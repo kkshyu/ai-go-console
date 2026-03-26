@@ -22,6 +22,12 @@ import {
   Terminal,
 } from "lucide-react";
 
+interface OrgDomain {
+  id: string;
+  domain: string;
+  isActive: boolean;
+}
+
 interface AppData {
   id: string;
   name: string;
@@ -30,7 +36,6 @@ interface AppData {
   template: string;
   status: string;
   port: number | null;
-  domains: Array<{ id: string; domain: string; isActive: boolean }>;
 }
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
@@ -46,6 +51,7 @@ export default function AppDetailPage() {
   const router = useRouter();
   const t = useTranslations("apps");
   const [app, setApp] = useState<AppData | null>(null);
+  const [orgDomains, setOrgDomains] = useState<OrgDomain[]>([]);
   const [logs, setLogs] = useState("");
   const [loading, setLoading] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
@@ -54,6 +60,18 @@ export default function AppDetailPage() {
     fetch(`/api/apps/${appId}`)
       .then((res) => res.json())
       .then(setApp);
+    // Fetch org domains
+    fetch("/api/organizations")
+      .then((r) => r.ok ? r.json() : null)
+      .then((org) => {
+        if (org?.id) {
+          fetch(`/api/organizations/${org.id}/domains`)
+            .then((r) => r.json())
+            .then(setOrgDomains)
+            .catch(() => {});
+        }
+      })
+      .catch(() => {});
   }, [appId]);
 
   async function doAction(action: string) {
@@ -126,10 +144,14 @@ export default function AppDetailPage() {
             <CardTitle className="text-sm font-medium">{t("domain")}</CardTitle>
           </CardHeader>
           <CardContent>
-            {app.domains.length > 0 ? (
-              app.domains.map((d) => (
-                <p key={d.id} className="font-mono text-sm">{d.domain}</p>
-              ))
+            {orgDomains.filter((d) => d.isActive).length > 0 ? (
+              orgDomains
+                .filter((d) => d.isActive)
+                .map((d) => (
+                  <p key={d.id} className="font-mono text-sm">
+                    {d.domain}/{app.slug}
+                  </p>
+                ))
             ) : (
               <p className="text-sm text-muted-foreground">—</p>
             )}

@@ -102,7 +102,14 @@
     "enable": "Enable",
     "disable": "Disable",
     "invite": "Add Member",
-    "invitePlaceholder": "Enter email address to add..."
+    "invitePlaceholder": "Enter email address to add...",
+    "customDomains": "Custom Domains",
+    "customDomainsDescription": "Add custom domains for your organization. Apps are accessible at {domain}/{app-slug}",
+    "addDomain": "Add",
+    "domainPlaceholder": "e.g. app.example.com",
+    "domainActive": "Active",
+    "domainPending": "Pending",
+    "noDomainsYet": "No custom domains configured"
   },
   "users": {
     "title": "User Management",

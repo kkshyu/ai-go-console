@@ -13,7 +13,6 @@ export async function GET(
   const app = await prisma.app.findUnique({
     where: { id: appId },
     include: {
-      domains: true,
       services: {
         include: {
           service: { select: { id: true, name: true, type: true } },

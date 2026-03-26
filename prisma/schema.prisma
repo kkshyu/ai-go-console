@@ -38,6 +38,7 @@ model Organization {
   users           User[]
   services        Service[]
   allowedServices OrgAllowedService[]
+  domains         OrgDomain[]
 
   @@map("organizations")
 }
@@ -86,24 +87,23 @@ model App {
   userId String @map("user_id")
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  domains      AppDomain[]
   services     AppService[]
   chatMessages ChatMessage[]
 
   @@map("apps")
 }
 
-model AppDomain {
+model OrgDomain {
   id        String   @id @default(cuid())
   domain    String   @unique
   isActive  Boolean  @default(false) @map("is_active")
   sslStatus String   @default("pending") @map("ssl_status")
   createdAt DateTime @default(now()) @map("created_at")
 
-  appId String @map("app_id")
-  app   App    @relation(fields: [appId], references: [id], onDelete: Cascade)
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  @@map("app_domains")
+  @@map("org_domains")
 }
 
 model Service {
