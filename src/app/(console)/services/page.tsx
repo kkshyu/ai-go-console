@@ -116,7 +116,7 @@ export default function ServicesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{t("title")}</h1>
         <Button onClick={() => setShowForm(!showForm)}>
           <Plus className="h-4 w-4" />
           {t("add")}
@@ -315,10 +315,10 @@ export default function ServicesPage() {
         <div className="space-y-3">
           {services.map((svc) => (
             <Card key={svc.id}>
-              <CardContent className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-3">
-                  <Server className="h-5 w-5 text-muted-foreground" />
-                  <div>
+              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Server className="h-5 w-5 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0">
                     <p className="font-medium">{svc.name}</p>
                     <div className="flex items-center gap-2">
                       <Badge variant="secondary">{svc.type}</Badge>
@@ -335,14 +335,14 @@ export default function ServicesPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 shrink-0">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => handleTest(svc.id)}
                   >
                     <TestTube className="h-4 w-4" />
-                    {t("testConnection")}
+                    <span className="hidden sm:inline">{t("testConnection")}</span>
                   </Button>
                   <Button
                     variant="outline"

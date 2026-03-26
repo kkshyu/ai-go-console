@@ -94,7 +94,7 @@ export default function AppDetailPage() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold tracking-tight">{app.name}</h1>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{app.name}</h1>
           {app.description && (
             <p className="text-muted-foreground mt-1">{app.description}</p>
           )}
@@ -104,7 +104,7 @@ export default function AppDetailPage() {
         </Badge>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-medium">{t("template")}</CardTitle>

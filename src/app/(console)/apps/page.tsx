@@ -44,7 +44,7 @@ export default function AppsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{t("title")}</h1>
         <Link href="/create">
           <Button>
             <PlusCircle className="h-4 w-4" />
