@@ -12,14 +12,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Server, Plus, Trash2, TestTube } from "lucide-react";
+import { Server, Plus, Trash2, TestTube, Pencil, Loader2, CheckCircle2, XCircle, CircleDashed } from "lucide-react";
 import {
   CATEGORY_SERVICE_TYPES,
   SERVICE_TYPE_CONFIG_FIELDS,
-  SERVICE_CATEGORY_LABELS,
   SERVICE_TYPE_CATEGORY,
   SERVICE_TYPE_HTTP_MODE,
   type ConfigFieldDef,
+  ServiceCategory,
 } from "@/lib/service-types";
 import type { ServiceType } from "@prisma/client";
 
@@ -27,20 +27,37 @@ const allCategories = Object.keys(CATEGORY_SERVICE_TYPES) as Array<
   keyof typeof CATEGORY_SERVICE_TYPES
 >;
 
+interface ServiceItem {
+  id: string;
+  name: string;
+  type: string;
+  endpointUrl: string | null;
+}
+
+type ConnectionStatus = "untested" | "connected" | "failed";
+
 export default function ServicesPage() {
   const t = useTranslations("services");
+
+  // --- Add form state ---
   const [showForm, setShowForm] = useState(false);
-  const [formType, setFormType] = useState<string>("postgresql");
+  const [formCategory, setFormCategory] = useState<string>("");
+  const [formType, setFormType] = useState<string>("");
   const [formName, setFormName] = useState("");
   const [formEndpointUrl, setFormEndpointUrl] = useState("");
   const [formConfig, setFormConfig] = useState<Record<string, string>>({});
-  const [services, setServices] = useState<
-    { id: string; name: string; type: string; endpointUrl: string | null }[]
-  >([]);
+
+  // --- Data state ---
+  const [services, setServices] = useState<ServiceItem[]>([]);
   const [allowedTypes, setAllowedTypes] = useState<Set<string>>(new Set());
-  const [testResults, setTestResults] = useState<
-    Record<string, { success: boolean; message: string }>
-  >({});
+  const [connectionStatus, setConnectionStatus] = useState<Record<string, ConnectionStatus>>({});
+  const [testingIds, setTestingIds] = useState<Set<string>>(new Set());
+
+  // --- Edit state ---
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEndpointUrl, setEditEndpointUrl] = useState("");
+  const [editConfig, setEditConfig] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetch("/api/services")
@@ -63,10 +80,18 @@ export default function ServicesPage() {
       .catch(() => {});
   }, []);
 
+  // --- Add form helpers ---
   function resetForm() {
+    setFormCategory("");
+    setFormType("");
     setFormName("");
-    setFormType("postgresql");
     setFormEndpointUrl("");
+    setFormConfig({});
+  }
+
+  function handleCategoryChange(cat: string) {
+    setFormCategory(cat);
+    setFormType("");
     setFormConfig({});
   }
 
@@ -74,6 +99,18 @@ export default function ServicesPage() {
     setFormType(newType);
     setFormConfig({});
   }
+
+  const availableTypesForCategory = formCategory
+    ? (CATEGORY_SERVICE_TYPES[formCategory as ServiceCategory] || []).filter(
+        (st) => allowedTypes.has(st)
+      )
+    : [];
+
+  // Categories that have at least one allowed type
+  const availableCategories = allCategories.filter(
+    (cat) =>
+      CATEGORY_SERVICE_TYPES[cat].some((st) => allowedTypes.has(st))
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -97,23 +134,130 @@ export default function ServicesPage() {
     }
   }
 
+  // --- Delete ---
   async function handleDelete(id: string) {
     const res = await fetch(`/api/services/${id}`, { method: "DELETE" });
     if (res.ok) {
       setServices((prev) => prev.filter((s) => s.id !== id));
+      setConnectionStatus((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     }
   }
 
+  // --- Test ---
   async function handleTest(id: string) {
-    const res = await fetch(`/api/services/${id}/test`, { method: "POST" });
-    const result = await res.json();
-    setTestResults((prev) => ({ ...prev, [id]: result }));
+    setTestingIds((prev) => new Set(prev).add(id));
+    try {
+      const res = await fetch(`/api/services/${id}/test`, { method: "POST" });
+      const result = await res.json();
+      setConnectionStatus((prev) => ({
+        ...prev,
+        [id]: result.success ? "connected" : "failed",
+      }));
+    } catch {
+      setConnectionStatus((prev) => ({ ...prev, [id]: "failed" }));
+    } finally {
+      setTestingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   }
 
-  const configFields: ConfigFieldDef[] =
-    SERVICE_TYPE_CONFIG_FIELDS[formType as ServiceType] || [];
+  // --- Edit helpers ---
+  function startEdit(svc: ServiceItem) {
+    setEditingId(svc.id);
+    setEditName(svc.name);
+    setEditEndpointUrl(svc.endpointUrl || "");
+    setEditConfig({});
+  }
 
-  const category = SERVICE_TYPE_CATEGORY[formType as ServiceType];
+  function cancelEdit() {
+    setEditingId(null);
+    setEditName("");
+    setEditEndpointUrl("");
+    setEditConfig({});
+  }
+
+  async function handleSaveEdit(svc: ServiceItem) {
+    const body: Record<string, string> = {};
+    if (editName && editName !== svc.name) body.name = editName;
+    if (editEndpointUrl !== (svc.endpointUrl || ""))
+      body.endpointUrl = editEndpointUrl;
+    // Include config fields that have values
+    for (const [k, v] of Object.entries(editConfig)) {
+      if (v) body[k] = v;
+    }
+
+    if (Object.keys(body).length === 0) {
+      cancelEdit();
+      return;
+    }
+
+    const res = await fetch(`/api/services/${svc.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (res.ok) {
+      const updated = await res.json();
+      setServices((prev) =>
+        prev.map((s) => (s.id === svc.id ? { ...s, ...updated } : s))
+      );
+      // Reset connection status since config changed
+      setConnectionStatus((prev) => {
+        const next = { ...prev };
+        delete next[svc.id];
+        return next;
+      });
+      cancelEdit();
+    }
+  }
+
+  // --- Derived ---
+  const configFields: ConfigFieldDef[] =
+    formType
+      ? SERVICE_TYPE_CONFIG_FIELDS[formType as ServiceType] || []
+      : [];
+
+  function getStatusBadge(id: string) {
+    if (testingIds.has(id)) {
+      return (
+        <Badge variant="secondary" className="gap-1">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          {t("testing")}
+        </Badge>
+      );
+    }
+    const status = connectionStatus[id];
+    if (status === "connected") {
+      return (
+        <Badge variant="success" className="gap-1">
+          <CheckCircle2 className="h-3 w-3" />
+          {t("statusConnected")}
+        </Badge>
+      );
+    }
+    if (status === "failed") {
+      return (
+        <Badge variant="destructive" className="gap-1">
+          <XCircle className="h-3 w-3" />
+          {t("statusFailed")}
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="outline" className="gap-1 text-muted-foreground">
+        <CircleDashed className="h-3 w-3" />
+        {t("statusUntested")}
+      </Badge>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -127,6 +271,7 @@ export default function ServicesPage() {
         </Button>
       </div>
 
+      {/* --- Add form --- */}
       {showForm && (
         <Card>
           <CardHeader>
@@ -135,16 +280,25 @@ export default function ServicesPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">{t("name")}</label>
-                  <Input
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    placeholder="My Service"
-                    required
-                  />
-                </div>
+              {/* Step 1: Category */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">{t("category")}</label>
+                <select
+                  value={formCategory}
+                  onChange={(e) => handleCategoryChange(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">{t("selectCategory")}</option>
+                  {availableCategories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {t(`categories.${cat}`)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Step 2: Service type (only after category selected) */}
+              {formCategory && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">{t("type")}</label>
                   <select
@@ -152,95 +306,98 @@ export default function ServicesPage() {
                     onChange={(e) => handleTypeChange(e.target.value)}
                     className="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                   >
-                    {allCategories.map((cat) => {
-                      const types = CATEGORY_SERVICE_TYPES[cat].filter((st) =>
-                        allowedTypes.has(st)
-                      );
-                      if (types.length === 0) return null;
-                      return (
-                        <optgroup
-                          key={cat}
-                          label={t(`categories.${cat}`)}
-                        >
-                          {types.map((st) => (
-                            <option key={st} value={st}>
-                              {t(`types.${st}`)}
-                            </option>
-                          ))}
-                        </optgroup>
-                      );
-                    })}
+                    <option value="">{t("selectType")}</option>
+                    {availableTypesForCategory.map((st) => (
+                      <option key={st} value={st}>
+                        {t(`types.${st}`)}
+                      </option>
+                    ))}
                   </select>
                 </div>
-              </div>
-
-              {/* Endpoint URL - only for user-provided httpMode */}
-              {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] === "user-provided" && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    {t("endpointUrl")}
-                  </label>
-                  <Input
-                    value={formEndpointUrl}
-                    onChange={(e) => setFormEndpointUrl(e.target.value)}
-                    placeholder="https://..."
-                    required
-                  />
-                </div>
-              )}
-              {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] === "proxy" && (
-                <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
-                  {t("proxyHint")}
-                </p>
-              )}
-              {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] === "fixed" && (
-                <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
-                  {t("fixedHint")}
-                </p>
-              )}
-              {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] === "sdk" && (
-                <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
-                  {t("sdkHint")}
-                </p>
               )}
 
-              {/* Dynamic config fields based on service type */}
-              {configFields.length > 0 && (
-                <div className="grid gap-4 md:grid-cols-2">
-                  {configFields.map((field) => (
-                    <div
-                      key={field.key}
-                      className={`space-y-2 ${
-                        configFields.length === 1 ? "md:col-span-2" : ""
-                      }`}
-                    >
+              {/* Step 3: Name and config (only after type selected) */}
+              {formType && (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">{t("name")}</label>
+                    <Input
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      placeholder="My Service"
+                      required
+                    />
+                  </div>
+
+                  {/* Endpoint URL - only for user-provided httpMode */}
+                  {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] ===
+                    "user-provided" && (
+                    <div className="space-y-2">
                       <label className="text-sm font-medium">
-                        {t(field.key)}
+                        {t("endpointUrl")}
                       </label>
                       <Input
-                        type={field.type}
-                        value={formConfig[field.key] || ""}
-                        onChange={(e) =>
-                          setFormConfig((prev) => ({
-                            ...prev,
-                            [field.key]: e.target.value,
-                          }))
-                        }
-                        placeholder={field.placeholder}
+                        value={formEndpointUrl}
+                        onChange={(e) => setFormEndpointUrl(e.target.value)}
+                        placeholder="https://..."
+                        required
                       />
                     </div>
-                  ))}
-                </div>
-              )}
+                  )}
+                  {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] ===
+                    "proxy" && (
+                    <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+                      {t("proxyHint")}
+                    </p>
+                  )}
+                  {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] ===
+                    "fixed" && (
+                    <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+                      {t("fixedHint")}
+                    </p>
+                  )}
+                  {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] ===
+                    "sdk" && (
+                    <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+                      {t("sdkHint")}
+                    </p>
+                  )}
 
-              {category && (
-                <p className="text-xs text-muted-foreground">
-                  {t(`categories.${category}`)}
-                </p>
+                  {/* Dynamic config fields */}
+                  {configFields.length > 0 && (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {configFields.map((field) => (
+                        <div
+                          key={field.key}
+                          className={`space-y-2 ${
+                            configFields.length === 1 ? "md:col-span-2" : ""
+                          }`}
+                        >
+                          <label className="text-sm font-medium">
+                            {t(field.key)}
+                          </label>
+                          <Input
+                            type={field.type}
+                            value={formConfig[field.key] || ""}
+                            onChange={(e) =>
+                              setFormConfig((prev) => ({
+                                ...prev,
+                                [field.key]: e.target.value,
+                              }))
+                            }
+                            placeholder={field.placeholder}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="flex gap-2">
-                <Button type="submit">{t("add")}</Button>
+                <Button type="submit" disabled={!formType || !formName}>
+                  {t("add")}
+                </Button>
                 <Button
                   type="button"
                   variant="outline"
@@ -249,7 +406,7 @@ export default function ServicesPage() {
                     resetForm();
                   }}
                 >
-                  Cancel
+                  {t("cancelEdit")}
                 </Button>
               </div>
             </form>
@@ -257,6 +414,7 @@ export default function ServicesPage() {
         </Card>
       )}
 
+      {/* --- Service list --- */}
       {services.length === 0 && !showForm ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
@@ -266,60 +424,158 @@ export default function ServicesPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {services.map((svc) => (
-            <Card key={svc.id}>
-              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3 min-w-0">
-                  <Server className="h-5 w-5 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0">
-                    <p className="font-medium">{svc.name}</p>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary">{svc.type}</Badge>
-                      {SERVICE_TYPE_HTTP_MODE[svc.type as ServiceType] === "proxy" ? (
-                        <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                          Proxy: /api/proxy/{svc.id}/query
-                        </span>
-                      ) : svc.endpointUrl ? (
-                        <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                          {svc.endpointUrl}
-                        </span>
-                      ) : null}
+          {services.map((svc) => {
+            const isEditing = editingId === svc.id;
+            const editFields: ConfigFieldDef[] =
+              SERVICE_TYPE_CONFIG_FIELDS[svc.type as ServiceType] || [];
+
+            return (
+              <Card key={svc.id}>
+                <CardContent className="p-4">
+                  {isEditing ? (
+                    /* --- Edit mode --- */
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-sm text-muted-foreground">
+                          {t("editService")}
+                        </p>
+                        <Badge variant="secondary">{t(`types.${svc.type}`)}</Badge>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">
+                            {t("name")}
+                          </label>
+                          <Input
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                          />
+                        </div>
+
+                        {SERVICE_TYPE_HTTP_MODE[svc.type as ServiceType] ===
+                          "user-provided" && (
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">
+                              {t("endpointUrl")}
+                            </label>
+                            <Input
+                              value={editEndpointUrl}
+                              onChange={(e) =>
+                                setEditEndpointUrl(e.target.value)
+                              }
+                              placeholder="https://..."
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {editFields.length > 0 && (
+                        <div className="grid gap-4 md:grid-cols-2">
+                          {editFields.map((field) => (
+                            <div
+                              key={field.key}
+                              className={`space-y-2 ${
+                                editFields.length === 1 ? "md:col-span-2" : ""
+                              }`}
+                            >
+                              <label className="text-sm font-medium">
+                                {t(field.key)}
+                              </label>
+                              <Input
+                                type={field.type}
+                                value={editConfig[field.key] || ""}
+                                onChange={(e) =>
+                                  setEditConfig((prev) => ({
+                                    ...prev,
+                                    [field.key]: e.target.value,
+                                  }))
+                                }
+                                placeholder={field.placeholder}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleSaveEdit(svc)}
+                        >
+                          {t("saveChanges")}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={cancelEdit}
+                        >
+                          {t("cancelEdit")}
+                        </Button>
+                      </div>
                     </div>
-                    {testResults[svc.id] && (
-                      <p
-                        className={`text-xs mt-1 ${
-                          testResults[svc.id].success
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }`}
-                      >
-                        {testResults[svc.id].message}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleTest(svc.id)}
-                  >
-                    <TestTube className="h-4 w-4" />
-                    <span className="hidden sm:inline">
-                      {t("testConnection")}
-                    </span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDelete(svc.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  ) : (
+                    /* --- Display mode --- */
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Server className="h-5 w-5 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{svc.name}</p>
+                            {getStatusBadge(svc.id)}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <Badge variant="secondary">{t(`types.${svc.type}`)}</Badge>
+                            {SERVICE_TYPE_HTTP_MODE[svc.type as ServiceType] ===
+                            "proxy" ? (
+                              <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                Proxy: /api/proxy/{svc.id}/query
+                              </span>
+                            ) : svc.endpointUrl ? (
+                              <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                {svc.endpointUrl}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleTest(svc.id)}
+                          disabled={testingIds.has(svc.id)}
+                        >
+                          {testingIds.has(svc.id) ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <TestTube className="h-4 w-4" />
+                          )}
+                          <span className="hidden sm:inline">
+                            {t("testConnection")}
+                          </span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => startEdit(svc)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDelete(svc.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
