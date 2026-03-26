@@ -18,9 +18,9 @@ test.describe("Dashboard", () => {
     await expect(page.getByText(/Running|執行中/)).toBeVisible();
   });
 
-  test("shows Credentials stat card", async ({ page }) => {
+  test("shows Services stat card", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText(/Credentials|憑證/).first()).toBeVisible();
+    await expect(page.getByText(/Services|服務/).first()).toBeVisible();
   });
 
   test("shows empty state with create button", async ({ page }) => {

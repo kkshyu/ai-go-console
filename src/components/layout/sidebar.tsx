@@ -7,9 +7,10 @@ import {
   LayoutDashboard,
   AppWindow,
   PlusCircle,
-  Database,
+  Server,
   Users,
   Settings,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -24,8 +25,9 @@ const navItems: NavItem[] = [
   { href: "/", labelKey: "dashboard", icon: LayoutDashboard },
   { href: "/apps", labelKey: "apps", icon: AppWindow },
   { href: "/create", labelKey: "createApp", icon: PlusCircle },
-  { href: "/credentials", labelKey: "credentials", icon: Database, adminOnly: true },
+  { href: "/services", labelKey: "services", icon: Server, adminOnly: true },
   { href: "/users", labelKey: "users", icon: Users, adminOnly: true },
+  { href: "/settings/organization", labelKey: "organization", icon: Building2, adminOnly: true },
 ];
 
 export function Sidebar({ userRole = "admin" }: { userRole?: string }) {

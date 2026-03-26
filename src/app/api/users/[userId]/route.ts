@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export async function PATCH(
@@ -6,6 +8,15 @@ export async function PATCH(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   const { userId } = await params;
+  const session = await getServerSession(authOptions);
+  const organizationId = session?.user?.organizationId;
+
+  // Verify user is in same org
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target || (organizationId && target.organizationId !== organizationId)) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
   const { role, name } = await request.json();
 
   const data: Record<string, string> = {};
@@ -26,6 +37,13 @@ export async function DELETE(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   const { userId } = await params;
+  const session = await getServerSession(authOptions);
+  const organizationId = session?.user?.organizationId;
+
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target || (organizationId && target.organizationId !== organizationId)) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
 
   await prisma.user.delete({ where: { id: userId } });
 

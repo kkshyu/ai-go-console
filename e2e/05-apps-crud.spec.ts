@@ -97,7 +97,7 @@ test.describe("Apps CRUD", () => {
     const body = await res.json();
     expect(body.id).toBe(appId);
     expect(body.domains).toBeDefined();
-    expect(body.credentials).toBeDefined();
+    expect(body.services).toBeDefined();
   });
 
   test("GET /api/apps lists all created apps", async ({ request }) => {

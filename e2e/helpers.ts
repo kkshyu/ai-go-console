@@ -42,21 +42,23 @@ export async function loginViaUI(
 }
 
 /**
- * Create a credential via API
+ * Create a service via API
  */
-export async function createCredential(
+export async function createService(
   request: APIRequestContext,
   data: {
     name: string;
     type: string;
+    endpointUrl?: string;
     host?: string;
     port?: string;
     database?: string;
     username?: string;
     password?: string;
+    apiKey?: string;
   }
 ) {
-  const res = await request.post("/api/credentials", { data });
+  const res = await request.post("/api/services", { data });
   return res.json();
 }
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { removeApp } from "@/lib/generator";
-import { stopApp, getAppDockerStatus } from "@/lib/docker";
+import { stopApp } from "@/lib/docker";
 import { stopDevServer } from "@/lib/dev-server";
 
 export async function GET(
@@ -14,9 +14,9 @@ export async function GET(
     where: { id: appId },
     include: {
       domains: true,
-      credentials: {
+      services: {
         include: {
-          credential: { select: { id: true, name: true, type: true } },
+          service: { select: { id: true, name: true, type: true } },
         },
       },
     },

@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [organizationName, setOrganizationName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -29,7 +30,7 @@ export default function LoginPage() {
         const res = await fetch("/api/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name }),
+          body: JSON.stringify({ email, password, name, organizationName }),
         });
 
         if (!res.ok) {
@@ -46,6 +47,7 @@ export default function LoginPage() {
         password,
         name: isRegister ? name : undefined,
         isRegister: isRegister ? "true" : "false",
+        organizationName: isRegister ? organizationName : undefined,
         redirect: false,
       });
 
@@ -81,14 +83,24 @@ export default function LoginPage() {
               </div>
             )}
             {isRegister && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">{t("name")}</label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required={isRegister}
-                />
-              </div>
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">{t("name")}</label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required={isRegister}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">{t("organizationName")}</label>
+                  <Input
+                    value={organizationName}
+                    onChange={(e) => setOrganizationName(e.target.value)}
+                    placeholder={t("organizationPlaceholder")}
+                  />
+                </div>
+              </>
             )}
             <div className="space-y-2">
               <label className="text-sm font-medium">{t("email")}</label>

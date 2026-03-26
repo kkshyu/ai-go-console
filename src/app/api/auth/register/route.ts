@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
+import { createOrganizationWithDefaults } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
-  const { email, password, name } = await request.json();
+  const { email, password, name, organizationName, organizationId } =
+    await request.json();
 
   if (!email || !password) {
     return NextResponse.json(
@@ -22,7 +24,34 @@ export async function POST(request: NextRequest) {
 
   // First user becomes admin
   const userCount = await prisma.user.count();
-  const role = userCount === 0 ? "admin" : "user";
+  const isFirstUser = userCount === 0;
+  const role = isFirstUser ? "admin" : "user";
+
+  let orgId: string;
+
+  if (isFirstUser) {
+    const org = await createOrganizationWithDefaults(
+      organizationName || "My Organization"
+    );
+    orgId = org.id;
+  } else if (organizationId) {
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+    if (!org) {
+      return NextResponse.json(
+        { error: "Organization not found" },
+        { status: 404 }
+      );
+    }
+    orgId = org.id;
+  } else {
+    const orgName =
+      organizationName ||
+      `${name || email.split("@")[0]}'s Organization`;
+    const org = await createOrganizationWithDefaults(orgName);
+    orgId = org.id;
+  }
 
   const passwordHash = await bcrypt.hash(password, 12);
   const user = await prisma.user.create({
@@ -31,8 +60,16 @@ export async function POST(request: NextRequest) {
       name: name || email.split("@")[0],
       passwordHash,
       role: role as "admin" | "user",
+      organizationId: orgId,
     },
-    select: { id: true, email: true, name: true, role: true, createdAt: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      organizationId: true,
+      createdAt: true,
+    },
   });
 
   return NextResponse.json(user, { status: 201 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,11 +12,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Database, Plus, Trash2, TestTube } from "lucide-react";
+import { Server, Plus, Trash2, TestTube } from "lucide-react";
 
-interface CredentialForm {
+interface ServiceForm {
   name: string;
   type: string;
+  endpointUrl: string;
   host: string;
   port: string;
   database: string;
@@ -24,11 +25,14 @@ interface CredentialForm {
   password: string;
   apiKey: string;
   projectUrl: string;
+  adminSecret: string;
+  webhookSecret: string;
 }
 
-const emptyForm: CredentialForm = {
+const emptyForm: ServiceForm = {
   name: "",
-  type: "postgres",
+  type: "postgresql",
+  endpointUrl: "",
   host: "",
   port: "",
   database: "",
@@ -36,45 +40,78 @@ const emptyForm: CredentialForm = {
   password: "",
   apiKey: "",
   projectUrl: "",
+  adminSecret: "",
+  webhookSecret: "",
 };
 
-const credentialTypes = ["postgres", "supabase", "mysql", "redis"] as const;
+const serviceTypes = ["disk", "postgresql", "supabase", "stripe", "hasura"] as const;
 
-export default function CredentialsPage() {
-  const t = useTranslations("credentials");
+export default function ServicesPage() {
+  const t = useTranslations("services");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<CredentialForm>(emptyForm);
-  const [credentials, setCredentials] = useState<
-    { id: string; name: string; type: string }[]
+  const [form, setForm] = useState<ServiceForm>(emptyForm);
+  const [services, setServices] = useState<
+    { id: string; name: string; type: string; endpointUrl: string | null }[]
   >([]);
+  const [allowedTypes, setAllowedTypes] = useState<Set<string>>(new Set(serviceTypes));
+  const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
 
-  function updateForm(key: keyof CredentialForm, value: string) {
+  useEffect(() => {
+    fetch("/api/services")
+      .then((r) => r.json())
+      .then(setServices)
+      .catch(() => {});
+
+    fetch("/api/organizations")
+      .then((r) => r.json())
+      .then((org) => {
+        if (org.allowedServices) {
+          const enabled = new Set<string>(
+            org.allowedServices
+              .filter((s: { enabled: boolean }) => s.enabled)
+              .map((s: { serviceType: string }) => s.serviceType)
+          );
+          setAllowedTypes(enabled);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  function updateForm(key: keyof ServiceForm, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const res = await fetch("/api/credentials", {
+    const res = await fetch("/api/services", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
 
     if (res.ok) {
-      const ds = await res.json();
-      setCredentials((prev) => [...prev, ds]);
+      const svc = await res.json();
+      setServices((prev) => [svc, ...prev]);
       setForm(emptyForm);
       setShowForm(false);
     }
   }
 
   async function handleDelete(id: string) {
-    const res = await fetch(`/api/credentials/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/services/${id}`, { method: "DELETE" });
     if (res.ok) {
-      setCredentials((prev) => prev.filter((ds) => ds.id !== id));
+      setServices((prev) => prev.filter((s) => s.id !== id));
     }
   }
+
+  async function handleTest(id: string) {
+    const res = await fetch(`/api/services/${id}/test`, { method: "POST" });
+    const result = await res.json();
+    setTestResults((prev) => ({ ...prev, [id]: result }));
+  }
+
+  const filteredTypes = serviceTypes.filter((t) => allowedTypes.has(t));
 
   return (
     <div className="space-y-6">
@@ -91,7 +128,7 @@ export default function CredentialsPage() {
           <CardHeader>
             <CardTitle>{t("add")}</CardTitle>
             <CardDescription>
-              Configure a new credential connection
+              {t("addDescription")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -102,7 +139,7 @@ export default function CredentialsPage() {
                   <Input
                     value={form.name}
                     onChange={(e) => updateForm("name", e.target.value)}
-                    placeholder="My Database"
+                    placeholder="My Service"
                     required
                   />
                 </div>
@@ -113,7 +150,7 @@ export default function CredentialsPage() {
                     onChange={(e) => updateForm("type", e.target.value)}
                     className="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                   >
-                    {credentialTypes.map((type) => (
+                    {filteredTypes.map((type) => (
                       <option key={type} value={type}>
                         {t(`types.${type}`)}
                       </option>
@@ -122,7 +159,17 @@ export default function CredentialsPage() {
                 </div>
               </div>
 
-              {(form.type === "postgres" || form.type === "mysql") && (
+              {/* Endpoint URL - common to all types */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">{t("endpointUrl")}</label>
+                <Input
+                  value={form.endpointUrl}
+                  onChange={(e) => updateForm("endpointUrl", e.target.value)}
+                  placeholder="https://..."
+                />
+              </div>
+
+              {form.type === "postgresql" && (
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">{t("host")}</label>
@@ -137,13 +184,11 @@ export default function CredentialsPage() {
                     <Input
                       value={form.port}
                       onChange={(e) => updateForm("port", e.target.value)}
-                      placeholder={form.type === "postgres" ? "5432" : "3306"}
+                      placeholder="5432"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">
-                      {t("database")}
-                    </label>
+                    <label className="text-sm font-medium">{t("database")}</label>
                     <Input
                       value={form.database}
                       onChange={(e) => updateForm("database", e.target.value)}
@@ -151,9 +196,7 @@ export default function CredentialsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">
-                      {t("username")}
-                    </label>
+                    <label className="text-sm font-medium">{t("username")}</label>
                     <Input
                       value={form.username}
                       onChange={(e) => updateForm("username", e.target.value)}
@@ -161,9 +204,7 @@ export default function CredentialsPage() {
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium">
-                      {t("password")}
-                    </label>
+                    <label className="text-sm font-medium">{t("password")}</label>
                     <Input
                       type="password"
                       value={form.password}
@@ -177,9 +218,7 @@ export default function CredentialsPage() {
               {form.type === "supabase" && (
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">
-                      {t("projectUrl")}
-                    </label>
+                    <label className="text-sm font-medium">{t("projectUrl")}</label>
                     <Input
                       value={form.projectUrl}
                       onChange={(e) => updateForm("projectUrl", e.target.value)}
@@ -187,9 +226,7 @@ export default function CredentialsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">
-                      {t("apiKey")}
-                    </label>
+                    <label className="text-sm font-medium">{t("apiKey")}</label>
                     <Input
                       type="password"
                       value={form.apiKey}
@@ -200,35 +237,50 @@ export default function CredentialsPage() {
                 </div>
               )}
 
-              {form.type === "redis" && (
+              {form.type === "disk" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">{t("apiKey")}</label>
+                  <Input
+                    type="password"
+                    value={form.apiKey}
+                    onChange={(e) => updateForm("apiKey", e.target.value)}
+                    placeholder="your-api-key"
+                  />
+                </div>
+              )}
+
+              {form.type === "stripe" && (
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">{t("host")}</label>
+                    <label className="text-sm font-medium">{t("apiKey")}</label>
                     <Input
-                      value={form.host}
-                      onChange={(e) => updateForm("host", e.target.value)}
-                      placeholder="localhost"
+                      type="password"
+                      value={form.apiKey}
+                      onChange={(e) => updateForm("apiKey", e.target.value)}
+                      placeholder="sk_..."
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">{t("port")}</label>
-                    <Input
-                      value={form.port}
-                      onChange={(e) => updateForm("port", e.target.value)}
-                      placeholder="6379"
-                    />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium">
-                      {t("password")}
-                    </label>
+                    <label className="text-sm font-medium">{t("webhookSecret")}</label>
                     <Input
                       type="password"
-                      value={form.password}
-                      onChange={(e) => updateForm("password", e.target.value)}
-                      placeholder="********"
+                      value={form.webhookSecret}
+                      onChange={(e) => updateForm("webhookSecret", e.target.value)}
+                      placeholder="whsec_..."
                     />
                   </div>
+                </div>
+              )}
+
+              {form.type === "hasura" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">{t("adminSecret")}</label>
+                  <Input
+                    type="password"
+                    value={form.adminSecret}
+                    onChange={(e) => updateForm("adminSecret", e.target.value)}
+                    placeholder="your-admin-secret"
+                  />
                 </div>
               )}
 
@@ -250,36 +302,52 @@ export default function CredentialsPage() {
         </Card>
       )}
 
-      {credentials.length === 0 && !showForm ? (
+      {services.length === 0 && !showForm ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
-            <Database className="h-12 w-12 text-muted-foreground mb-4" />
+            <Server className="h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-lg text-muted-foreground">
-              No credentials configured
+              {t("emptyState")}
             </p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {credentials.map((ds) => (
-            <Card key={ds.id}>
+          {services.map((svc) => (
+            <Card key={svc.id}>
               <CardContent className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
-                  <Database className="h-5 w-5 text-muted-foreground" />
+                  <Server className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="font-medium">{ds.name}</p>
-                    <Badge variant="secondary">{ds.type}</Badge>
+                    <p className="font-medium">{svc.name}</p>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">{svc.type}</Badge>
+                      {svc.endpointUrl && (
+                        <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                          {svc.endpointUrl}
+                        </span>
+                      )}
+                    </div>
+                    {testResults[svc.id] && (
+                      <p className={`text-xs mt-1 ${testResults[svc.id].success ? "text-green-600" : "text-red-600"}`}>
+                        {testResults[svc.id].message}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleTest(svc.id)}
+                  >
                     <TestTube className="h-4 w-4" />
                     {t("testConnection")}
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleDelete(ds.id)}
+                    onClick={() => handleDelete(svc.id)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

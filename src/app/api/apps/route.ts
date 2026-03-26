@@ -1,16 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { slugify } from "@/lib/utils";
 import { generateApp } from "@/lib/generator";
 
 export async function GET() {
+  const session = await getServerSession(authOptions);
+  const organizationId = session?.user?.organizationId;
+
+  // Scope to org: show apps from users in the same org
+  const where = organizationId
+    ? { user: { organizationId } }
+    : {};
+
   const apps = await prisma.app.findMany({
+    where,
     orderBy: { createdAt: "desc" },
     include: {
       domains: true,
-      credentials: {
+      services: {
         include: {
-          credential: {
+          service: {
             select: { id: true, name: true, type: true },
           },
         },
@@ -22,8 +33,11 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  const organizationId = session?.user?.organizationId;
+
   const body = await request.json();
-  const { name, description, template, config, credentialIds, userId } = body;
+  const { name, description, template, config, serviceIds, userId } = body;
 
   if (!name || !template) {
     return NextResponse.json(
@@ -39,7 +53,9 @@ export async function POST(request: NextRequest) {
     if (!user) resolvedUserId = null;
   }
   if (!resolvedUserId) {
-    const admin = await prisma.user.findFirst({ where: { role: "admin" } });
+    const admin = await prisma.user.findFirst({
+      where: { role: "admin", ...(organizationId ? { organizationId } : {}) },
+    });
     if (!admin) {
       return NextResponse.json(
         { error: "No admin user found. Please register first." },
@@ -49,15 +65,40 @@ export async function POST(request: NextRequest) {
     resolvedUserId = admin.id;
   }
 
-  let slug = slugify(name);
+  // Validate service IDs belong to the same org and their types are allowed
+  if (serviceIds && serviceIds.length > 0 && organizationId) {
+    const services = await prisma.service.findMany({
+      where: { id: { in: serviceIds }, organizationId },
+    });
+    if (services.length !== serviceIds.length) {
+      return NextResponse.json(
+        { error: "Some services not found or not in your organization" },
+        { status: 400 }
+      );
+    }
 
-  // Ensure unique slug
+    // Check each service type is allowed
+    const allowedServices = await prisma.orgAllowedService.findMany({
+      where: { organizationId, enabled: true },
+    });
+    const allowedTypes = new Set(allowedServices.map((s) => s.serviceType));
+
+    for (const svc of services) {
+      if (!allowedTypes.has(svc.type)) {
+        return NextResponse.json(
+          { error: `Service type "${svc.type}" is not enabled for your organization` },
+          { status: 403 }
+        );
+      }
+    }
+  }
+
+  let slug = slugify(name);
   const existing = await prisma.app.findUnique({ where: { slug } });
   if (existing) {
     slug = `${slug}-${Date.now().toString(36)}`;
   }
 
-  // Find next available port
   const lastApp = await prisma.app.findFirst({
     where: { port: { not: null } },
     orderBy: { port: "desc" },
@@ -73,12 +114,12 @@ export async function POST(request: NextRequest) {
       port,
       config: config || {},
       userId: resolvedUserId,
-      credentials: credentialIds
+      services: serviceIds
         ? {
-            create: credentialIds.map(
-              (credId: string, index: number) => ({
-                credentialId: credId,
-                envVarPrefix: index === 0 ? "DB" : `DS${index}`,
+            create: serviceIds.map(
+              (svcId: string, index: number) => ({
+                serviceId: svcId,
+                envVarPrefix: index === 0 ? "SVC" : `SVC${index}`,
               })
             ),
           }
@@ -86,7 +127,6 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // Generate app files from template
   try {
     await generateApp({
       slug,
@@ -94,10 +134,9 @@ export async function POST(request: NextRequest) {
       description,
       template,
       port,
-      credentialIds,
+      serviceIds,
     });
   } catch (error) {
-    // Clean up DB record on generation failure
     await prisma.app.delete({ where: { id: app.id } });
     const msg = error instanceof Error ? error.message : "Generation failed";
     return NextResponse.json({ error: msg }, { status: 500 });

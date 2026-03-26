@@ -2,6 +2,43 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
+import type { ServiceType } from "@prisma/client";
+
+const ALL_SERVICE_TYPES: ServiceType[] = [
+  "disk",
+  "postgresql",
+  "supabase",
+  "stripe",
+  "hasura",
+];
+
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+async function createOrganizationWithDefaults(name: string) {
+  const slug = slugify(name) || "org";
+  const org = await prisma.organization.create({
+    data: {
+      name,
+      slug: `${slug}-${Date.now()}`,
+    },
+  });
+
+  // Seed all service types as allowed
+  await prisma.orgAllowedService.createMany({
+    data: ALL_SERVICE_TYPES.map((serviceType) => ({
+      organizationId: org.id,
+      serviceType,
+      enabled: true,
+    })),
+  });
+
+  return org;
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -12,6 +49,8 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
         name: { label: "Name", type: "text" },
         isRegister: { label: "Register", type: "text" },
+        organizationName: { label: "Organization", type: "text" },
+        organizationId: { label: "Organization ID", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
@@ -23,9 +62,30 @@ export const authOptions: NextAuthOptions = {
           });
           if (existing) throw new Error("Email already registered");
 
-          // First user becomes admin
+          // First user becomes admin and creates org
           const userCount = await prisma.user.count();
-          const role = userCount === 0 ? "admin" : "user";
+          const isFirstUser = userCount === 0;
+          const role = isFirstUser ? "admin" : "user";
+
+          let organizationId: string;
+
+          if (isFirstUser) {
+            const orgName = credentials.organizationName || "My Organization";
+            const org = await createOrganizationWithDefaults(orgName);
+            organizationId = org.id;
+          } else if (credentials.organizationId) {
+            // Join existing org
+            const org = await prisma.organization.findUnique({
+              where: { id: credentials.organizationId },
+            });
+            if (!org) throw new Error("Organization not found");
+            organizationId = org.id;
+          } else {
+            // Create new org for the user
+            const orgName = credentials.organizationName || `${credentials.name || credentials.email.split("@")[0]}'s Organization`;
+            const org = await createOrganizationWithDefaults(orgName);
+            organizationId = org.id;
+          }
 
           const passwordHash = await bcrypt.hash(credentials.password, 12);
           const user = await prisma.user.create({
@@ -34,10 +94,17 @@ export const authOptions: NextAuthOptions = {
               name: credentials.name || credentials.email.split("@")[0],
               passwordHash,
               role: role as "admin" | "user",
+              organizationId,
             },
           });
 
-          return { id: user.id, email: user.email, name: user.name, role: user.role };
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            organizationId: user.organizationId,
+          };
         }
 
         // Login
@@ -49,7 +116,13 @@ export const authOptions: NextAuthOptions = {
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!valid) throw new Error("Invalid credentials");
 
-        return { id: user.id, email: user.email, name: user.name, role: user.role };
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          organizationId: user.organizationId,
+        };
       },
     }),
   ],
@@ -58,6 +131,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = (user as { role: string }).role;
+        token.organizationId = (user as { organizationId: string }).organizationId;
       }
       return token;
     },
@@ -65,6 +139,8 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         (session.user as { id: string }).id = token.id as string;
         (session.user as { role: string }).role = token.role as string;
+        (session.user as { organizationId: string }).organizationId =
+          token.organizationId as string;
       }
       return session;
     },
@@ -77,3 +153,5 @@ export const authOptions: NextAuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
+
+export { ALL_SERVICE_TYPES, createOrganizationWithDefaults };

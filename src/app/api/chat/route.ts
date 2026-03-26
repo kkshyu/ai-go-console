@@ -1,4 +1,7 @@
 import { NextRequest } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { streamChat, type ChatMessage } from "@/lib/ai";
 
 export async function POST(request: NextRequest) {
@@ -12,6 +15,19 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  // Get allowed services for the user's org
+  let allowedServices: string[] | undefined;
+  const session = await getServerSession(authOptions);
+  if (session?.user?.organizationId) {
+    const orgAllowed = await prisma.orgAllowedService.findMany({
+      where: {
+        organizationId: session.user.organizationId,
+        enabled: true,
+      },
+    });
+    allowedServices = orgAllowed.map((s) => s.serviceType);
+  }
+
   // Create a TransformStream for SSE
   const encoder = new TextEncoder();
   const stream = new TransformStream();
@@ -20,10 +36,14 @@ export async function POST(request: NextRequest) {
   // Start streaming in background
   (async () => {
     try {
-      await streamChat(messages, (chunk) => {
-        const data = JSON.stringify({ content: chunk });
-        writer.write(encoder.encode(`data: ${data}\n\n`));
-      });
+      await streamChat(
+        messages,
+        (chunk) => {
+          const data = JSON.stringify({ content: chunk });
+          writer.write(encoder.encode(`data: ${data}\n\n`));
+        },
+        allowedServices
+      );
       writer.write(encoder.encode("data: [DONE]\n\n"));
     } catch (error) {
       const msg =

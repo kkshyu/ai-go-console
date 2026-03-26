@@ -20,22 +20,51 @@ enum AppStatus {
   error
 }
 
-enum CredentialType {
-  postgres
+enum ServiceType {
+  disk
+  postgresql
   supabase
-  mysql
-  redis
+  stripe
+  hasura
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users           User[]
+  services        Service[]
+  allowedServices OrgAllowedService[]
+
+  @@map("organizations")
+}
+
+model OrgAllowedService {
+  id             String      @id @default(cuid())
+  organizationId String      @map("organization_id")
+  serviceType    ServiceType @map("service_type")
+  enabled        Boolean     @default(true)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, serviceType])
+  @@map("org_allowed_services")
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String
-  passwordHash String   @map("password_hash")
-  role         UserRole @default(user)
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String
+  passwordHash   String   @map("password_hash")
+  role           UserRole @default(user)
+  organizationId String   @map("organization_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   apps         App[]
   chatMessages ChatMessage[]
 
@@ -58,7 +87,7 @@ model App {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   domains      AppDomain[]
-  credentials  AppCredential[]
+  services     AppService[]
   chatMessages ChatMessage[]
 
   @@map("apps")
@@ -77,31 +106,34 @@ model AppDomain {
   @@map("app_domains")
 }
 
-model Credential {
-  id                   String         @id @default(cuid())
-  name                 String
-  type                 CredentialType
-  credentialsEncrypted String         @map("credentials_encrypted")
-  iv                   String
-  authTag              String         @map("auth_tag")
-  createdAt            DateTime       @default(now()) @map("created_at")
-  updatedAt            DateTime       @updatedAt @map("updated_at")
+model Service {
+  id             String      @id @default(cuid())
+  name           String
+  type           ServiceType
+  endpointUrl    String?     @map("endpoint_url")
+  configEncrypted String     @map("config_encrypted")
+  iv             String
+  authTag        String      @map("auth_tag")
+  organizationId String      @map("organization_id")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
 
-  apps AppCredential[]
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  apps         AppService[]
 
-  @@map("credentials")
+  @@map("services")
 }
 
-model AppCredential {
+model AppService {
   appId        String @map("app_id")
-  credentialId String @map("credential_id")
-  envVarPrefix String @default("DB") @map("env_var_prefix")
+  serviceId    String @map("service_id")
+  envVarPrefix String @default("SVC") @map("env_var_prefix")
 
-  app        App        @relation(fields: [appId], references: [id], onDelete: Cascade)
-  credential Credential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  app     App     @relation(fields: [appId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
-  @@id([appId, credentialId])
-  @@map("app_credentials")
+  @@id([appId, serviceId])
+  @@map("app_services")
 }
 
 model ChatMessage {

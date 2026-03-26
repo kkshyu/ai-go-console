@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AppWindow, Database, Play, PlusCircle, Globe } from "lucide-react";
+import { AppWindow, Server, Play, PlusCircle, Globe } from "lucide-react";
 
 interface AppItem {
   id: string;
@@ -25,7 +25,7 @@ interface AppItem {
 interface Stats {
   totalApps: number;
   runningApps: number;
-  credentials: number;
+  services: number;
 }
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
@@ -43,7 +43,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<Stats>({
     totalApps: 0,
     runningApps: 0,
-    credentials: 0,
+    services: 0,
   });
 
   useEffect(() => {
@@ -62,11 +62,11 @@ export default function DashboardPage() {
       })
       .catch(() => {});
 
-    // Fetch credentials count
-    fetch("/api/credentials")
+    // Fetch services count
+    fetch("/api/services")
       .then((res) => res.json())
       .then((data: unknown[]) => {
-        setStats((prev) => ({ ...prev, credentials: data.length }));
+        setStats((prev) => ({ ...prev, services: data.length }));
       })
       .catch(() => {});
   }, []);
@@ -105,12 +105,12 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              {t("credentials")}
+              {t("services")}
             </CardTitle>
-            <Database className="h-4 w-4 text-muted-foreground" />
+            <Server className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.credentials}</div>
+            <div className="text-2xl font-bold">{stats.services}</div>
           </CardContent>
         </Card>
       </div>

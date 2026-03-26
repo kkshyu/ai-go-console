@@ -19,8 +19,9 @@
     "dashboard": "儀表板",
     "apps": "應用程式",
     "createApp": "建立應用",
-    "credentials": "憑證",
+    "services": "服務",
     "users": "使用者管理",
+    "organization": "組織",
     "settings": "設定",
     "logout": "登出"
   },
@@ -28,7 +29,7 @@
     "title": "儀表板",
     "totalApps": "應用程式總數",
     "runningApps": "執行中",
-    "credentials": "憑證",
+    "services": "服務",
     "emptyState": "尚未建立任何應用程式",
     "emptyStateAction": "建立第一個應用",
     "recentApps": "最近的應用程式"
@@ -59,13 +60,17 @@
     "placeholder": "描述您想建立的應用程式...",
     "send": "送出",
     "preview": "預覽",
-    "generating": "正在產生應用程式..."
+    "generating": "正在產生應用程式...",
+    "serviceNotAuthorized": "所需的服務尚未授權給您的組織",
+    "contactAdmin": "請聯繫組織管理員以啟用這些服務。"
   },
-  "credentials": {
-    "title": "憑證",
-    "add": "新增憑證",
+  "services": {
+    "title": "服務",
+    "add": "新增服務",
+    "addDescription": "設定新的服務連線",
     "name": "名稱",
     "type": "類型",
+    "endpointUrl": "端點 URL",
     "host": "主機",
     "port": "連接埠",
     "database": "資料庫",
@@ -73,15 +78,30 @@
     "password": "密碼",
     "apiKey": "API Key",
     "projectUrl": "專案 URL",
+    "adminSecret": "管理員密鑰",
+    "webhookSecret": "Webhook 密鑰",
     "testConnection": "測試連線",
     "connectionSuccess": "連線成功",
     "connectionFailed": "連線失敗",
+    "emptyState": "尚未設定任何服務",
     "types": {
-      "postgres": "PostgreSQL",
+      "disk": "磁碟儲存",
+      "postgresql": "PostgreSQL",
       "supabase": "Supabase",
-      "mysql": "MySQL",
-      "redis": "Redis"
+      "stripe": "Stripe",
+      "hasura": "Hasura"
     }
+  },
+  "organization": {
+    "title": "組織設定",
+    "members": "成員",
+    "servicesCount": "個服務",
+    "allowedServices": "允許的服務",
+    "allowedServicesDescription": "控制此組織的應用程式可以使用哪些服務類型",
+    "enable": "啟用",
+    "disable": "停用",
+    "invite": "新增成員",
+    "invitePlaceholder": "輸入電子郵件地址以新增..."
   },
   "users": {
     "title": "使用者管理",
@@ -99,6 +119,8 @@
     "email": "電子郵件",
     "password": "密碼",
     "name": "名稱",
+    "organizationName": "組織名稱",
+    "organizationPlaceholder": "我的組織",
     "loginTitle": "登入 AI Go",
     "registerTitle": "註冊 AI Go",
     "noAccount": "還沒有帳號？",

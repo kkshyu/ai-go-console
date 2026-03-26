@@ -19,8 +19,9 @@
     "dashboard": "Dashboard",
     "apps": "Apps",
     "createApp": "Create App",
-    "credentials": "Credentials",
+    "services": "Services",
     "users": "User Management",
+    "organization": "Organization",
     "settings": "Settings",
     "logout": "Logout"
   },
@@ -28,7 +29,7 @@
     "title": "Dashboard",
     "totalApps": "Total Apps",
     "runningApps": "Running",
-    "credentials": "Credentials",
+    "services": "Services",
     "emptyState": "No apps created yet",
     "emptyStateAction": "Create your first app",
     "recentApps": "Recent Apps"
@@ -59,13 +60,17 @@
     "placeholder": "Describe the app you want to create...",
     "send": "Send",
     "preview": "Preview",
-    "generating": "Generating app..."
+    "generating": "Generating app...",
+    "serviceNotAuthorized": "Required service not authorized for your organization",
+    "contactAdmin": "Please contact your organization admin to enable these services."
   },
-  "credentials": {
-    "title": "Credentials",
-    "add": "Add Credential",
+  "services": {
+    "title": "Services",
+    "add": "Add Service",
+    "addDescription": "Configure a new service connection",
     "name": "Name",
     "type": "Type",
+    "endpointUrl": "Endpoint URL",
     "host": "Host",
     "port": "Port",
     "database": "Database",
@@ -73,15 +78,30 @@
     "password": "Password",
     "apiKey": "API Key",
     "projectUrl": "Project URL",
+    "adminSecret": "Admin Secret",
+    "webhookSecret": "Webhook Secret",
     "testConnection": "Test Connection",
     "connectionSuccess": "Connection successful",
     "connectionFailed": "Connection failed",
+    "emptyState": "No services configured",
     "types": {
-      "postgres": "PostgreSQL",
+      "disk": "Disk Storage",
+      "postgresql": "PostgreSQL",
       "supabase": "Supabase",
-      "mysql": "MySQL",
-      "redis": "Redis"
+      "stripe": "Stripe",
+      "hasura": "Hasura"
     }
+  },
+  "organization": {
+    "title": "Organization Settings",
+    "members": "Members",
+    "servicesCount": "services",
+    "allowedServices": "Allowed Services",
+    "allowedServicesDescription": "Control which service types apps in this organization can use",
+    "enable": "Enable",
+    "disable": "Disable",
+    "invite": "Add Member",
+    "invitePlaceholder": "Enter email address to add..."
   },
   "users": {
     "title": "User Management",
@@ -99,6 +119,8 @@
     "email": "Email",
     "password": "Password",
     "name": "Name",
+    "organizationName": "Organization Name",
+    "organizationPlaceholder": "My Organization",
     "loginTitle": "Login to AI Go",
     "registerTitle": "Register for AI Go",
     "noAccount": "Don't have an account?",

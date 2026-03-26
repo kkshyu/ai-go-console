@@ -1,14 +1,15 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Credential Encryption", () => {
-  let dsId: string;
+test.describe("Service Encryption", () => {
+  let svcId: string;
 
-  test("credentials are stored encrypted in DB", async ({ request }) => {
-    // Create a credential
-    const res = await request.post("/api/credentials", {
+  test("services are stored encrypted in DB", async ({ request }) => {
+    // Create a service
+    const res = await request.post("/api/services", {
       data: {
-        name: "E2E Encrypted DS",
-        type: "postgres",
+        name: "E2E Encrypted SVC",
+        type: "postgresql",
+        endpointUrl: "http://secrethost.internal:3000",
         host: "secrethost.internal",
         port: "5432",
         database: "secretdb",
@@ -18,34 +19,34 @@ test.describe("Credential Encryption", () => {
     });
     expect(res.status()).toBe(201);
     const body = await res.json();
-    dsId = body.id;
+    svcId = body.id;
 
-    // The GET response should NOT contain credentials
-    expect(body.credentialsEncrypted).toBeUndefined();
+    // The GET response should NOT contain config
+    expect(body.configEncrypted).toBeUndefined();
     expect(body.password).toBeUndefined();
     expect(body.host).toBeUndefined();
   });
 
-  test("GET credential list never exposes encrypted data", async ({
+  test("GET service list never exposes encrypted data", async ({
     request,
   }) => {
-    const res = await request.get("/api/credentials");
-    const sources = await res.json();
+    const res = await request.get("/api/services");
+    const services = await res.json();
 
-    for (const ds of sources) {
-      expect(ds.credentialsEncrypted).toBeUndefined();
-      expect(ds.iv).toBeUndefined();
-      expect(ds.authTag).toBeUndefined();
-      expect(ds.password).toBeUndefined();
-      expect(ds.apiKey).toBeUndefined();
+    for (const svc of services) {
+      expect(svc.configEncrypted).toBeUndefined();
+      expect(svc.iv).toBeUndefined();
+      expect(svc.authTag).toBeUndefined();
+      expect(svc.password).toBeUndefined();
+      expect(svc.apiKey).toBeUndefined();
     }
   });
 
-  test("test connection can decrypt and use credentials", async ({
+  test("test connection can decrypt and use service config", async ({
     request,
   }) => {
-    // The test connection endpoint decrypts credentials internally
-    const res = await request.post(`/api/credentials/${dsId}/test`);
+    // The test connection endpoint decrypts config internally
+    const res = await request.post(`/api/services/${svcId}/test`);
     expect(res.status()).toBe(200);
     const body = await res.json();
     // It should have attempted connection (may fail since host doesn't exist)
@@ -53,8 +54,8 @@ test.describe("Credential Encryption", () => {
   });
 
   test.afterAll(async ({ request }) => {
-    if (dsId) {
-      await request.delete(`/api/credentials/${dsId}`);
+    if (svcId) {
+      await request.delete(`/api/services/${svcId}`);
     }
   });
 });

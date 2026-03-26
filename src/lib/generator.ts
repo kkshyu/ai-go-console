@@ -14,14 +14,14 @@ export interface GenerateAppOptions {
   description?: string;
   template: string;
   port: number;
-  credentialIds?: string[];
+  serviceIds?: string[];
 }
 
 /**
  * Generates an app from a template into apps/<slug>/
  */
 export async function generateApp(options: GenerateAppOptions): Promise<string> {
-  const { slug, name, description, template, port, credentialIds } = options;
+  const { slug, name, description, template, port, serviceIds } = options;
 
   const tmpl = getTemplate(template);
   if (!tmpl) {
@@ -38,31 +38,34 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
     await fsp.rm(appDir, { recursive: true, force: true });
   }
 
-  // Resolve environment variables from linked credentials
+  // Resolve environment variables from linked services
   const envVars: Record<string, string> = {};
-  if (credentialIds && credentialIds.length > 0) {
-    const appCredentials = await prisma.appCredential.findMany({
+  if (serviceIds && serviceIds.length > 0) {
+    const appServices = await prisma.appService.findMany({
       where: {
-        appId: slug, // We'll use the actual app ID after creation
-        credentialId: { in: credentialIds },
+        appId: slug,
+        serviceId: { in: serviceIds },
       },
-      include: { credential: true },
+      include: { service: true },
     });
 
-    for (const ads of appCredentials) {
-      const ds = ads.credential;
-      const creds = JSON.parse(
-        decrypt(ds.credentialsEncrypted, ds.iv, ds.authTag)
+    for (const as_ of appServices) {
+      const svc = as_.service;
+      const config = JSON.parse(
+        decrypt(svc.configEncrypted, svc.iv, svc.authTag)
       );
-      const prefix = ads.envVarPrefix;
+      const prefix = as_.envVarPrefix;
 
-      if (creds.host) envVars[`${prefix}_HOST`] = creds.host;
-      if (creds.port) envVars[`${prefix}_PORT`] = creds.port;
-      if (creds.database) envVars[`${prefix}_DATABASE`] = creds.database;
-      if (creds.username) envVars[`${prefix}_USER`] = creds.username;
-      if (creds.password) envVars[`${prefix}_PASSWORD`] = creds.password;
-      if (creds.apiKey) envVars[`${prefix}_API_KEY`] = creds.apiKey;
-      if (creds.projectUrl) envVars[`${prefix}_PROJECT_URL`] = creds.projectUrl;
+      if (svc.endpointUrl) envVars[`${prefix}_ENDPOINT_URL`] = svc.endpointUrl;
+      if (config.host) envVars[`${prefix}_HOST`] = config.host;
+      if (config.port) envVars[`${prefix}_PORT`] = config.port;
+      if (config.database) envVars[`${prefix}_DATABASE`] = config.database;
+      if (config.username) envVars[`${prefix}_USER`] = config.username;
+      if (config.password) envVars[`${prefix}_PASSWORD`] = config.password;
+      if (config.apiKey) envVars[`${prefix}_API_KEY`] = config.apiKey;
+      if (config.projectUrl) envVars[`${prefix}_PROJECT_URL`] = config.projectUrl;
+      if (config.adminSecret) envVars[`${prefix}_ADMIN_SECRET`] = config.adminSecret;
+      if (config.webhookSecret) envVars[`${prefix}_WEBHOOK_SECRET`] = config.webhookSecret;
     }
   }
 

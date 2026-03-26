@@ -2,11 +2,10 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Send, Bot, User, Loader2 } from "lucide-react";
+import { Send, Bot, User, Loader2, AlertTriangle } from "lucide-react";
 
 interface Message {
   id: string;
@@ -20,21 +19,38 @@ interface CreateAppAction {
   template: string;
   description?: string;
   config?: Record<string, unknown>;
+  requiredServices?: string[];
 }
 
 export default function CreateAppPage() {
   const t = useTranslations("create");
-  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [previewPort, setPreviewPort] = useState<number | null>(null);
   const [creatingApp, setCreatingApp] = useState(false);
+  const [serviceWarning, setServiceWarning] = useState<string | null>(null);
+  const [allowedServices, setAllowedServices] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Load allowed services for this org
+  useEffect(() => {
+    fetch("/api/organizations")
+      .then((r) => r.json())
+      .then((org) => {
+        if (org.allowedServices) {
+          const enabled = org.allowedServices
+            .filter((s: { enabled: boolean }) => s.enabled)
+            .map((s: { serviceType: string }) => s.serviceType);
+          setAllowedServices(enabled);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Parse AI response for create_app action
   const parseAction = useCallback((content: string): CreateAppAction | null => {
@@ -47,12 +63,40 @@ export default function CreateAppPage() {
     return null;
   }, []);
 
+  // Check if required services are authorized
+  const checkServiceAuthorization = useCallback(
+    (requiredServices: string[]): string[] => {
+      if (!requiredServices || requiredServices.length === 0) return [];
+      return requiredServices.filter((s) => !allowedServices.includes(s));
+    },
+    [allowedServices]
+  );
+
   // Create app from action
   const handleCreateApp = useCallback(
     async (action: CreateAppAction) => {
+      // Check service authorization
+      if (action.requiredServices && action.requiredServices.length > 0) {
+        const unauthorized = checkServiceAuthorization(action.requiredServices);
+        if (unauthorized.length > 0) {
+          setServiceWarning(
+            `${t("serviceNotAuthorized")}: ${unauthorized.join(", ")}`
+          );
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: Date.now().toString(),
+              role: "assistant",
+              content: `${t("serviceNotAuthorized")}: ${unauthorized.join(", ")}. ${t("contactAdmin")}`,
+            },
+          ]);
+          return;
+        }
+      }
+
       setCreatingApp(true);
+      setServiceWarning(null);
       try {
-        // Create the app via API
         const res = await fetch("/api/apps", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -61,7 +105,6 @@ export default function CreateAppPage() {
             template: action.template,
             description: action.description || "",
             config: action.config || {},
-            userId: "temp-user", // TODO: use actual auth user
           }),
         });
 
@@ -69,7 +112,6 @@ export default function CreateAppPage() {
 
         const app = await res.json();
 
-        // Generate app files
         const genRes = await fetch(`/api/apps/${app.id}/lifecycle`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -81,7 +123,6 @@ export default function CreateAppPage() {
           setPreviewPort(port || app.port);
         }
 
-        // Add success message
         setMessages((prev) => [
           ...prev,
           {
@@ -105,12 +146,14 @@ export default function CreateAppPage() {
         setCreatingApp(false);
       }
     },
-    []
+    [checkServiceAuthorization, t]
   );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
+
+    setServiceWarning(null);
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -123,7 +166,6 @@ export default function CreateAppPage() {
     setInput("");
     setIsLoading(true);
 
-    // Add placeholder for streaming response
     const assistantId = (Date.now() + 1).toString();
     setMessages((prev) => [
       ...prev,
@@ -213,6 +255,13 @@ export default function CreateAppPage() {
       <div className="mb-4">
         <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
       </div>
+
+      {serviceWarning && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>{serviceWarning}</span>
+        </div>
+      )}
 
       <div className="flex flex-1 gap-4 min-h-0">
         {/* Chat Panel */}

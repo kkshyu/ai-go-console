@@ -1,24 +1,25 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Credentials", () => {
+test.describe("Services", () => {
   let createdId: string;
 
-  test("GET /api/credentials returns empty array initially", async ({
+  test("GET /api/services returns empty array initially", async ({
     request,
   }) => {
-    const res = await request.get("/api/credentials");
+    const res = await request.get("/api/services");
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(Array.isArray(body)).toBe(true);
   });
 
-  test("POST /api/credentials creates a PostgreSQL credential", async ({
+  test("POST /api/services creates a PostgreSQL service", async ({
     request,
   }) => {
-    const res = await request.post("/api/credentials", {
+    const res = await request.post("/api/services", {
       data: {
         name: "E2E Test Postgres",
-        type: "postgres",
+        type: "postgresql",
+        endpointUrl: "http://localhost:3000/rest",
         host: "localhost",
         port: "5432",
         database: "testdb",
@@ -29,18 +30,19 @@ test.describe("Credentials", () => {
     expect(res.status()).toBe(201);
     const body = await res.json();
     expect(body.name).toBe("E2E Test Postgres");
-    expect(body.type).toBe("postgres");
+    expect(body.type).toBe("postgresql");
     expect(body.id).toBeDefined();
     createdId = body.id;
   });
 
-  test("POST /api/credentials creates a Supabase credential", async ({
+  test("POST /api/services creates a Supabase service", async ({
     request,
   }) => {
-    const res = await request.post("/api/credentials", {
+    const res = await request.post("/api/services", {
       data: {
         name: "E2E Test Supabase",
         type: "supabase",
+        endpointUrl: "https://test.supabase.co",
         projectUrl: "https://test.supabase.co",
         apiKey: "test-anon-key",
       },
@@ -50,27 +52,27 @@ test.describe("Credentials", () => {
     expect(body.type).toBe("supabase");
   });
 
-  test("POST /api/credentials rejects missing name", async ({ request }) => {
-    const res = await request.post("/api/credentials", {
-      data: { type: "postgres" },
+  test("POST /api/services rejects missing name", async ({ request }) => {
+    const res = await request.post("/api/services", {
+      data: { type: "postgresql" },
     });
     expect(res.status()).toBe(400);
   });
 
-  test("GET /api/credentials lists created credentials", async ({ request }) => {
-    const res = await request.get("/api/credentials");
+  test("GET /api/services lists created services", async ({ request }) => {
+    const res = await request.get("/api/services");
     const body = await res.json();
     expect(body.length).toBeGreaterThanOrEqual(2);
     // Should NOT contain encrypted data in response
-    for (const ds of body) {
-      expect(ds.credentialsEncrypted).toBeUndefined();
-      expect(ds.iv).toBeUndefined();
-      expect(ds.authTag).toBeUndefined();
+    for (const svc of body) {
+      expect(svc.configEncrypted).toBeUndefined();
+      expect(svc.iv).toBeUndefined();
+      expect(svc.authTag).toBeUndefined();
     }
   });
 
-  test("PATCH /api/credentials/:id updates name", async ({ request }) => {
-    const res = await request.patch(`/api/credentials/${createdId}`, {
+  test("PATCH /api/services/:id updates name", async ({ request }) => {
+    const res = await request.patch(`/api/services/${createdId}`, {
       data: { name: "E2E Updated Postgres" },
     });
     expect(res.status()).toBe(200);
@@ -78,34 +80,33 @@ test.describe("Credentials", () => {
     expect(body.name).toBe("E2E Updated Postgres");
   });
 
-  test("POST /api/credentials/:id/test tests connection", async ({
+  test("POST /api/services/:id/test tests connection", async ({
     request,
   }) => {
-    const res = await request.post(`/api/credentials/${createdId}/test`);
+    const res = await request.post(`/api/services/${createdId}/test`);
     expect(res.status()).toBe(200);
     const body = await res.json();
-    // Should return success/failure (localhost:5432 is our actual PG)
     expect(body).toHaveProperty("success");
     expect(body).toHaveProperty("message");
   });
 
-  test("credentials page shows form on Add button click", async ({
+  test("services page shows form on Add button click", async ({
     page,
   }) => {
-    await page.goto("/credentials");
-    await page.click("button:has-text('Add Credential'), button:has-text('新增憑證')");
+    await page.goto("/services");
+    await page.click("button:has-text('Add Service'), button:has-text('新增服務')");
     // Form should appear
-    await expect(page.locator('input[placeholder="My Database"]')).toBeVisible();
+    await expect(page.locator('input[placeholder="My Service"]')).toBeVisible();
   });
 
-  test("DELETE /api/credentials/:id removes credential", async ({
+  test("DELETE /api/services/:id removes service", async ({
     request,
   }) => {
-    const res = await request.delete(`/api/credentials/${createdId}`);
+    const res = await request.delete(`/api/services/${createdId}`);
     expect(res.status()).toBe(200);
 
     // Verify it's gone
-    const getRes = await request.get(`/api/credentials/${createdId}`);
+    const getRes = await request.get(`/api/services/${createdId}`);
     expect(getRes.status()).toBe(404);
   });
 });
