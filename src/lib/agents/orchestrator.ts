@@ -1,21 +1,18 @@
 /**
  * Multi-Agent Orchestrator
  *
- * Routes user messages to the appropriate agent based on the current
- * pipeline stage and message content. Manages stage transitions.
+ * PM Agent is the central orchestrator. It receives user messages and
+ * decides which specialist agents to dispatch tasks to. The orchestrator
+ * parses PM's JSON actions and routes accordingly.
  */
 
 import type {
   AgentRole,
-  PipelineStage,
-  PipelineState,
   AgentMessage,
+  OrchestrationState,
+  PMAction,
 } from "./types";
-import {
-  PIPELINE_STAGES,
-  STAGE_AGENT_MAP,
-  createInitialPipelineState,
-} from "./types";
+import { createInitialOrchestrationState } from "./types";
 import {
   buildPMPrompt,
   buildArchitectPrompt,
@@ -29,54 +26,49 @@ import {
 export interface OrchestratorContext {
   allowedServices: string[];
   appContext?: string; // For existing app development
-  pipelineState?: PipelineState;
+  orchestrationState?: OrchestrationState;
+  /** When set, PM has dispatched to this agent — route to it instead of PM */
+  dispatchedAgent?: AgentRole;
+  /** Task description from PM for the dispatched agent */
+  dispatchedTask?: string;
 }
 
 export interface AgentDispatch {
   agentRole: AgentRole;
-  stage: PipelineStage;
   systemPrompt: string;
-  pipelineState: PipelineState;
+  orchestrationState: OrchestrationState;
 }
 
 /**
- * Determine which agent should handle the current message
- * based on pipeline state and message content.
+ * Determine which agent should handle the current message.
+ *
+ * - If PM dispatched an agent, route to that agent.
+ * - Otherwise, route to PM.
  */
 export function routeMessage(
   messages: AgentMessage[],
   context: OrchestratorContext
 ): AgentDispatch {
-  const state = context.pipelineState || createInitialPipelineState();
+  const state = context.orchestrationState || createInitialOrchestrationState();
 
-  // Check if the last assistant message contained a stage-completion action
-  const lastAssistant = [...messages]
-    .reverse()
-    .find((m) => m.role === "assistant");
-
-  if (lastAssistant) {
-    const advancedState = checkStageAdvancement(lastAssistant.content, state);
-    if (advancedState) {
-      return buildDispatch(advancedState, context);
-    }
+  // If PM dispatched a specialist agent, route to it
+  if (context.dispatchedAgent && context.dispatchedAgent !== "pm") {
+    return buildSpecialistDispatch(
+      context.dispatchedAgent,
+      context.dispatchedTask || "",
+      state,
+      context
+    );
   }
 
-  // For existing app development, use simplified two-agent flow
-  if (context.appContext) {
-    return routeAppDevMessage(messages, state, context);
-  }
-
-  // Default: stay on current stage
-  return buildDispatch(state, context);
+  // Default: route to PM
+  return buildPMDispatch(state, context);
 }
 
 /**
- * Check if an assistant message contains an action that advances the pipeline
+ * Parse PM Agent's JSON output to determine what action to take.
  */
-function checkStageAdvancement(
-  content: string,
-  state: PipelineState
-): PipelineState | null {
+export function parsePMAction(content: string): PMAction | null {
   const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
   if (!jsonMatch) return null;
 
@@ -84,154 +76,193 @@ function checkStageAdvancement(
     const parsed = JSON.parse(jsonMatch[1]);
     const action = parsed.action as string;
 
-    const actionStageMap: Record<string, PipelineStage> = {
-      pm_spec: "requirements",
-      pm_analysis: "requirements",
-      architect_design: "architecture",
-      create_app: "coding",
-      update_app: "coding",
-      review_result: "review",
-      deploy_ready: "deployment",
-    };
-
-    const completedStage = actionStageMap[action];
-    if (!completedStage) return null;
-
-    const newState = { ...state };
-    newState.stages = { ...state.stages };
-    newState.stages[completedStage] = {
-      status: "completed",
-      summary: extractSummary(parsed),
-    };
-
-    if (!newState.completedStages.includes(completedStage)) {
-      newState.completedStages = [...newState.completedStages, completedStage];
+    if (action === "dispatch" && parsed.target && parsed.task) {
+      return {
+        action: "dispatch",
+        target: parsed.target as AgentRole,
+        task: parsed.task,
+      };
     }
 
-    // Advance to next stage
-    const currentIndex = PIPELINE_STAGES.indexOf(completedStage);
-    if (currentIndex < PIPELINE_STAGES.length - 1) {
-      const nextStage = PIPELINE_STAGES[currentIndex + 1];
-      newState.currentStage = nextStage;
-      newState.stages[nextStage] = { status: "running" };
-      newState.status = "running";
-    } else {
-      newState.status = "completed";
+    if (action === "respond" && parsed.message) {
+      return {
+        action: "respond",
+        message: parsed.message,
+      };
     }
 
-    return newState;
+    if (action === "complete") {
+      return {
+        action: "complete",
+        summary: parsed.summary || "Task completed",
+      };
+    }
+
+    return null;
   } catch {
     return null;
   }
 }
 
-function extractSummary(parsed: Record<string, unknown>): string {
-  if (parsed.spec && typeof parsed.spec === "object") {
-    const spec = parsed.spec as Record<string, unknown>;
-    return (spec.description as string) || "Requirements gathered";
+/**
+ * Parse a specialist agent's JSON output to extract a summary.
+ * Also detects if the agent reported being blocked.
+ */
+export function parseAgentResult(content: string): { summary: string; blocked: boolean; blockedReason?: string } {
+  const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
+  if (!jsonMatch) return { summary: content.slice(0, 200), blocked: false };
+
+  try {
+    const parsed = JSON.parse(jsonMatch[1]);
+
+    // Check if agent reported being blocked
+    if (parsed.status === "blocked") {
+      return {
+        summary: parsed.blockedReason || "Agent could not complete the task",
+        blocked: true,
+        blockedReason: parsed.blockedReason,
+      };
+    }
+
+    let summary = "Task completed";
+    if (parsed.design?.architecture) summary = parsed.design.architecture;
+    else if (parsed.review?.summary) summary = parsed.review.summary;
+    else if (parsed.deployment?.notes) summary = parsed.deployment.notes;
+    else if (parsed.name) summary = `App: ${parsed.name}`;
+    else if (parsed.changes?.description) summary = parsed.changes.description;
+    else if (parsed.action) summary = parsed.action;
+
+    return { summary, blocked: false };
+  } catch {
+    return { summary: content.slice(0, 200), blocked: false };
   }
-  if (parsed.design && typeof parsed.design === "object") {
-    const design = parsed.design as Record<string, unknown>;
-    return (design.architecture as string) || "Architecture designed";
-  }
-  if (parsed.review && typeof parsed.review === "object") {
-    const review = parsed.review as Record<string, unknown>;
-    return (review.summary as string) || "Review complete";
-  }
-  return "Stage completed";
 }
 
-function routeAppDevMessage(
-  messages: AgentMessage[],
-  state: PipelineState,
-  context: OrchestratorContext
-): AgentDispatch {
-  // For app development, alternate between PM (analysis) and Developer
-  const lastAssistant = [...messages]
-    .reverse()
-    .find((m) => m.role === "assistant");
-
-  if (lastAssistant?.agentRole === "pm") {
-    // PM analyzed, now developer implements
-    return {
-      agentRole: "developer",
-      stage: "coding",
-      systemPrompt: buildAppDevDeveloperPrompt(context.appContext || ""),
-      pipelineState: {
-        ...state,
-        currentStage: "coding",
-        stages: { ...state.stages, coding: { status: "running" } },
-      },
-    };
-  }
-
-  // Default: PM analyzes first
+/**
+ * Update orchestration state when dispatching to an agent.
+ */
+export function stateForDispatch(
+  state: OrchestrationState,
+  agentRole: AgentRole,
+  description?: string
+): OrchestrationState {
   return {
-    agentRole: "pm",
-    stage: "requirements",
-    systemPrompt: buildAppDevPMPrompt(context.appContext || ""),
-    pipelineState: {
-      ...state,
-      currentStage: "requirements",
-      stages: { ...state.stages, requirements: { status: "running" } },
-    },
-  };
-}
-
-function buildDispatch(
-  state: PipelineState,
-  context: OrchestratorContext
-): AgentDispatch {
-  const agentRole = STAGE_AGENT_MAP[state.currentStage];
-  const services = context.allowedServices.join(",");
-
-  const promptBuilders: Record<AgentRole, () => string> = {
-    pm: () => buildPMPrompt(context.allowedServices),
-    architect: () => buildArchitectPrompt(context.allowedServices),
-    developer: () => buildDeveloperPrompt(context.allowedServices),
-    reviewer: () => buildReviewerPrompt(),
-    devops: () => buildDevOpsPrompt(),
-  };
-
-  return {
-    agentRole,
-    stage: state.currentStage,
-    systemPrompt: promptBuilders[agentRole](),
-    pipelineState: {
-      ...state,
-      status: "running",
-      stages: {
-        ...state.stages,
-        [state.currentStage]: { status: "running" },
-      },
-    },
+    status: "running",
+    currentAgent: agentRole,
+    tasks: [
+      ...state.tasks,
+      { agentRole, status: "running", description },
+    ],
   };
 }
 
 /**
- * Build context string for passing between agents.
- * Includes summaries from all completed stages.
+ * Update orchestration state when an agent completes.
  */
-export function buildAgentContext(
-  messages: AgentMessage[],
-  state: PipelineState
-): string {
+export function stateForAgentComplete(
+  state: OrchestrationState,
+  agentRole: AgentRole,
+  summary?: string
+): OrchestrationState {
+  return {
+    ...state,
+    currentAgent: "pm", // control returns to PM
+    tasks: state.tasks.map((t) =>
+      t.agentRole === agentRole && t.status === "running"
+        ? { ...t, status: "completed" as const, summary }
+        : t
+    ),
+  };
+}
+
+/**
+ * Update orchestration state when PM marks the task complete.
+ */
+export function stateForComplete(
+  state: OrchestrationState,
+  summary?: string
+): OrchestrationState {
+  return {
+    status: "completed",
+    currentAgent: null,
+    tasks: state.tasks.map((t) =>
+      t.status === "running"
+        ? { ...t, status: "completed" as const, summary }
+        : t
+    ),
+  };
+}
+
+// ---- Internal helpers ----
+
+function buildPMDispatch(
+  state: OrchestrationState,
+  context: OrchestratorContext
+): AgentDispatch {
+  const prompt = context.appContext
+    ? buildAppDevPMPrompt(context.appContext)
+    : buildPMPrompt(context.allowedServices);
+
+  return {
+    agentRole: "pm",
+    systemPrompt: prompt,
+    orchestrationState: {
+      ...state,
+      status: "running",
+      currentAgent: "pm",
+    },
+  };
+}
+
+function buildSpecialistDispatch(
+  agentRole: AgentRole,
+  task: string,
+  state: OrchestrationState,
+  context: OrchestratorContext
+): AgentDispatch {
+  const promptBuilders: Record<AgentRole, () => string> = {
+    pm: () => buildPMPrompt(context.allowedServices),
+    architect: () => buildArchitectPrompt(context.allowedServices),
+    developer: () =>
+      context.appContext
+        ? buildAppDevDeveloperPrompt(context.appContext)
+        : buildDeveloperPrompt(context.allowedServices),
+    reviewer: () => buildReviewerPrompt(),
+    devops: () => buildDevOpsPrompt(),
+  };
+
+  // Prepend PM's task description to the system prompt
+  const basePrompt = promptBuilders[agentRole]();
+  const systemPrompt = `${basePrompt}\n\n--- TASK FROM PM ---\n${task}`;
+
+  return {
+    agentRole,
+    systemPrompt,
+    orchestrationState: stateForDispatch(state, agentRole, task),
+  };
+}
+
+/**
+ * Build minimal context string from previous agent JSON outputs.
+ * Only extracts structured JSON blocks — never full conversation text.
+ * This keeps token usage low while preserving all decision-critical data.
+ */
+export function buildAgentContext(messages: AgentMessage[]): string {
   const contextParts: string[] = [];
 
-  // Collect JSON action outputs from previous agents
   for (const msg of messages) {
     if (msg.role !== "assistant") continue;
     const jsonMatch = msg.content.match(/```json\s*\n([\s\S]*?)\n```/);
     if (jsonMatch) {
       contextParts.push(
-        `[${msg.agentRole?.toUpperCase() || "AGENT"} output]: ${jsonMatch[1]}`
+        `[${msg.agentRole?.toUpperCase() || "AGENT"}]: ${jsonMatch[1]}`
       );
     }
   }
 
   return contextParts.length > 0
-    ? `\n\nPrevious agent outputs:\n${contextParts.join("\n\n")}`
+    ? `\n\nAgent outputs:\n${contextParts.join("\n")}`
     : "";
 }
 
-export { createInitialPipelineState };
+export { createInitialOrchestrationState };

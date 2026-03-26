@@ -180,18 +180,35 @@ model ChatMessage {
 }
 
 model AgentPipeline {
-  id            String   @id @default(cuid())
-  status        String   @default("idle")
-  currentStage  String   @default("requirements") @map("current_stage")
-  completedStages String[] @map("completed_stages")
-  stageData     Json?    @map("stage_data")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(cuid())
+  status         String   @default("idle")
+  currentAgent   String?  @map("current_stage")
+  completedAgents String[] @map("completed_stages")
+  tasks          Json?    @map("stage_data")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   appId String? @map("app_id")
   app   App?    @relation(fields: [appId], references: [id], onDelete: Cascade)
 
-  messages ChatMessage[]
+  messages  ChatMessage[]
+  artifacts AgentArtifact[]
 
   @@map("agent_pipelines")
+}
+
+/// Persists structured outputs from agents (design docs, task specs, etc.)
+/// so they can be referenced across agent calls without repeating in context.
+model AgentArtifact {
+  id         String   @id @default(cuid())
+  pipelineId String   @map("pipeline_id")
+  agentRole  String   @map("agent_role")
+  type       String   // "design" | "spec" | "review" | "deployment" | "task"
+  content    Json     // the structured JSON output from the agent
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  pipeline AgentPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  @@index([pipelineId, agentRole])
+  @@map("agent_artifacts")
 }

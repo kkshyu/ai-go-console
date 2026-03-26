@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle } from "lucide-react";
 import { AgentChatPanel } from "@/components/chat/agent-chat-panel";
-import type { AgentRole, PipelineStage, PipelineState } from "@/lib/agents/types";
+import type { AgentRole } from "@/lib/agents/types";
 
 interface CreateAppAction {
   action: "create_app";
@@ -24,14 +24,6 @@ export default function CreateAppPage() {
   const [serviceWarning, setServiceWarning] = useState<string | null>(null);
   const [allowedServices, setAllowedServices] = useState<string[]>([]);
   const [pipelineId, setPipelineId] = useState<string | null>(null);
-
-  const stageLabels: Record<PipelineStage, string> = {
-    requirements: tAgents("stages.requirements"),
-    architecture: tAgents("stages.architecture"),
-    coding: tAgents("stages.coding"),
-    review: tAgents("stages.review"),
-    deployment: tAgents("stages.deployment"),
-  };
 
   // Load allowed services for this org
   useEffect(() => {
@@ -125,8 +117,8 @@ export default function CreateAppPage() {
     [handleCreateApp]
   );
 
-  const handlePipelineUpdate = useCallback((state: PipelineState) => {
-    // Could trigger additional actions based on pipeline state changes
+  const handleOrchestrationUpdate = useCallback(() => {
+    // Could trigger additional actions based on orchestration state changes
   }, []);
 
   return (
@@ -153,10 +145,9 @@ export default function CreateAppPage() {
             totalTokensLabel={t("totalTokens")}
             externalLoading={creatingApp}
             onAssistantResponse={handleAssistantResponse}
-            onPipelineUpdate={handlePipelineUpdate}
+            onOrchestrationUpdate={handleOrchestrationUpdate}
             pipelineId={pipelineId || undefined}
-            showPipeline={true}
-            stageLabels={stageLabels}
+            showProgress={true}
           />
         </div>
 

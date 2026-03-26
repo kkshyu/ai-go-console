@@ -9,61 +9,79 @@ import {
   Check,
   Loader2,
 } from "lucide-react";
-import type { PipelineStage, PipelineState } from "@/lib/agents/types";
-import { PIPELINE_STAGES, STAGE_AGENT_MAP, AGENT_DEFINITIONS } from "@/lib/agents/types";
+import type { AgentRole, OrchestrationState } from "@/lib/agents/types";
+import { AGENT_DEFINITIONS } from "@/lib/agents/types";
 
-const STAGE_ICONS: Record<PipelineStage, React.ComponentType<{ className?: string }>> = {
-  requirements: ClipboardList,
-  architecture: Blocks,
-  coding: Code2,
-  review: ShieldCheck,
-  deployment: Rocket,
+const ROLE_ICONS: Record<AgentRole, React.ComponentType<{ className?: string }>> = {
+  pm: ClipboardList,
+  architect: Blocks,
+  developer: Code2,
+  reviewer: ShieldCheck,
+  devops: Rocket,
 };
 
-interface PipelineProgressProps {
-  state: PipelineState;
-  labels: Record<PipelineStage, string>;
+interface AgentProgressProps {
+  state: OrchestrationState;
 }
 
-export function PipelineProgress({ state, labels }: PipelineProgressProps) {
+/**
+ * Displays dispatched agent tasks dynamically.
+ * Only shows agents that PM has actually dispatched (not a fixed 5-stage bar).
+ */
+export function PipelineProgress({ state }: AgentProgressProps) {
+  if (state.tasks.length === 0 && !state.currentAgent) {
+    return null;
+  }
+
+  // Collect unique agents to show: tasks + current PM if running
+  const items: { role: AgentRole; isActive: boolean; isCompleted: boolean }[] = [];
+
+  // If PM is currently active and no tasks yet, show PM
+  if (state.currentAgent === "pm" && state.tasks.length === 0) {
+    items.push({ role: "pm", isActive: true, isCompleted: false });
+  }
+
+  for (const task of state.tasks) {
+    items.push({
+      role: task.agentRole,
+      isActive: task.status === "running",
+      isCompleted: task.status === "completed",
+    });
+  }
+
   return (
     <div className="flex items-center gap-1 px-3 py-2 rounded-lg bg-muted/50 overflow-x-auto">
-      {PIPELINE_STAGES.map((stage, index) => {
-        const Icon = STAGE_ICONS[stage];
-        const agentRole = STAGE_AGENT_MAP[stage];
-        const agent = AGENT_DEFINITIONS[agentRole];
-        const stageState = state.stages[stage];
-        const isActive = state.currentStage === stage;
-        const isCompleted = stageState.status === "completed";
-        const isRunning = stageState.status === "running";
+      {items.map((item, index) => {
+        const Icon = ROLE_ICONS[item.role];
+        const agent = AGENT_DEFINITIONS[item.role];
 
         return (
-          <div key={stage} className="flex items-center">
+          <div key={`${item.role}-${index}`} className="flex items-center">
             {index > 0 && (
               <div
                 className={`w-4 h-px mx-0.5 ${
-                  isCompleted ? "bg-green-400" : "bg-border"
+                  item.isCompleted ? "bg-green-400" : "bg-border"
                 }`}
               />
             )}
             <div
               className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs whitespace-nowrap transition-all ${
-                isActive
+                item.isActive
                   ? `bg-background shadow-sm ring-1 ring-border ${agent.color}`
-                  : isCompleted
+                  : item.isCompleted
                     ? "text-green-600 dark:text-green-400"
                     : "text-muted-foreground"
               }`}
-              title={labels[stage]}
+              title={agent.description}
             >
-              {isCompleted ? (
+              {item.isCompleted ? (
                 <Check className="h-3 w-3 shrink-0" />
-              ) : isRunning ? (
+              ) : item.isActive ? (
                 <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
               ) : (
                 <Icon className="h-3 w-3 shrink-0" />
               )}
-              <span className="hidden sm:inline">{labels[stage]}</span>
+              <span className="hidden sm:inline">{agent.label}</span>
             </div>
           </div>
         );

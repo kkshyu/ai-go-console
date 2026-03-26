@@ -230,16 +230,9 @@
     "languageZhTW": "繁體中文"
   },
   "agents": {
-    "subtitle": "Multi-agent team helps you build apps step by step",
-    "emptyState": "Describe the app you want to create — our AI team will collaborate to build it",
+    "subtitle": "PM Agent orchestrates a team of specialists to build your app",
+    "emptyState": "Describe the app you want to create — PM will coordinate the team to build it",
     "previewHint": "App preview will appear here after the agents create it",
-    "stages": {
-      "requirements": "Requirements",
-      "architecture": "Architecture",
-      "coding": "Coding",
-      "review": "Review",
-      "deployment": "Deployment"
-    },
     "roles": {
       "pm": "PM",
       "architect": "Architect",
@@ -248,13 +241,13 @@
       "devops": "DevOps"
     },
     "roleDescriptions": {
-      "pm": "Gathers requirements and creates specifications",
+      "pm": "Orchestrates agents and manages requirements",
       "architect": "Designs system architecture and selects technologies",
       "developer": "Writes and generates application code",
       "reviewer": "Reviews code quality and security",
       "devops": "Handles deployment and infrastructure"
     },
-    "pipelineStatus": {
+    "status": {
       "idle": "Ready",
       "running": "In Progress",
       "completed": "Completed",
