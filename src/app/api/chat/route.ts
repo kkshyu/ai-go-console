@@ -2,11 +2,14 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { streamChat, type ChatMessage } from "@/lib/ai";
+import { streamChat, DEFAULT_MODEL, type ChatMessage } from "@/lib/ai";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { messages } = body as { messages: ChatMessage[] };
+  const { messages, model } = body as {
+    messages: ChatMessage[];
+    model?: string;
+  };
 
   if (!messages || !Array.isArray(messages)) {
     return new Response(JSON.stringify({ error: "Messages array required" }), {
@@ -36,14 +39,23 @@ export async function POST(request: NextRequest) {
   // Start streaming in background
   (async () => {
     try {
-      await streamChat(
+      const result = await streamChat(
         messages,
         (chunk) => {
           const data = JSON.stringify({ content: chunk });
           writer.write(encoder.encode(`data: ${data}\n\n`));
         },
+        model || DEFAULT_MODEL,
         allowedServices
       );
+      // Send usage data before closing
+      if (result.usage) {
+        const usageData = JSON.stringify({
+          usage: result.usage,
+          model: model || DEFAULT_MODEL,
+        });
+        writer.write(encoder.encode(`data: ${usageData}\n\n`));
+      }
       writer.write(encoder.encode("data: [DONE]\n\n"));
     } catch (error) {
       const msg =

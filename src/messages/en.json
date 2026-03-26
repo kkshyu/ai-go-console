@@ -62,7 +62,8 @@
     "preview": "Preview",
     "generating": "Generating app...",
     "serviceNotAuthorized": "Required service not authorized for your organization",
-    "contactAdmin": "Please contact your organization admin to enable these services."
+    "contactAdmin": "Please contact your organization admin to enable these services.",
+    "totalTokens": "Tokens"
   },
   "services": {
     "title": "Services",

@@ -62,7 +62,8 @@
     "preview": "預覽",
     "generating": "正在產生應用程式...",
     "serviceNotAuthorized": "所需的服務尚未授權給您的組織",
-    "contactAdmin": "請聯繫組織管理員以啟用這些服務。"
+    "contactAdmin": "請聯繫組織管理員以啟用這些服務。",
+    "totalTokens": "Token 用量"
   },
   "services": {
     "title": "服務",

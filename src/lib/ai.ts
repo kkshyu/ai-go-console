@@ -5,6 +5,27 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export interface StreamChatResult {
+  content: string;
+  usage: TokenUsage | null;
+}
+
+export const AVAILABLE_MODELS = [
+  { id: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4" },
+  { id: "anthropic/claude-haiku-4", label: "Claude Haiku 4" },
+  { id: "openai/gpt-4o-mini", label: "GPT-4o Mini" },
+  { id: "openai/gpt-4o", label: "GPT-4o" },
+  { id: "google/gemini-2.5-flash-preview", label: "Gemini 2.5 Flash" },
+] as const;
+
+export const DEFAULT_MODEL = AVAILABLE_MODELS[0].id;
+
 function buildSystemPrompt(allowedServices?: string[]): string {
   const serviceList = allowedServices && allowedServices.length > 0
     ? allowedServices.join(", ")
@@ -58,8 +79,9 @@ Be concise and helpful. Respond in the same language as the user.`;
 export async function streamChat(
   messages: ChatMessage[],
   onChunk: (text: string) => void,
+  model: string = DEFAULT_MODEL,
   allowedServices?: string[]
-): Promise<string> {
+): Promise<StreamChatResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error("OPENROUTER_API_KEY is not set");
@@ -76,7 +98,7 @@ export async function streamChat(
       "X-Title": "AI Go Console",
     },
     body: JSON.stringify({
-      model: "anthropic/claude-sonnet-4",
+      model,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
       stream: true,
       max_tokens: 4096,
@@ -93,6 +115,7 @@ export async function streamChat(
 
   const decoder = new TextDecoder();
   let fullContent = "";
+  let usage: TokenUsage | null = null;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -112,13 +135,21 @@ export async function streamChat(
           fullContent += content;
           onChunk(content);
         }
+        // Capture usage from the final chunk
+        if (parsed.usage) {
+          usage = {
+            promptTokens: parsed.usage.prompt_tokens ?? 0,
+            completionTokens: parsed.usage.completion_tokens ?? 0,
+            totalTokens: parsed.usage.total_tokens ?? 0,
+          };
+        }
       } catch {
         // Skip malformed JSON lines
       }
     }
   }
 
-  return fullContent;
+  return { content: fullContent, usage };
 }
 
 /**
@@ -126,8 +157,9 @@ export async function streamChat(
  */
 export async function chat(
   messages: ChatMessage[],
+  model: string = DEFAULT_MODEL,
   allowedServices?: string[]
-): Promise<string> {
+): Promise<StreamChatResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error("OPENROUTER_API_KEY is not set");
@@ -144,7 +176,7 @@ export async function chat(
       "X-Title": "AI Go Console",
     },
     body: JSON.stringify({
-      model: "anthropic/claude-sonnet-4",
+      model,
       messages: [{ role: "system", content: systemPrompt }, ...messages],
       max_tokens: 4096,
     }),
@@ -156,5 +188,14 @@ export async function chat(
   }
 
   const data = await response.json();
-  return data.choices?.[0]?.message?.content || "";
+  const content = data.choices?.[0]?.message?.content || "";
+  const usage: TokenUsage | null = data.usage
+    ? {
+        promptTokens: data.usage.prompt_tokens ?? 0,
+        completionTokens: data.usage.completion_tokens ?? 0,
+        totalTokens: data.usage.total_tokens ?? 0,
+      }
+    : null;
+
+  return { content, usage };
 }
