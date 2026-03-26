@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions, ALL_SERVICE_TYPES } from "@/lib/auth";
+import { authOptions } from "@/lib/auth";
+import { ALL_SERVICE_TYPES } from "@/lib/service-types";
 import { prisma } from "@/lib/db";
 import type { ServiceType } from "@prisma/client";
 

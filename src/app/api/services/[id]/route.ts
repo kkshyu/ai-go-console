@@ -53,20 +53,7 @@ export async function PATCH(
   }
 
   const body = await request.json();
-  const {
-    name,
-    type,
-    endpointUrl,
-    host,
-    port,
-    database,
-    username,
-    password,
-    apiKey,
-    projectUrl,
-    adminSecret,
-    webhookSecret,
-  } = body;
+  const { name, type, endpointUrl, ...configFields } = body;
 
   const data: Record<string, unknown> = {};
   if (name) data.name = name;
@@ -74,18 +61,9 @@ export async function PATCH(
   if (endpointUrl !== undefined) data.endpointUrl = endpointUrl || null;
 
   // If any config fields provided, re-encrypt
-  if (host || port || database || username || password || apiKey || projectUrl || adminSecret || webhookSecret) {
-    const config = JSON.stringify({
-      host,
-      port,
-      database,
-      username,
-      password,
-      apiKey,
-      projectUrl,
-      adminSecret,
-      webhookSecret,
-    });
+  const hasConfigFields = Object.values(configFields).some((v) => v);
+  if (hasConfigFields) {
+    const config = JSON.stringify(configFields);
     const { ciphertext, iv, authTag } = encrypt(config);
     data.configEncrypted = ciphertext;
     data.iv = iv;

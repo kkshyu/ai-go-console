@@ -2,15 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
-import type { ServiceType } from "@prisma/client";
-
-const ALL_SERVICE_TYPES: ServiceType[] = [
-  "disk",
-  "postgresql",
-  "supabase",
-  "stripe",
-  "hasura",
-];
+import { ALL_SERVICE_TYPES } from "@/lib/service-types";
 
 function slugify(name: string): string {
   return name

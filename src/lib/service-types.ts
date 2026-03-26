@@ -1,0 +1,235 @@
+import type { ServiceType } from "@prisma/client";
+
+export enum ServiceCategory {
+  database = "database",
+  storage = "storage",
+  payment = "payment",
+  email = "email",
+  sms = "sms",
+  auth = "auth",
+  platform = "platform",
+}
+
+export const ALL_SERVICE_TYPES: ServiceType[] = [
+  // database
+  "postgresql",
+  "mysql",
+  "mongodb",
+  // storage
+  "s3",
+  "gcs",
+  "azure_blob",
+  // payment
+  "stripe",
+  "paypal",
+  "ecpay",
+  // email
+  "sendgrid",
+  "ses",
+  "mailgun",
+  // sms
+  "twilio",
+  "vonage",
+  "aws_sns",
+  // auth
+  "auth0",
+  "firebase_auth",
+  "line_login",
+  // platform
+  "supabase",
+  "hasura",
+];
+
+export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
+  postgresql: ServiceCategory.database,
+  mysql: ServiceCategory.database,
+  mongodb: ServiceCategory.database,
+  s3: ServiceCategory.storage,
+  gcs: ServiceCategory.storage,
+  azure_blob: ServiceCategory.storage,
+  stripe: ServiceCategory.payment,
+  paypal: ServiceCategory.payment,
+  ecpay: ServiceCategory.payment,
+  sendgrid: ServiceCategory.email,
+  ses: ServiceCategory.email,
+  mailgun: ServiceCategory.email,
+  twilio: ServiceCategory.sms,
+  vonage: ServiceCategory.sms,
+  aws_sns: ServiceCategory.sms,
+  auth0: ServiceCategory.auth,
+  firebase_auth: ServiceCategory.auth,
+  line_login: ServiceCategory.auth,
+  supabase: ServiceCategory.platform,
+  hasura: ServiceCategory.platform,
+};
+
+export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
+  [ServiceCategory.database]: ["postgresql", "mysql", "mongodb"],
+  [ServiceCategory.storage]: ["s3", "gcs", "azure_blob"],
+  [ServiceCategory.payment]: ["stripe", "paypal", "ecpay"],
+  [ServiceCategory.email]: ["sendgrid", "ses", "mailgun"],
+  [ServiceCategory.sms]: ["twilio", "vonage", "aws_sns"],
+  [ServiceCategory.auth]: ["auth0", "firebase_auth", "line_login"],
+  [ServiceCategory.platform]: ["supabase", "hasura"],
+};
+
+export interface ConfigFieldDef {
+  key: string;
+  type: "text" | "password";
+  placeholder: string;
+  required?: boolean;
+}
+
+/**
+ * Per-type config field definitions.
+ * endpointUrl is always shown separately; these are the extra fields.
+ */
+export const SERVICE_TYPE_CONFIG_FIELDS: Record<ServiceType, ConfigFieldDef[]> = {
+  // --- database ---
+  postgresql: [
+    { key: "host", type: "text", placeholder: "localhost" },
+    { key: "port", type: "text", placeholder: "5432" },
+    { key: "database", type: "text", placeholder: "mydb" },
+    { key: "username", type: "text", placeholder: "user" },
+    { key: "password", type: "password", placeholder: "********" },
+  ],
+  mysql: [
+    { key: "host", type: "text", placeholder: "localhost" },
+    { key: "port", type: "text", placeholder: "3306" },
+    { key: "database", type: "text", placeholder: "mydb" },
+    { key: "username", type: "text", placeholder: "root" },
+    { key: "password", type: "password", placeholder: "********" },
+  ],
+  mongodb: [
+    { key: "connectionString", type: "password", placeholder: "mongodb+srv://user:pass@cluster.mongodb.net/db" },
+  ],
+  // --- storage ---
+  s3: [
+    { key: "accessKeyId", type: "text", placeholder: "AKIAIOSFODNN7EXAMPLE" },
+    { key: "secretAccessKey", type: "password", placeholder: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" },
+    { key: "bucket", type: "text", placeholder: "my-bucket" },
+    { key: "region", type: "text", placeholder: "us-east-1" },
+  ],
+  gcs: [
+    { key: "projectId", type: "text", placeholder: "my-gcp-project" },
+    { key: "clientEmail", type: "text", placeholder: "sa@project.iam.gserviceaccount.com" },
+    { key: "privateKey", type: "password", placeholder: "-----BEGIN PRIVATE KEY-----..." },
+    { key: "bucket", type: "text", placeholder: "my-bucket" },
+  ],
+  azure_blob: [
+    { key: "accountName", type: "text", placeholder: "mystorageaccount" },
+    { key: "accountKey", type: "password", placeholder: "base64-encoded-key" },
+    { key: "containerName", type: "text", placeholder: "my-container" },
+  ],
+  // --- payment ---
+  stripe: [
+    { key: "apiKey", type: "password", placeholder: "sk_..." },
+    { key: "webhookSecret", type: "password", placeholder: "whsec_..." },
+  ],
+  paypal: [
+    { key: "clientId", type: "text", placeholder: "AaBbCcDdEeFf..." },
+    { key: "clientSecret", type: "password", placeholder: "EeFfGgHhIiJj..." },
+    { key: "mode", type: "text", placeholder: "sandbox" },
+  ],
+  ecpay: [
+    { key: "merchantId", type: "text", placeholder: "2000132" },
+    { key: "hashKey", type: "password", placeholder: "5294y06JbISpM5x9" },
+    { key: "hashIV", type: "password", placeholder: "v77hoKGq4kWxNNIS" },
+  ],
+  // --- email ---
+  sendgrid: [
+    { key: "apiKey", type: "password", placeholder: "SG.xxxxx" },
+    { key: "fromEmail", type: "text", placeholder: "noreply@example.com" },
+  ],
+  ses: [
+    { key: "accessKeyId", type: "text", placeholder: "AKIAIOSFODNN7EXAMPLE" },
+    { key: "secretAccessKey", type: "password", placeholder: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" },
+    { key: "region", type: "text", placeholder: "us-east-1" },
+    { key: "fromEmail", type: "text", placeholder: "noreply@example.com" },
+  ],
+  mailgun: [
+    { key: "apiKey", type: "password", placeholder: "key-xxxxx" },
+    { key: "domain", type: "text", placeholder: "mg.example.com" },
+    { key: "fromEmail", type: "text", placeholder: "noreply@example.com" },
+  ],
+  // --- sms ---
+  twilio: [
+    { key: "accountSid", type: "text", placeholder: "ACxxxxx" },
+    { key: "authToken", type: "password", placeholder: "your-auth-token" },
+    { key: "fromNumber", type: "text", placeholder: "+15551234567" },
+  ],
+  vonage: [
+    { key: "apiKey", type: "text", placeholder: "abcd1234" },
+    { key: "apiSecret", type: "password", placeholder: "your-api-secret" },
+    { key: "fromNumber", type: "text", placeholder: "+15551234567" },
+  ],
+  aws_sns: [
+    { key: "accessKeyId", type: "text", placeholder: "AKIAIOSFODNN7EXAMPLE" },
+    { key: "secretAccessKey", type: "password", placeholder: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" },
+    { key: "region", type: "text", placeholder: "us-east-1" },
+  ],
+  // --- auth ---
+  auth0: [
+    { key: "domain", type: "text", placeholder: "my-tenant.auth0.com" },
+    { key: "clientId", type: "text", placeholder: "your-client-id" },
+    { key: "clientSecret", type: "password", placeholder: "your-client-secret" },
+  ],
+  firebase_auth: [
+    { key: "projectId", type: "text", placeholder: "my-firebase-project" },
+    { key: "apiKey", type: "text", placeholder: "AIzaSyB..." },
+    { key: "authDomain", type: "text", placeholder: "my-project.firebaseapp.com" },
+  ],
+  line_login: [
+    { key: "channelId", type: "text", placeholder: "1234567890" },
+    { key: "channelSecret", type: "password", placeholder: "your-channel-secret" },
+    { key: "callbackUrl", type: "text", placeholder: "https://example.com/callback" },
+  ],
+  // --- platform ---
+  supabase: [
+    { key: "projectUrl", type: "text", placeholder: "https://xxx.supabase.co" },
+    { key: "apiKey", type: "password", placeholder: "your-anon-key" },
+  ],
+  hasura: [
+    { key: "adminSecret", type: "password", placeholder: "your-admin-secret" },
+  ],
+};
+
+export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
+  postgresql: "PostgreSQL",
+  mysql: "MySQL",
+  mongodb: "MongoDB",
+  s3: "S3 Storage",
+  gcs: "Google Cloud Storage",
+  azure_blob: "Azure Blob Storage",
+  stripe: "Stripe",
+  paypal: "PayPal",
+  ecpay: "ECPay",
+  sendgrid: "SendGrid",
+  ses: "Amazon SES",
+  mailgun: "Mailgun",
+  twilio: "Twilio",
+  vonage: "Vonage",
+  aws_sns: "Amazon SNS",
+  auth0: "Auth0",
+  firebase_auth: "Firebase Auth",
+  line_login: "LINE Login",
+  supabase: "Supabase",
+  hasura: "Hasura",
+};
+
+export const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
+  [ServiceCategory.database]: "Database",
+  [ServiceCategory.storage]: "Storage",
+  [ServiceCategory.payment]: "Payment",
+  [ServiceCategory.email]: "Email",
+  [ServiceCategory.sms]: "SMS",
+  [ServiceCategory.auth]: "Authentication",
+  [ServiceCategory.platform]: "Platform",
+};
+
+/**
+ * Convert camelCase to SCREAMING_SNAKE_CASE for env var names.
+ */
+export function toScreamingSnake(str: string): string {
+  return str.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
+}

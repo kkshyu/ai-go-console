@@ -39,20 +39,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const {
-    name,
-    type,
-    endpointUrl,
-    host,
-    port,
-    database,
-    username,
-    password,
-    apiKey,
-    projectUrl,
-    adminSecret,
-    webhookSecret,
-  } = body;
+  const { name, type, endpointUrl, ...configFields } = body;
 
   if (!name || !type) {
     return NextResponse.json(
@@ -78,18 +65,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const config = JSON.stringify({
-    host,
-    port,
-    database,
-    username,
-    password,
-    apiKey,
-    projectUrl,
-    adminSecret,
-    webhookSecret,
-  });
-
+  const config = JSON.stringify(configFields);
   const { ciphertext, iv, authTag } = encrypt(config);
 
   const service = await prisma.service.create({
