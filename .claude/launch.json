@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "ai-go-console",
-      "runtimeExecutable": "yarn",
-      "runtimeArgs": ["dev"],
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "dev", "--turbopack"],
       "port": 3000,
       "autoPort": true
     }
