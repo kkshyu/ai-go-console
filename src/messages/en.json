@@ -186,12 +186,20 @@
   "users": {
     "title": "User Management",
     "invite": "Invite User",
+    "addUser": "Add User",
     "email": "Email",
     "name": "Name",
+    "namePlaceholder": "User name",
+    "password": "Password",
     "role": "Role",
     "admin": "Admin",
     "user": "User",
-    "createdAt": "Created At"
+    "createdAt": "Created At",
+    "cancel": "Cancel",
+    "create": "Create",
+    "addError": "Failed to add user",
+    "deleteConfirm": "Are you sure you want to delete this user? This action cannot be undone.",
+    "deleteError": "Failed to delete user"
   },
   "auth": {
     "login": "Login",

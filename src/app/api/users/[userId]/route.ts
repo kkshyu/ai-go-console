@@ -40,6 +40,14 @@ export async function DELETE(
   const session = await getServerSession(authOptions);
   const organizationId = session?.user?.organizationId;
 
+  if (session?.user?.role !== "admin") {
+    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  }
+
+  if (session?.user?.id === userId) {
+    return NextResponse.json({ error: "Cannot delete yourself" }, { status: 400 });
+  }
+
   const target = await prisma.user.findUnique({ where: { id: userId } });
   if (!target || (organizationId && target.organizationId !== organizationId)) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
