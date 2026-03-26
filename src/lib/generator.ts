@@ -5,7 +5,13 @@ import Handlebars from "handlebars";
 import { getTemplate } from "@/lib/templates";
 import { prisma } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
-import { toScreamingSnake } from "@/lib/service-types";
+import { generateProxyToken } from "@/lib/proxy-token";
+import {
+  toScreamingSnake,
+  SERVICE_TYPE_HTTP_MODE,
+  FIXED_ENDPOINT_URLS,
+} from "@/lib/service-types";
+import type { ServiceType } from "@prisma/client";
 
 const APPS_ROOT = path.join(process.cwd(), "apps");
 
@@ -50,14 +56,40 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
       include: { service: true },
     });
 
+    const consolePort = process.env.PORT || "3000";
+
     for (const as_ of appServices) {
       const svc = as_.service;
       const config = JSON.parse(
         decrypt(svc.configEncrypted, svc.iv, svc.authTag)
       );
       const prefix = as_.envVarPrefix;
+      const httpMode = SERVICE_TYPE_HTTP_MODE[svc.type as ServiceType];
 
-      if (svc.endpointUrl) envVars[`${prefix}_ENDPOINT_URL`] = svc.endpointUrl;
+      // Inject endpoint URL based on httpMode
+      switch (httpMode) {
+        case "proxy":
+          // Auto-generate proxy URL and token — user doesn't provide endpoint
+          envVars[`${prefix}_ENDPOINT_URL`] =
+            `http://host.docker.internal:${consolePort}/api/proxy/${svc.id}/query`;
+          envVars[`${prefix}_API_TOKEN`] = generateProxyToken(svc.id);
+          break;
+        case "fixed": {
+          // Use well-known API URL
+          const fixedUrl = FIXED_ENDPOINT_URLS[svc.type as ServiceType];
+          if (fixedUrl) envVars[`${prefix}_ENDPOINT_URL`] = fixedUrl;
+          break;
+        }
+        case "user-provided":
+          // User provides the endpoint URL
+          if (svc.endpointUrl) envVars[`${prefix}_ENDPOINT_URL`] = svc.endpointUrl;
+          break;
+        case "sdk":
+          // No endpoint URL — app uses SDK with config credentials
+          break;
+      }
+
+      // Always inject all config fields as env vars
       for (const [key, value] of Object.entries(config)) {
         if (value) {
           envVars[`${prefix}_${toScreamingSnake(key)}`] = String(value);

@@ -228,6 +228,54 @@ export const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
 };
 
 /**
+ * How the service is accessed over HTTP.
+ * - "user-provided": user supplies an endpointUrl (e.g. Supabase, Hasura, Auth0)
+ * - "fixed": service has a well-known API URL, user only provides credentials
+ * - "proxy": no HTTP API — we build an HTTP proxy layer automatically
+ * - "sdk": requires SDK with complex auth, config-only for now
+ */
+export type HttpMode = "user-provided" | "fixed" | "proxy" | "sdk";
+
+export const SERVICE_TYPE_HTTP_MODE: Record<ServiceType, HttpMode> = {
+  // database — no HTTP API, needs proxy
+  postgresql: "proxy",
+  mysql: "proxy",
+  mongodb: "proxy",
+  // storage — SDK-based with complex auth (SigV4, OAuth2, SharedKey)
+  s3: "sdk",
+  gcs: "sdk",
+  azure_blob: "sdk",
+  // payment — fixed well-known API URLs
+  stripe: "fixed",
+  paypal: "fixed",
+  ecpay: "sdk",
+  // email — fixed well-known API URLs
+  sendgrid: "fixed",
+  ses: "sdk",
+  mailgun: "fixed",
+  // sms — fixed well-known API URLs
+  twilio: "fixed",
+  vonage: "fixed",
+  aws_sns: "sdk",
+  // auth — user provides domain/endpoint
+  auth0: "user-provided",
+  firebase_auth: "sdk",
+  line_login: "sdk",
+  // platform — user provides project URL / endpoint
+  supabase: "user-provided",
+  hasura: "user-provided",
+};
+
+export const FIXED_ENDPOINT_URLS: Partial<Record<ServiceType, string>> = {
+  stripe: "https://api.stripe.com",
+  paypal: "https://api-m.paypal.com",
+  sendgrid: "https://api.sendgrid.com",
+  mailgun: "https://api.mailgun.net",
+  twilio: "https://api.twilio.com",
+  vonage: "https://rest.nexmo.com",
+};
+
+/**
  * Convert camelCase to SCREAMING_SNAKE_CASE for env var names.
  */
 export function toScreamingSnake(str: string): string {

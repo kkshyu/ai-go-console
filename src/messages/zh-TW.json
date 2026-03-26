@@ -124,6 +124,9 @@
     "testConnection": "測試連線",
     "connectionSuccess": "連線成功",
     "connectionFailed": "連線失敗",
+    "proxyHint": "將自動產生 HTTP Proxy URL，無需手動填寫端點。",
+    "fixedHint": "此服務使用固定 API 端點，無需提供 URL。",
+    "sdkHint": "此服務使用 SDK 存取，無需提供 HTTP 端點。",
     "emptyState": "尚未設定任何服務",
     "types": {
       "postgresql": "PostgreSQL",
