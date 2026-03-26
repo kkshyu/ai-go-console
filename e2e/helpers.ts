@@ -42,9 +42,9 @@ export async function loginViaUI(
 }
 
 /**
- * Create a data source via API
+ * Create a credential via API
  */
-export async function createDataSource(
+export async function createCredential(
   request: APIRequestContext,
   data: {
     name: string;
@@ -56,7 +56,7 @@ export async function createDataSource(
     password?: string;
   }
 ) {
-  const res = await request.post("/api/data-sources", { data });
+  const res = await request.post("/api/credentials", { data });
   return res.json();
 }
 

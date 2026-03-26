@@ -19,7 +19,7 @@
     "dashboard": "Dashboard",
     "apps": "Apps",
     "createApp": "Create App",
-    "dataSources": "Data Sources",
+    "credentials": "Credentials",
     "users": "User Management",
     "settings": "Settings",
     "logout": "Logout"
@@ -28,7 +28,7 @@
     "title": "Dashboard",
     "totalApps": "Total Apps",
     "runningApps": "Running",
-    "dataSources": "Data Sources",
+    "credentials": "Credentials",
     "emptyState": "No apps created yet",
     "emptyStateAction": "Create your first app",
     "recentApps": "Recent Apps"
@@ -61,9 +61,9 @@
     "preview": "Preview",
     "generating": "Generating app..."
   },
-  "dataSources": {
-    "title": "Data Sources",
-    "add": "Add Data Source",
+  "credentials": {
+    "title": "Credentials",
+    "add": "Add Credential",
     "name": "Name",
     "type": "Type",
     "host": "Host",

@@ -20,7 +20,7 @@ enum AppStatus {
   error
 }
 
-enum DataSourceType {
+enum CredentialType {
   postgres
   supabase
   mysql
@@ -58,7 +58,7 @@ model App {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   domains      AppDomain[]
-  dataSources  AppDataSource[]
+  credentials  AppCredential[]
   chatMessages ChatMessage[]
 
   @@map("apps")
@@ -77,31 +77,31 @@ model AppDomain {
   @@map("app_domains")
 }
 
-model DataSource {
+model Credential {
   id                   String         @id @default(cuid())
   name                 String
-  type                 DataSourceType
+  type                 CredentialType
   credentialsEncrypted String         @map("credentials_encrypted")
   iv                   String
   authTag              String         @map("auth_tag")
   createdAt            DateTime       @default(now()) @map("created_at")
   updatedAt            DateTime       @updatedAt @map("updated_at")
 
-  apps AppDataSource[]
+  apps AppCredential[]
 
-  @@map("data_sources")
+  @@map("credentials")
 }
 
-model AppDataSource {
+model AppCredential {
   appId        String @map("app_id")
-  dataSourceId String @map("data_source_id")
+  credentialId String @map("credential_id")
   envVarPrefix String @default("DB") @map("env_var_prefix")
 
   app        App        @relation(fields: [appId], references: [id], onDelete: Cascade)
-  dataSource DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  credential Credential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
 
-  @@id([appId, dataSourceId])
-  @@map("app_data_sources")
+  @@id([appId, credentialId])
+  @@map("app_credentials")
 }
 
 model ChatMessage {

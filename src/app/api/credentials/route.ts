@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { encrypt } from "@/lib/crypto";
 
 export async function GET() {
-  const dataSources = await prisma.dataSource.findMany({
+  const credentials = await prisma.credential.findMany({
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -14,7 +14,7 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json(dataSources);
+  return NextResponse.json(credentials);
 }
 
 export async function POST(request: NextRequest) {
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const credentials = JSON.stringify({
+  const creds = JSON.stringify({
     host,
     port,
     database,
@@ -39,9 +39,9 @@ export async function POST(request: NextRequest) {
     projectUrl,
   });
 
-  const { ciphertext, iv, authTag } = encrypt(credentials);
+  const { ciphertext, iv, authTag } = encrypt(creds);
 
-  const dataSource = await prisma.dataSource.create({
+  const credential = await prisma.credential.create({
     data: {
       name,
       type: type as "postgres" | "supabase" | "mysql" | "redis",
@@ -57,5 +57,5 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json(dataSource, { status: 201 });
+  return NextResponse.json(credential, { status: 201 });
 }

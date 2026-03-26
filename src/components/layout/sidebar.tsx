@@ -24,7 +24,7 @@ const navItems: NavItem[] = [
   { href: "/", labelKey: "dashboard", icon: LayoutDashboard },
   { href: "/apps", labelKey: "apps", icon: AppWindow },
   { href: "/create", labelKey: "createApp", icon: PlusCircle },
-  { href: "/data-sources", labelKey: "dataSources", icon: Database, adminOnly: true },
+  { href: "/credentials", labelKey: "credentials", icon: Database, adminOnly: true },
   { href: "/users", labelKey: "users", icon: Users, adminOnly: true },
 ];
 

@@ -8,9 +8,9 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
     include: {
       domains: true,
-      dataSources: {
+      credentials: {
         include: {
-          dataSource: {
+          credential: {
             select: { id: true, name: true, type: true },
           },
         },
@@ -23,7 +23,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { name, description, template, config, dataSourceIds, userId } = body;
+  const { name, description, template, config, credentialIds, userId } = body;
 
   if (!name || !template || !userId) {
     return NextResponse.json(
@@ -56,11 +56,11 @@ export async function POST(request: NextRequest) {
       port,
       config: config || {},
       userId,
-      dataSources: dataSourceIds
+      credentials: credentialIds
         ? {
-            create: dataSourceIds.map(
-              (dsId: string, index: number) => ({
-                dataSourceId: dsId,
+            create: credentialIds.map(
+              (credId: string, index: number) => ({
+                credentialId: credId,
                 envVarPrefix: index === 0 ? "DB" : `DS${index}`,
               })
             ),
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
       description,
       template,
       port,
-      dataSourceIds,
+      credentialIds,
     });
   } catch (error) {
     // Clean up DB record on generation failure

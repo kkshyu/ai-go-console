@@ -14,14 +14,14 @@ export interface GenerateAppOptions {
   description?: string;
   template: string;
   port: number;
-  dataSourceIds?: string[];
+  credentialIds?: string[];
 }
 
 /**
  * Generates an app from a template into apps/<slug>/
  */
 export async function generateApp(options: GenerateAppOptions): Promise<string> {
-  const { slug, name, description, template, port, dataSourceIds } = options;
+  const { slug, name, description, template, port, credentialIds } = options;
 
   const tmpl = getTemplate(template);
   if (!tmpl) {
@@ -38,19 +38,19 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
     await fsp.rm(appDir, { recursive: true, force: true });
   }
 
-  // Resolve environment variables from linked data sources
+  // Resolve environment variables from linked credentials
   const envVars: Record<string, string> = {};
-  if (dataSourceIds && dataSourceIds.length > 0) {
-    const appDataSources = await prisma.appDataSource.findMany({
+  if (credentialIds && credentialIds.length > 0) {
+    const appCredentials = await prisma.appCredential.findMany({
       where: {
         appId: slug, // We'll use the actual app ID after creation
-        dataSourceId: { in: dataSourceIds },
+        credentialId: { in: credentialIds },
       },
-      include: { dataSource: true },
+      include: { credential: true },
     });
 
-    for (const ads of appDataSources) {
-      const ds = ads.dataSource;
+    for (const ads of appCredentials) {
+      const ds = ads.credential;
       const creds = JSON.parse(
         decrypt(ds.credentialsEncrypted, ds.iv, ds.authTag)
       );

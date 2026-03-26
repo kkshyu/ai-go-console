@@ -4,8 +4,8 @@ test.describe("Credential Encryption", () => {
   let dsId: string;
 
   test("credentials are stored encrypted in DB", async ({ request }) => {
-    // Create a data source
-    const res = await request.post("/api/data-sources", {
+    // Create a credential
+    const res = await request.post("/api/credentials", {
       data: {
         name: "E2E Encrypted DS",
         type: "postgres",
@@ -26,10 +26,10 @@ test.describe("Credential Encryption", () => {
     expect(body.host).toBeUndefined();
   });
 
-  test("GET data source list never exposes credentials", async ({
+  test("GET credential list never exposes encrypted data", async ({
     request,
   }) => {
-    const res = await request.get("/api/data-sources");
+    const res = await request.get("/api/credentials");
     const sources = await res.json();
 
     for (const ds of sources) {
@@ -45,7 +45,7 @@ test.describe("Credential Encryption", () => {
     request,
   }) => {
     // The test connection endpoint decrypts credentials internally
-    const res = await request.post(`/api/data-sources/${dsId}/test`);
+    const res = await request.post(`/api/credentials/${dsId}/test`);
     expect(res.status()).toBe(200);
     const body = await res.json();
     // It should have attempted connection (may fail since host doesn't exist)
@@ -54,7 +54,7 @@ test.describe("Credential Encryption", () => {
 
   test.afterAll(async ({ request }) => {
     if (dsId) {
-      await request.delete(`/api/data-sources/${dsId}`);
+      await request.delete(`/api/credentials/${dsId}`);
     }
   });
 });

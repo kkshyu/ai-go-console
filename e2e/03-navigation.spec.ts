@@ -6,7 +6,7 @@ test.describe("Navigation & i18n", () => {
     await expect(page.getByRole("link", { name: /Dashboard|儀表板/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /Apps|應用程式/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /Create App|建立應用/ })).toBeVisible();
-    await expect(page.getByRole("link", { name: /Data Sources|資料來源/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Credentials|憑證/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /User Management|使用者管理/ })).toBeVisible();
   });
 
@@ -24,11 +24,11 @@ test.describe("Navigation & i18n", () => {
     await expect(page.locator("h1")).toContainText(/Create App|建立應用/);
   });
 
-  test("navigate to Data Sources page", async ({ page }) => {
+  test("navigate to Credentials page", async ({ page }) => {
     await page.goto("/");
-    await page.click('a[href="/data-sources"]');
-    await expect(page).toHaveURL(/\/data-sources/);
-    await expect(page.locator("h1")).toContainText(/Data Sources|資料來源/);
+    await page.click('a[href="/credentials"]');
+    await expect(page).toHaveURL(/\/credentials/);
+    await expect(page.locator("h1")).toContainText(/Credentials|憑證/);
   });
 
   test("navigate to Users page", async ({ page }) => {

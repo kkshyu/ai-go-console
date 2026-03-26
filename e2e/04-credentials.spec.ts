@@ -1,21 +1,21 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Data Sources", () => {
+test.describe("Credentials", () => {
   let createdId: string;
 
-  test("GET /api/data-sources returns empty array initially", async ({
+  test("GET /api/credentials returns empty array initially", async ({
     request,
   }) => {
-    const res = await request.get("/api/data-sources");
+    const res = await request.get("/api/credentials");
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(Array.isArray(body)).toBe(true);
   });
 
-  test("POST /api/data-sources creates a PostgreSQL data source", async ({
+  test("POST /api/credentials creates a PostgreSQL credential", async ({
     request,
   }) => {
-    const res = await request.post("/api/data-sources", {
+    const res = await request.post("/api/credentials", {
       data: {
         name: "E2E Test Postgres",
         type: "postgres",
@@ -34,10 +34,10 @@ test.describe("Data Sources", () => {
     createdId = body.id;
   });
 
-  test("POST /api/data-sources creates a Supabase data source", async ({
+  test("POST /api/credentials creates a Supabase credential", async ({
     request,
   }) => {
-    const res = await request.post("/api/data-sources", {
+    const res = await request.post("/api/credentials", {
       data: {
         name: "E2E Test Supabase",
         type: "supabase",
@@ -50,18 +50,18 @@ test.describe("Data Sources", () => {
     expect(body.type).toBe("supabase");
   });
 
-  test("POST /api/data-sources rejects missing name", async ({ request }) => {
-    const res = await request.post("/api/data-sources", {
+  test("POST /api/credentials rejects missing name", async ({ request }) => {
+    const res = await request.post("/api/credentials", {
       data: { type: "postgres" },
     });
     expect(res.status()).toBe(400);
   });
 
-  test("GET /api/data-sources lists created sources", async ({ request }) => {
-    const res = await request.get("/api/data-sources");
+  test("GET /api/credentials lists created credentials", async ({ request }) => {
+    const res = await request.get("/api/credentials");
     const body = await res.json();
     expect(body.length).toBeGreaterThanOrEqual(2);
-    // Should NOT contain credentials in response
+    // Should NOT contain encrypted data in response
     for (const ds of body) {
       expect(ds.credentialsEncrypted).toBeUndefined();
       expect(ds.iv).toBeUndefined();
@@ -69,8 +69,8 @@ test.describe("Data Sources", () => {
     }
   });
 
-  test("PATCH /api/data-sources/:id updates name", async ({ request }) => {
-    const res = await request.patch(`/api/data-sources/${createdId}`, {
+  test("PATCH /api/credentials/:id updates name", async ({ request }) => {
+    const res = await request.patch(`/api/credentials/${createdId}`, {
       data: { name: "E2E Updated Postgres" },
     });
     expect(res.status()).toBe(200);
@@ -78,10 +78,10 @@ test.describe("Data Sources", () => {
     expect(body.name).toBe("E2E Updated Postgres");
   });
 
-  test("POST /api/data-sources/:id/test tests connection", async ({
+  test("POST /api/credentials/:id/test tests connection", async ({
     request,
   }) => {
-    const res = await request.post(`/api/data-sources/${createdId}/test`);
+    const res = await request.post(`/api/credentials/${createdId}/test`);
     expect(res.status()).toBe(200);
     const body = await res.json();
     // Should return success/failure (localhost:5432 is our actual PG)
@@ -89,23 +89,23 @@ test.describe("Data Sources", () => {
     expect(body).toHaveProperty("message");
   });
 
-  test("data sources page shows form on Add button click", async ({
+  test("credentials page shows form on Add button click", async ({
     page,
   }) => {
-    await page.goto("/data-sources");
-    await page.click("button:has-text('Add Data Source'), button:has-text('新增資料來源')");
+    await page.goto("/credentials");
+    await page.click("button:has-text('Add Credential'), button:has-text('新增憑證')");
     // Form should appear
     await expect(page.locator('input[placeholder="My Database"]')).toBeVisible();
   });
 
-  test("DELETE /api/data-sources/:id removes data source", async ({
+  test("DELETE /api/credentials/:id removes credential", async ({
     request,
   }) => {
-    const res = await request.delete(`/api/data-sources/${createdId}`);
+    const res = await request.delete(`/api/credentials/${createdId}`);
     expect(res.status()).toBe(200);
 
     // Verify it's gone
-    const getRes = await request.get(`/api/data-sources/${createdId}`);
+    const getRes = await request.get(`/api/credentials/${createdId}`);
     expect(getRes.status()).toBe(404);
   });
 });

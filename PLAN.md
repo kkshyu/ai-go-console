@@ -2,7 +2,7 @@
 
 ## Context
 
-Build a web-based console called "AI Go" that enables users to create, manage, and run independent web applications through a conversational interface. Each app is stored under an `apps/` directory, containerized with Docker, and can share centrally-managed data source credentials (Postgres, Supabase, etc.).
+Build a web-based console called "AI Go" that enables users to create, manage, and run independent web applications through a conversational interface. Each app is stored under an `apps/` directory, containerized with Docker, and can share centrally-managed credential credentials (Postgres, Supabase, etc.).
 
 ## Tech Stack
 
@@ -28,13 +28,13 @@ ai-go-console/
 │   │   ├── apps/
 │   │   │   ├── page.tsx            # Apps list
 │   │   │   └── [appId]/page.tsx    # App detail + logs + controls
-│   │   ├── data-sources/page.tsx   # Credential vault CRUD (admin only)
+│   │   ├── credentials/page.tsx   # Credential vault CRUD (admin only)
 │   │   ├── users/page.tsx          # User management (admin only)
 │   │   ├── login/page.tsx          # Login page
 │   │   └── api/
 │   │       ├── apps/               # App CRUD + lifecycle
 │   │       ├── chat/route.ts       # Streaming chat endpoint
-│   │       ├── data-sources/       # Credential CRUD (admin only)
+│   │       ├── credentials/       # Credential CRUD (admin only)
 │   │       ├── users/             # User management (admin only)
 │   │       └── auth/[...nextauth]/route.ts  # NextAuth handler
 │   ├── components/
@@ -42,7 +42,7 @@ ai-go-console/
 │   │   ├── layout/                 # sidebar, header
 │   │   ├── chat/                   # chat-panel, message, template-picker, preview-iframe
 │   │   ├── apps/                   # app-card, status-badge
-│   │   └── data-sources/           # source-form, source-list
+│   │   └── credentials/           # source-form, source-list
 │   ├── lib/
 │   │   ├── db/index.ts             # Prisma client singleton
 │   │   ├── crypto.ts               # AES-256-GCM encrypt/decrypt
@@ -69,8 +69,8 @@ Models in `prisma/schema.prisma`:
 
 - **apps** - id, name, slug (unique folder name), description, template type, status, port, config (JSON), timestamps
 - **app_domains** - id, appId (FK), domain (unique), isActive, sslStatus, createdAt — supports multiple custom domains per app, all stored in PostgreSQL
-- **data_sources** - id, name, type (postgres/supabase/mysql/redis), encrypted credentials + IV + authTag, timestamps
-- **app_data_sources** - junction table linking apps to data sources with env var prefix (e.g. `DB` → `DB_HOST`, `DB_PORT`...)
+- **credentials** - id, name, type (postgres/supabase/mysql/redis), encrypted credentials + IV + authTag, timestamps
+- **app_credentials** - junction table linking apps to credentials with env var prefix (e.g. `DB` → `DB_HOST`, `DB_PORT`...)
 - **users** - id, email, name, passwordHash, role (enum: `admin` | `user`), createdAt
 - **chat_messages** - id, appId, userId (FK), role, content, timestamp (conversation history per app)
 
@@ -82,7 +82,7 @@ Models in `prisma/schema.prisma`:
 - Add root `docker-compose.yml` with PostgreSQL service for the console's own DB
 - Set up Prisma ORM, define `prisma/schema.prisma`, run `prisma migrate dev`
 - Build layout: sidebar nav, header (with language switcher), dashboard page (empty state)
-- Build data sources page: add/edit/delete credentials
+- Build credentials page: add/edit/delete credentials
 - Implement `crypto.ts` for AES-256-GCM encryption
 
 ### Phase 2: App Templates & Generator
@@ -127,7 +127,7 @@ Models in `prisma/schema.prisma`:
 - User model with two roles: **admin** and **user**
 - Auth via NextAuth.js (credentials provider) with JWT session
 - **Admin** permissions:
-  - Manage all data source credentials (CRUD)
+  - Manage all credential credentials (CRUD)
   - Assign/revoke credentials to/from apps
   - Manage users (invite, change role)
   - All user permissions
@@ -135,7 +135,7 @@ Models in `prisma/schema.prisma`:
   - Create, edit, delete their own apps
   - Use conversational AI to build apps
   - Manage custom domains for their apps
-  - View (but not edit) assigned data sources
+  - View (but not edit) assigned credentials
 - Middleware: role-based route protection on API routes and pages
 - First user to register becomes admin (seed admin)
 - Login/register pages
@@ -144,11 +144,11 @@ Models in `prisma/schema.prisma`:
 - Error handling across all API routes
 - Loading states + optimistic UI updates
 - App deletion (stop container → remove files → clean DB → remove proxy route)
-- "Test Connection" for data sources
+- "Test Connection" for credentials
 - Input validation on all forms
 
 ## Credential Flow
-1. User adds data source via form → credentials encrypted with AES-256-GCM → stored in PostgreSQL (encrypted at application level)
+1. User adds credential via form → credentials encrypted with AES-256-GCM → stored in PostgreSQL (encrypted at application level)
 2. When generating/starting an app, server decrypts linked credentials → injects as environment variables into app's `docker-compose.yml`
 3. Credentials never shown decrypted in UI (masked display only)
 4. `ENCRYPTION_KEY` auto-generated on first run → stored in `.env.local`
@@ -181,7 +181,7 @@ Models in `prisma/schema.prisma`:
 
 ## Verification
 - `npm run dev` → console runs at localhost:3000
-- Navigate to Data Sources → add a Postgres credential → verify it's stored encrypted
+- Navigate to Credentials → add a Postgres credential → verify it's stored encrypted
 - Navigate to Create → chat to create a React SPA → verify `apps/<slug>/` created with correct files
 - From app detail → click Start → verify Docker container runs → open app in browser
-- Verify multiple apps can share the same data source credentials
+- Verify multiple apps can share the same credential credentials

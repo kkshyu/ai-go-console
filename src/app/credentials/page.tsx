@@ -14,7 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Database, Plus, Trash2, TestTube } from "lucide-react";
 
-interface DataSourceForm {
+interface CredentialForm {
   name: string;
   type: string;
   host: string;
@@ -26,7 +26,7 @@ interface DataSourceForm {
   projectUrl: string;
 }
 
-const emptyForm: DataSourceForm = {
+const emptyForm: CredentialForm = {
   name: "",
   type: "postgres",
   host: "",
@@ -38,24 +38,24 @@ const emptyForm: DataSourceForm = {
   projectUrl: "",
 };
 
-const dataSourceTypes = ["postgres", "supabase", "mysql", "redis"] as const;
+const credentialTypes = ["postgres", "supabase", "mysql", "redis"] as const;
 
-export default function DataSourcesPage() {
-  const t = useTranslations("dataSources");
+export default function CredentialsPage() {
+  const t = useTranslations("credentials");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<DataSourceForm>(emptyForm);
-  const [dataSources, setDataSources] = useState<
+  const [form, setForm] = useState<CredentialForm>(emptyForm);
+  const [credentials, setCredentials] = useState<
     { id: string; name: string; type: string }[]
   >([]);
 
-  function updateForm(key: keyof DataSourceForm, value: string) {
+  function updateForm(key: keyof CredentialForm, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const res = await fetch("/api/data-sources", {
+    const res = await fetch("/api/credentials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
@@ -63,16 +63,16 @@ export default function DataSourcesPage() {
 
     if (res.ok) {
       const ds = await res.json();
-      setDataSources((prev) => [...prev, ds]);
+      setCredentials((prev) => [...prev, ds]);
       setForm(emptyForm);
       setShowForm(false);
     }
   }
 
   async function handleDelete(id: string) {
-    const res = await fetch(`/api/data-sources/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/credentials/${id}`, { method: "DELETE" });
     if (res.ok) {
-      setDataSources((prev) => prev.filter((ds) => ds.id !== id));
+      setCredentials((prev) => prev.filter((ds) => ds.id !== id));
     }
   }
 
@@ -91,7 +91,7 @@ export default function DataSourcesPage() {
           <CardHeader>
             <CardTitle>{t("add")}</CardTitle>
             <CardDescription>
-              Configure a new data source connection
+              Configure a new credential connection
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -113,7 +113,7 @@ export default function DataSourcesPage() {
                     onChange={(e) => updateForm("type", e.target.value)}
                     className="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                   >
-                    {dataSourceTypes.map((type) => (
+                    {credentialTypes.map((type) => (
                       <option key={type} value={type}>
                         {t(`types.${type}`)}
                       </option>
@@ -250,18 +250,18 @@ export default function DataSourcesPage() {
         </Card>
       )}
 
-      {dataSources.length === 0 && !showForm ? (
+      {credentials.length === 0 && !showForm ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Database className="h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-lg text-muted-foreground">
-              No data sources configured
+              No credentials configured
             </p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {dataSources.map((ds) => (
+          {credentials.map((ds) => (
             <Card key={ds.id}>
               <CardContent className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">

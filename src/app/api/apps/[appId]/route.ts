@@ -14,9 +14,9 @@ export async function GET(
     where: { id: appId },
     include: {
       domains: true,
-      dataSources: {
+      credentials: {
         include: {
-          dataSource: { select: { id: true, name: true, type: true } },
+          credential: { select: { id: true, name: true, type: true } },
         },
       },
     },

@@ -8,7 +8,7 @@ export async function POST(
 ) {
   const { id } = await params;
 
-  const ds = await prisma.dataSource.findUnique({ where: { id } });
+  const ds = await prisma.credential.findUnique({ where: { id } });
   if (!ds) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

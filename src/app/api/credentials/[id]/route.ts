@@ -8,7 +8,7 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const ds = await prisma.dataSource.findUnique({
+  const ds = await prisma.credential.findUnique({
     where: { id },
     select: { id: true, name: true, type: true, createdAt: true, updatedAt: true },
   });
@@ -43,7 +43,7 @@ export async function PATCH(
     data.authTag = authTag;
   }
 
-  const ds = await prisma.dataSource.update({
+  const ds = await prisma.credential.update({
     where: { id },
     data,
     select: { id: true, name: true, type: true, createdAt: true, updatedAt: true },
@@ -58,7 +58,7 @@ export async function DELETE(
 ) {
   const { id } = await params;
 
-  await prisma.dataSource.delete({ where: { id } });
+  await prisma.credential.delete({ where: { id } });
 
   return NextResponse.json({ success: true });
 }
