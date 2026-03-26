@@ -21,7 +21,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { AgentChatPanel, type AgentMessage } from "@/components/chat/agent-chat-panel";
-import type { AgentRole, PipelineStage, PipelineState } from "@/lib/agents/types";
+import type { AgentRole } from "@/lib/agents/types";
 
 interface AppData {
   id: string;
@@ -45,7 +45,6 @@ export default function AppDetailPage() {
   const { appId } = useParams();
   const router = useRouter();
   const t = useTranslations("apps");
-  const tAgents = useTranslations("agents");
   const [app, setApp] = useState<AppData | null>(null);
   const [logs, setLogs] = useState("");
   const [loading, setLoading] = useState(false);
@@ -59,14 +58,6 @@ export default function AppDetailPage() {
   const isDevRunning = app?.status === "running" || app?.status === "developing";
   const hasPreview = app?.port && isDevRunning;
   const previewUrl = hasPreview ? `http://localhost:${app.port}` : null;
-
-  const stageLabels: Record<PipelineStage, string> = {
-    requirements: tAgents("stages.requirements"),
-    architecture: tAgents("stages.architecture"),
-    coding: tAgents("stages.coding"),
-    review: tAgents("stages.review"),
-    deployment: tAgents("stages.deployment"),
-  };
 
   useEffect(() => {
     fetch(`/api/apps/${appId}`)
@@ -82,7 +73,6 @@ export default function AppDetailPage() {
               role: m.role as "user" | "assistant",
               content: m.content,
               agentRole: (m.agentRole as AgentRole) || null,
-              stage: (m.stage as PipelineStage) || null,
             }))
           );
         }
@@ -120,12 +110,12 @@ export default function AppDetailPage() {
   }
 
   const saveMessage = useCallback(
-    async (role: string, content: string, agentRole?: AgentRole, stage?: PipelineStage) => {
+    async (role: string, content: string, agentRole?: AgentRole) => {
       try {
         await fetch(`/api/apps/${appId}/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role, content, agentRole, stage }),
+          body: JSON.stringify({ role, content, agentRole }),
         });
       } catch {}
     },
@@ -284,8 +274,7 @@ export default function AppDetailPage() {
               onUserMessage={handleUserMessage}
               onAssistantComplete={handleAssistantComplete}
               onAssistantResponse={handleAssistantResponse}
-              showPipeline={true}
-              stageLabels={stageLabels}
+              showProgress={true}
             />
           )}
         </div>

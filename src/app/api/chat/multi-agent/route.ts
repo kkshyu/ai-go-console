@@ -12,13 +12,76 @@ import {
 } from "@/lib/ai";
 import {
   routeMessage,
-  buildAgentContext,
-  createInitialPipelineState,
+  parsePMAction,
+  parseAgentResult,
+  stateForAgentComplete,
+  stateForComplete,
+  createInitialOrchestrationState,
 } from "@/lib/agents/orchestrator";
-import type { AgentMessage, PipelineState } from "@/lib/agents/types";
+import type { AgentMessage, AgentRole, OrchestrationState } from "@/lib/agents/types";
 
 /** Maximum number of auto-chained agent calls per request */
-const MAX_CHAIN_DEPTH = 5;
+const MAX_CHAIN_DEPTH = 10;
+
+/**
+ * Map agent action types to artifact types for persistence.
+ */
+function getArtifactType(content: string): string | null {
+  const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
+  if (!jsonMatch) return null;
+  try {
+    const parsed = JSON.parse(jsonMatch[1]);
+    const actionMap: Record<string, string> = {
+      pm_spec: "spec",
+      pm_analysis: "spec",
+      architect_design: "design",
+      create_app: "implementation",
+      update_app: "implementation",
+      review_result: "review",
+      deploy_ready: "deployment",
+      dispatch: "task",
+      respond: null as unknown as string,
+      complete: null as unknown as string,
+    };
+    return actionMap[parsed.action] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extract the JSON content from an agent's response for artifact storage.
+ */
+function extractJsonContent(content: string): unknown | null {
+  const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
+  if (!jsonMatch) return null;
+  try {
+    return JSON.parse(jsonMatch[1]);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load persisted artifacts for a pipeline and format as minimal context.
+ * This replaces replaying full conversation history — agents get only
+ * the structured JSON outputs they need.
+ */
+async function loadArtifactContext(pipelineId: string): Promise<string> {
+  const artifacts = await prisma.agentArtifact.findMany({
+    where: { pipelineId },
+    orderBy: { createdAt: "asc" },
+    select: { agentRole: true, type: true, content: true },
+  });
+
+  if (artifacts.length === 0) return "";
+
+  const parts = artifacts.map(
+    (a) => `[${a.agentRole.toUpperCase()} ${a.type}]: ${JSON.stringify(a.content)}`
+  );
+
+  return `\n\nArtifacts from this pipeline:\n${parts.join("\n")}`;
+}
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -27,13 +90,13 @@ export async function POST(request: NextRequest) {
     model,
     appId,
     pipelineId,
-    pipelineState: clientPipelineState,
+    orchestrationState: clientState,
   } = body as {
     messages: ChatMessage[];
     model?: string;
     appId?: string;
     pipelineId?: string;
-    pipelineState?: PipelineState;
+    orchestrationState?: OrchestrationState;
   };
 
   if (!messages || !Array.isArray(messages)) {
@@ -87,51 +150,73 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Convert to AgentMessages for routing
+  // Convert to AgentMessages
   const agentMessages: AgentMessage[] = messages.map((m) => ({
     role: m.role as "user" | "assistant",
     content: m.content,
     agentRole: (m as unknown as { agentRole?: string }).agentRole as
       | AgentMessage["agentRole"]
       | undefined,
-    stage: (m as unknown as { stage?: string }).stage as
-      | AgentMessage["stage"]
-      | undefined,
   }));
 
-  // Use client pipeline state, or load from DB, or create new
-  let pipelineState: PipelineState | undefined = clientPipelineState;
-  if (!pipelineState && pipelineId) {
+  // Use client state, or load from DB, or create new
+  let orchState: OrchestrationState | undefined = clientState;
+  if (!orchState && pipelineId) {
     const pipeline = await prisma.agentPipeline.findUnique({
       where: { id: pipelineId },
     });
     if (pipeline) {
-      pipelineState = {
-        status: pipeline.status as PipelineState["status"],
-        currentStage: pipeline.currentStage as PipelineState["currentStage"],
-        completedStages:
-          pipeline.completedStages as PipelineState["completedStages"],
-        stages: (pipeline.stageData as PipelineState["stages"]) ||
-          createInitialPipelineState().stages,
+      orchState = {
+        status: pipeline.status as OrchestrationState["status"],
+        currentAgent: (pipeline.currentAgent as OrchestrationState["currentAgent"]) || null,
+        tasks: (pipeline.tasks as unknown as OrchestrationState["tasks"]) || [],
       };
     }
   }
+
+  // Load persisted artifacts for context (instead of replaying messages)
+  const artifactContext = pipelineId
+    ? await loadArtifactContext(pipelineId)
+    : "";
 
   // Create a TransformStream for SSE
   const encoder = new TextEncoder();
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
 
-  /** Helper to send an SSE event */
   const sendEvent = (data: unknown) =>
     writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
 
-  // Start streaming in background with auto-chaining
+  /**
+   * Save an agent's structured output as an artifact for future reference.
+   */
+  const saveArtifact = async (agentRole: AgentRole, content: string) => {
+    if (!pipelineId) return;
+    const type = getArtifactType(content);
+    if (!type) return;
+    const jsonContent = extractJsonContent(content);
+    if (!jsonContent) return;
+
+    await prisma.agentArtifact.create({
+      data: {
+        pipelineId,
+        agentRole,
+        type,
+        content: jsonContent as object,
+      },
+    });
+  };
+
+  // Start streaming in background with PM-controlled chaining
   (async () => {
     try {
       let currentMessages = [...agentMessages];
-      let currentPipelineState = pipelineState;
+      let currentState = orchState || createInitialOrchestrationState();
       let chainDepth = 0;
+
+      // Always start with PM Agent
+      let dispatchedAgent: string | undefined;
+      let dispatchedTask: string | undefined;
 
       while (chainDepth < MAX_CHAIN_DEPTH) {
         chainDepth++;
@@ -140,27 +225,27 @@ export async function POST(request: NextRequest) {
         const dispatch = routeMessage(currentMessages, {
           allowedServices,
           appContext,
-          pipelineState: currentPipelineState,
+          orchestrationState: currentState,
+          dispatchedAgent: dispatchedAgent as AgentMessage["agentRole"],
+          dispatchedTask,
         });
 
-        // Build the system prompt with context from previous agents
-        const agentContext = buildAgentContext(currentMessages, dispatch.pipelineState);
-        const systemPrompt = dispatch.systemPrompt + agentContext;
+        // Use artifacts for context instead of replaying full conversation
+        const systemPrompt = dispatch.systemPrompt + artifactContext;
 
-        // 1. Send agent metadata
+        // 1. Send agent metadata + state
         await sendEvent({
           agentRole: dispatch.agentRole,
-          stage: dispatch.stage,
-          pipelineState: dispatch.pipelineState,
+          orchestrationState: dispatch.orchestrationState,
         });
 
-        // 2. Signal that the agent is thinking (frontend shows loader)
+        // 2. Signal thinking
         await sendEvent({
           thinking: true,
           agentRole: dispatch.agentRole,
         });
 
-        // 3. Accumulate agent output silently (no streaming to user)
+        // 3. Generate agent response silently
         const chatMessages: ChatMessage[] = currentMessages.map((m) => ({
           role: m.role,
           content: m.content,
@@ -168,13 +253,13 @@ export async function POST(request: NextRequest) {
 
         const result = await streamChat(
           chatMessages,
-          () => {}, // no-op: don't stream raw chunks to user
+          () => {},
           model || DEFAULT_MODEL,
           allowedServices,
           systemPrompt
         );
 
-        // 4. Send raw generation usage
+        // 4. Send usage
         if (result.usage) {
           await sendEvent({
             usage: result.usage,
@@ -182,94 +267,157 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        // 5. Translate agent output for user display
-        await sendEvent({
-          translating: true,
-          agentRole: dispatch.agentRole,
-        });
-
-        const translated = await translateForUser(
-          result.content,
-          dispatch.agentRole,
-        );
-
-        // 6. Send translated content as a single chunk
-        const displayContent = translated.content || result.content;
-        if (displayContent) {
-          await sendEvent({
-            content: displayContent,
-            agentRole: dispatch.agentRole,
-          });
-        }
-
-        // 7. Send translation usage
-        if (translated.usage) {
-          await sendEvent({
-            usage: translated.usage,
-            model: OUTPUT_MODEL,
-          });
-        }
-
-        // 8. Check if the response advances the pipeline
-        const messagesWithResponse: AgentMessage[] = [
+        // Add agent response to message history
+        currentMessages = [
           ...currentMessages,
           {
-            role: "assistant",
-            content: result.content, // raw content for action parsing
+            role: "assistant" as const,
+            content: result.content,
             agentRole: dispatch.agentRole,
-            stage: dispatch.stage,
           },
         ];
 
-        const updatedDispatch = routeMessage(messagesWithResponse, {
-          allowedServices,
-          appContext,
-          pipelineState: dispatch.pipelineState,
-        });
+        // 5. Persist agent output as artifact
+        await saveArtifact(dispatch.agentRole, result.content);
 
-        // 9. Send pipeline state update
-        await sendEvent({
-          pipelineState: updatedDispatch.pipelineState,
-          nextAgent: updatedDispatch.agentRole,
-          nextStage: updatedDispatch.stage,
-        });
+        // 6. Decide what happens next based on which agent just responded
+        if (dispatch.agentRole === "pm") {
+          const pmAction = parsePMAction(result.content);
 
-        // Check if the pipeline advanced to a new stage
-        const stageAdvanced =
-          updatedDispatch.pipelineState.currentStage !== dispatch.pipelineState.currentStage;
+          if (pmAction?.action === "dispatch") {
+            await sendEvent({ translating: true, agentRole: "pm" });
+            const translated = await translateForUser(result.content, "pm");
+            if (translated.content) {
+              await sendEvent({ content: translated.content, agentRole: "pm" });
+            }
+            if (translated.usage) {
+              await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
+            }
+            await sendEvent({
+              agentComplete: true,
+              agentRole: "pm",
+              rawContent: result.content,
+            });
 
-        if (stageAdvanced && updatedDispatch.pipelineState.status !== "completed") {
-          // 10. Signal agent completion with raw content for action parsing
+            dispatchedAgent = pmAction.target;
+            dispatchedTask = pmAction.task;
+            currentState = dispatch.orchestrationState;
+            continue;
+          }
+
+          if (pmAction?.action === "respond") {
+            await sendEvent({ translating: true, agentRole: "pm" });
+            const translated = await translateForUser(result.content, "pm");
+            const displayContent = translated.content || pmAction.message;
+            if (displayContent) {
+              await sendEvent({ content: displayContent, agentRole: "pm" });
+            }
+            if (translated.usage) {
+              await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
+            }
+            await sendEvent({
+              agentComplete: true,
+              agentRole: "pm",
+              rawContent: result.content,
+            });
+            currentState = dispatch.orchestrationState;
+            break;
+          }
+
+          if (pmAction?.action === "complete") {
+            await sendEvent({ translating: true, agentRole: "pm" });
+            const translated = await translateForUser(result.content, "pm");
+            const displayContent = translated.content || pmAction.summary;
+            if (displayContent) {
+              await sendEvent({ content: displayContent, agentRole: "pm" });
+            }
+            if (translated.usage) {
+              await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
+            }
+            currentState = stateForComplete(
+              dispatch.orchestrationState,
+              pmAction.summary
+            );
+            await sendEvent({
+              agentComplete: true,
+              agentRole: "pm",
+              rawContent: result.content,
+              orchestrationState: currentState,
+            });
+            break;
+          }
+
+          // PM didn't output a valid action — treat as respond and stop
+          await sendEvent({ translating: true, agentRole: "pm" });
+          const translated = await translateForUser(result.content, "pm");
+          if (translated.content || result.content) {
+            await sendEvent({
+              content: translated.content || result.content,
+              agentRole: "pm",
+            });
+          }
+          if (translated.usage) {
+            await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
+          }
           await sendEvent({
             agentComplete: true,
-            agentRole: dispatch.agentRole,
+            agentRole: "pm",
             rawContent: result.content,
           });
-
-          // Update state for next iteration
-          currentMessages = messagesWithResponse;
-          currentPipelineState = updatedDispatch.pipelineState;
-        } else {
-          // Pipeline didn't advance or completed — send raw content for action parsing and stop
-          await sendEvent({
-            agentComplete: true,
-            agentRole: dispatch.agentRole,
-            rawContent: result.content,
-          });
-          currentPipelineState = updatedDispatch.pipelineState;
+          currentState = dispatch.orchestrationState;
           break;
+        } else {
+          // Specialist agent completed — translate, then loop back to PM
+          await sendEvent({
+            translating: true,
+            agentRole: dispatch.agentRole,
+          });
+
+          const translated = await translateForUser(
+            result.content,
+            dispatch.agentRole
+          );
+          if (translated.content || result.content) {
+            await sendEvent({
+              content: translated.content || result.content,
+              agentRole: dispatch.agentRole,
+            });
+          }
+          if (translated.usage) {
+            await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
+          }
+
+          const agentResult = parseAgentResult(result.content);
+          currentState = stateForAgentComplete(
+            dispatch.orchestrationState,
+            dispatch.agentRole,
+            agentResult.summary
+          );
+
+          await sendEvent({
+            agentComplete: true,
+            agentRole: dispatch.agentRole,
+            rawContent: result.content,
+            orchestrationState: currentState,
+          });
+
+          // Loop back to PM for next decision
+          dispatchedAgent = undefined;
+          dispatchedTask = undefined;
         }
       }
 
-      // Persist pipeline state if we have a pipelineId
-      if (pipelineId && currentPipelineState) {
+      // Persist orchestration state
+      if (pipelineId && currentState) {
         await prisma.agentPipeline.update({
           where: { id: pipelineId },
           data: {
-            status: currentPipelineState.status,
-            currentStage: currentPipelineState.currentStage,
-            completedStages: currentPipelineState.completedStages,
-            stageData: JSON.parse(JSON.stringify(currentPipelineState.stages)),
+            status: currentState.status,
+            currentAgent: currentState.currentAgent || "pm",
+            completedAgents: currentState.tasks
+              .filter((t) => t.status === "completed")
+              .map((t) => t.agentRole),
+            tasks: JSON.parse(JSON.stringify(currentState.tasks)),
           },
         });
       }

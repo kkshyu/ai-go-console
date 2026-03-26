@@ -225,16 +225,9 @@
     "languageZhTW": "繁體中文"
   },
   "agents": {
-    "subtitle": "多 Agent 團隊協作，逐步幫你打造應用",
-    "emptyState": "描述你想建立的應用 — 我們的 AI 團隊將協作完成",
+    "subtitle": "PM Agent 統籌調度專家團隊，為你打造應用",
+    "emptyState": "描述你想建立的應用 — PM 將協調團隊完成",
     "previewHint": "Agent 建立完成後，應用預覽將顯示在此",
-    "stages": {
-      "requirements": "需求分析",
-      "architecture": "架構設計",
-      "coding": "程式開發",
-      "review": "品質審查",
-      "deployment": "部署上線"
-    },
     "roles": {
       "pm": "產品經理",
       "architect": "架構師",
@@ -243,13 +236,13 @@
       "devops": "部署專家"
     },
     "roleDescriptions": {
-      "pm": "收集需求並建立規格說明",
+      "pm": "統籌調度 Agent 並管理需求",
       "architect": "設計系統架構並選擇技術方案",
       "developer": "撰寫並產生應用程式碼",
       "reviewer": "審查程式品質與安全性",
       "devops": "處理部署與基礎設施"
     },
-    "pipelineStatus": {
+    "status": {
       "idle": "準備中",
       "running": "進行中",
       "completed": "已完成",

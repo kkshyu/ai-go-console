@@ -17,15 +17,9 @@ export async function POST(request: NextRequest) {
   const pipeline = await prisma.agentPipeline.create({
     data: {
       status: "idle",
-      currentStage: "requirements",
-      completedStages: [],
-      stageData: {
-        requirements: { status: "idle" },
-        architecture: { status: "idle" },
-        coding: { status: "idle" },
-        review: { status: "idle" },
-        deployment: { status: "idle" },
-      },
+      currentAgent: null,
+      completedAgents: [],
+      tasks: [],
       ...(appId ? { appId } : {}),
     },
   });

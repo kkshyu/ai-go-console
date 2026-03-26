@@ -7,8 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Send, User, Loader2, ChevronDown, Zap } from "lucide-react";
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/ai";
-import { AGENT_DEFINITIONS, createInitialPipelineState } from "@/lib/agents/types";
-import type { AgentRole, PipelineState, PipelineStage } from "@/lib/agents/types";
+import { AGENT_DEFINITIONS, createInitialOrchestrationState } from "@/lib/agents/types";
+import type { AgentRole, OrchestrationState } from "@/lib/agents/types";
 import { PipelineProgress } from "./pipeline-progress";
 import { AgentAvatar } from "./agent-avatar";
 
@@ -17,15 +17,6 @@ export interface AgentMessage {
   role: "user" | "assistant";
   content: string;
   agentRole?: AgentRole | null;
-  stage?: PipelineStage | null;
-}
-
-/**
- * Strip JSON code blocks (```json ... ```) from message content
- * so users only see the human-friendly text.
- */
-function stripJsonBlocks(content: string): string {
-  return content.replace(/```json\s*\n[\s\S]*?\n```/g, "").trim();
 }
 
 interface ModelTokenUsage {
@@ -46,7 +37,7 @@ export interface AgentChatPanelProps {
   onAssistantResponse?: (content: string, agentRole?: AgentRole) => void;
   onUserMessage?: (content: string) => void;
   onAssistantComplete?: (content: string, agentRole?: AgentRole) => void;
-  onPipelineUpdate?: (state: PipelineState) => void;
+  onOrchestrationUpdate?: (state: OrchestrationState) => void;
   extraRequestBody?: Record<string, unknown>;
   placeholder?: string;
   emptyStateText?: string;
@@ -54,18 +45,8 @@ export interface AgentChatPanelProps {
   totalTokensLabel?: string;
   externalLoading?: boolean;
   pipelineId?: string;
-  showPipeline?: boolean;
-  stageLabels?: Record<PipelineStage, string>;
-  agentLabels?: Record<AgentRole, string>;
+  showProgress?: boolean;
 }
-
-const DEFAULT_STAGE_LABELS: Record<PipelineStage, string> = {
-  requirements: "Requirements",
-  architecture: "Architecture",
-  coding: "Coding",
-  review: "Review",
-  deployment: "Deployment",
-};
 
 type AgentPhase = "thinking" | "translating" | null;
 
@@ -74,7 +55,7 @@ export function AgentChatPanel({
   onAssistantResponse,
   onUserMessage,
   onAssistantComplete,
-  onPipelineUpdate,
+  onOrchestrationUpdate,
   extraRequestBody,
   placeholder = "Type a message...",
   emptyStateText = "Start a conversation",
@@ -82,8 +63,7 @@ export function AgentChatPanel({
   totalTokensLabel = "Tokens",
   externalLoading = false,
   pipelineId,
-  showPipeline = true,
-  stageLabels = DEFAULT_STAGE_LABELS,
+  showProgress = true,
 }: AgentChatPanelProps) {
   const [messages, setMessages] = useState<AgentMessage[]>(initialMessages);
   const [input, setInput] = useState("");
@@ -91,8 +71,8 @@ export function AgentChatPanel({
   const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [tokenUsage, setTokenUsage] = useState<Record<string, ModelTokenUsage>>({});
-  const [pipelineState, setPipelineState] = useState<PipelineState>(
-    createInitialPipelineState()
+  const [orchState, setOrchState] = useState<OrchestrationState>(
+    createInitialOrchestrationState()
   );
   const [currentAgent, setCurrentAgent] = useState<AgentRole | null>(null);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
@@ -158,11 +138,10 @@ export function AgentChatPanel({
               role: m.role,
               content: m.content,
               agentRole: m.agentRole,
-              stage: m.stage,
             })),
             model: selectedModel,
             pipelineId,
-            pipelineState,
+            orchestrationState: orchState,
             ...extraRequestBody,
           }),
         });
@@ -194,25 +173,31 @@ export function AgentChatPanel({
             try {
               const parsed = JSON.parse(data);
 
-              // Agent is thinking (generating raw output silently)
+              // Agent is thinking
               if (parsed.thinking) {
                 setAgentPhase("thinking");
                 continue;
               }
 
-              // Agent output is being translated for user
+              // Agent output is being translated
               if (parsed.translating) {
                 setAgentPhase("translating");
                 continue;
               }
 
-              // Agent completed — rawContent available for action parsing
+              // Agent completed
               if (parsed.agentComplete) {
                 rawContent = parsed.rawContent || rawContent;
                 setAgentPhase(null);
-                // Notify with raw content (for JSON action parsing)
                 onAssistantResponse?.(rawContent, resolvedAgent || undefined);
                 onAssistantComplete?.(displayContent, resolvedAgent || undefined);
+
+                // Update orchestration state if provided
+                if (parsed.orchestrationState) {
+                  setOrchState(parsed.orchestrationState);
+                  onOrchestrationUpdate?.(parsed.orchestrationState);
+                }
+
                 // Reset for next agent's message
                 displayContent = "";
                 rawContent = "";
@@ -225,16 +210,16 @@ export function AgentChatPanel({
                 continue;
               }
 
-              // Agent metadata (first message of each agent)
-              if (parsed.agentRole && parsed.stage && parsed.pipelineState) {
+              // Agent metadata
+              if (parsed.agentRole && parsed.orchestrationState) {
                 resolvedAgent = parsed.agentRole;
                 setCurrentAgent(parsed.agentRole);
-                setPipelineState(parsed.pipelineState);
-                onPipelineUpdate?.(parsed.pipelineState);
+                setOrchState(parsed.orchestrationState);
+                onOrchestrationUpdate?.(parsed.orchestrationState);
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === currentMsgId
-                      ? { ...m, agentRole: parsed.agentRole, stage: parsed.stage }
+                      ? { ...m, agentRole: parsed.agentRole }
                       : m
                   )
                 );
@@ -284,12 +269,6 @@ export function AgentChatPanel({
                   };
                 });
               }
-
-              // Pipeline state update
-              if (parsed.pipelineState && parsed.nextAgent) {
-                setPipelineState(parsed.pipelineState);
-                onPipelineUpdate?.(parsed.pipelineState);
-              }
             } catch {}
           }
         }
@@ -326,11 +305,11 @@ export function AgentChatPanel({
       selectedModel,
       extraRequestBody,
       pipelineId,
-      pipelineState,
+      orchState,
       onUserMessage,
       onAssistantResponse,
       onAssistantComplete,
-      onPipelineUpdate,
+      onOrchestrationUpdate,
     ]
   );
 
@@ -348,10 +327,10 @@ export function AgentChatPanel({
   return (
     <Card className="flex flex-1 flex-col min-h-0">
       <CardContent className="flex flex-1 flex-col p-4 min-h-0">
-        {/* Pipeline Progress */}
-        {showPipeline && (
+        {/* Agent Progress */}
+        {showProgress && (
           <div className="mb-3">
-            <PipelineProgress state={pipelineState} labels={stageLabels} />
+            <PipelineProgress state={orchState} />
             {(isLoading || externalLoading) && currentAgent && (
               <div className="flex items-center gap-2 mt-1.5 px-3 py-1 text-xs text-muted-foreground animate-pulse">
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -402,11 +381,6 @@ export function AgentChatPanel({
                     >
                       {AGENT_DEFINITIONS[message.agentRole]?.label}
                     </span>
-                    {message.stage && (
-                      <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
-                        {stageLabels[message.stage] || message.stage}
-                      </Badge>
-                    )}
                   </div>
                 )}
                 <div

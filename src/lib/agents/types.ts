@@ -1,31 +1,34 @@
 /**
  * Multi-Agent System Types
  *
- * Five specialized agents collaborate to build apps:
- * - PM: gathers requirements, creates specs
- * - Architect: designs system, picks template & services
- * - Developer: writes code
- * - Reviewer: reviews quality & security
- * - DevOps: handles deployment & infrastructure
+ * PM Agent acts as the central orchestrator, dispatching tasks to
+ * specialized agents (Architect, Developer, Reviewer, DevOps) as needed.
  */
 
 export type AgentRole = "pm" | "architect" | "developer" | "reviewer" | "devops";
 
-export type PipelineStatus = "idle" | "running" | "completed" | "error";
+export type TaskStatus = "idle" | "running" | "completed" | "error";
 
-export type PipelineStage =
-  | "requirements"
-  | "architecture"
-  | "coding"
-  | "review"
-  | "deployment";
+/** A single task dispatched by PM to an agent */
+export interface AgentTask {
+  agentRole: AgentRole;
+  status: TaskStatus;
+  description?: string; // what PM asked this agent to do
+  summary?: string; // result summary after completion
+}
+
+/** Overall orchestration state managed by PM Agent */
+export interface OrchestrationState {
+  status: TaskStatus;
+  tasks: AgentTask[]; // dispatched tasks (history, in order)
+  currentAgent: AgentRole | null; // currently executing agent
+}
 
 export interface AgentMeta {
   role: AgentRole;
   label: string;
   icon: string; // lucide icon name
   color: string; // tailwind color class
-  stage: PipelineStage;
   description: string;
 }
 
@@ -35,15 +38,13 @@ export const AGENT_DEFINITIONS: Record<AgentRole, AgentMeta> = {
     label: "PM",
     icon: "ClipboardList",
     color: "text-blue-500",
-    stage: "requirements",
-    description: "Product Manager — gathers requirements and creates specifications",
+    description: "Product Manager — orchestrates agents and manages requirements",
   },
   architect: {
     role: "architect",
     label: "Architect",
     icon: "Blocks",
     color: "text-purple-500",
-    stage: "architecture",
     description: "Architect — designs system architecture and selects technologies",
   },
   developer: {
@@ -51,7 +52,6 @@ export const AGENT_DEFINITIONS: Record<AgentRole, AgentMeta> = {
     label: "Developer",
     icon: "Code2",
     color: "text-green-500",
-    stage: "coding",
     description: "Developer — writes and generates application code",
   },
   reviewer: {
@@ -59,7 +59,6 @@ export const AGENT_DEFINITIONS: Record<AgentRole, AgentMeta> = {
     label: "Reviewer",
     icon: "ShieldCheck",
     color: "text-amber-500",
-    stage: "review",
     description: "Reviewer — reviews code quality and security",
   },
   devops: {
@@ -67,58 +66,40 @@ export const AGENT_DEFINITIONS: Record<AgentRole, AgentMeta> = {
     label: "DevOps",
     icon: "Rocket",
     color: "text-rose-500",
-    stage: "deployment",
     description: "DevOps — handles deployment and infrastructure",
   },
-};
-
-export const PIPELINE_STAGES: PipelineStage[] = [
-  "requirements",
-  "architecture",
-  "coding",
-  "review",
-  "deployment",
-];
-
-export const STAGE_AGENT_MAP: Record<PipelineStage, AgentRole> = {
-  requirements: "pm",
-  architecture: "architect",
-  coding: "developer",
-  review: "reviewer",
-  deployment: "devops",
 };
 
 export interface AgentMessage {
   role: "user" | "assistant";
   content: string;
   agentRole?: AgentRole;
-  stage?: PipelineStage;
 }
 
-export interface PipelineState {
-  status: PipelineStatus;
-  currentStage: PipelineStage;
-  completedStages: PipelineStage[];
-  stages: Record<
-    PipelineStage,
-    {
-      status: PipelineStatus;
-      summary?: string;
-    }
-  >;
-}
-
-export function createInitialPipelineState(): PipelineState {
+export function createInitialOrchestrationState(): OrchestrationState {
   return {
     status: "idle",
-    currentStage: "requirements",
-    completedStages: [],
-    stages: {
-      requirements: { status: "idle" },
-      architecture: { status: "idle" },
-      coding: { status: "idle" },
-      review: { status: "idle" },
-      deployment: { status: "idle" },
-    },
+    tasks: [],
+    currentAgent: null,
   };
 }
+
+// ---- PM Action types (parsed from PM Agent JSON output) ----
+
+export interface PMDispatchAction {
+  action: "dispatch";
+  target: AgentRole;
+  task: string;
+}
+
+export interface PMRespondAction {
+  action: "respond";
+  message: string;
+}
+
+export interface PMCompleteAction {
+  action: "complete";
+  summary: string;
+}
+
+export type PMAction = PMDispatchAction | PMRespondAction | PMCompleteAction;
