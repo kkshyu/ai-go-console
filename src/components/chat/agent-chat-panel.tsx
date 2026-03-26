@@ -278,6 +278,15 @@ export function AgentChatPanel({
           onAssistantResponse?.(rawContent || displayContent, resolvedAgent || undefined);
           onAssistantComplete?.(displayContent, resolvedAgent || undefined);
         }
+
+        // Remove trailing empty message left over from agentComplete handler
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === "assistant" && !last.content) {
+            return prev.slice(0, -1);
+          }
+          return prev;
+        });
       } catch {
         setMessages((prev) =>
           prev.map((m) =>
@@ -361,14 +370,21 @@ export function AgentChatPanel({
               <p className="text-sm">{emptyStateText}</p>
             </div>
           )}
-          {messages.map((message) => (
+          {messages
+            .filter(
+              (m) =>
+                m.role === "user" ||
+                m.content ||
+                m.agentRole
+            )
+            .map((message) => (
             <div
               key={message.id}
               className={`flex gap-3 ${
                 message.role === "user" ? "justify-end" : "justify-start"
               }`}
             >
-              {message.role === "assistant" && (
+              {message.role === "assistant" && message.agentRole && (
                 <AgentAvatar agentRole={message.agentRole} />
               )}
               <div className="max-w-[80%] flex flex-col gap-1">
