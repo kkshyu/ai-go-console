@@ -4,12 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Play,
@@ -20,12 +14,13 @@ import {
   Globe,
   ArrowLeft,
   Terminal,
-  Zap,
   Maximize2,
   X,
+  Copy,
+  Check,
+  ExternalLink,
 } from "lucide-react";
 import { ChatPanel, type Message, type TokenUsageMap } from "@/components/chat/chat-panel";
-import { AVAILABLE_MODELS } from "@/lib/ai";
 
 interface AppData {
   id: string;
@@ -35,13 +30,6 @@ interface AppData {
   template: string;
   status: string;
   port: number | null;
-}
-
-function formatTokenCount(count: number): string {
-  if (count >= 1000) {
-    return `${(count / 1000).toFixed(1)}k`;
-  }
-  return count.toString();
 }
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
@@ -64,15 +52,16 @@ export default function AppDetailPage() {
   const [chatLoaded, setChatLoaded] = useState(false);
   const [tokenUsage, setTokenUsage] = useState<TokenUsageMap>({});
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const isDevRunning = app?.status === "running" || app?.status === "developing";
   const hasPreview = app?.port && isDevRunning;
+  const previewUrl = hasPreview ? `http://localhost:${app.port}` : null;
 
   useEffect(() => {
     fetch(`/api/apps/${appId}`)
       .then((res) => res.json())
       .then(setApp);
-    // Load chat history
     fetch(`/api/apps/${appId}/chat`)
       .then((res) => res.json())
       .then((data) => {
@@ -147,13 +136,11 @@ export default function AppDetailPage() {
 
   const handleAssistantResponse = useCallback(
     (content: string) => {
-      // Parse for update_app action
       const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
       if (!jsonMatch) return;
       try {
         const parsed = JSON.parse(jsonMatch[1]);
         if (parsed.action === "update_app" && parsed.changes) {
-          // Apply update
           fetch(`/api/apps/${appId}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -173,30 +160,108 @@ export default function AppDetailPage() {
     setTokenUsage(usage);
   }, []);
 
-  if (!app) return <div className="p-8">Loading...</div>;
+  function copyUrl() {
+    if (!previewUrl) return;
+    navigator.clipboard.writeText(previewUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
 
-  const totalTokens = Object.values(tokenUsage).reduce(
-    (sum, u) => sum + u.totalTokens,
-    0
-  );
+  if (!app) return <div className="p-8">Loading...</div>;
 
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col">
-      <div className="flex items-center gap-4 mb-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/apps")}>
-          <ArrowLeft className="h-5 w-5" />
+      {/* Title Bar */}
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
+        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => router.push("/apps")}>
+          <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex-1">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{app.name}</h1>
-          {app.description && (
-            <p className="text-muted-foreground mt-1">{app.description}</p>
-          )}
-        </div>
+        <h1 className="text-xl font-bold tracking-tight truncate">{app.name}</h1>
         <Badge variant={statusVariant[app.status] || "secondary"}>
           {t(app.status as "developing" | "running" | "stopped" | "building" | "error")}
         </Badge>
+
+        {/* Separator */}
+        <div className="h-5 w-px bg-border" />
+
+        {/* Template & Port */}
+        <span className="text-xs text-muted-foreground font-mono">{app.template}</span>
+        {app.port && (
+          <>
+            <span className="text-xs text-muted-foreground">:</span>
+            <span className="text-xs text-muted-foreground font-mono">{app.port}</span>
+          </>
+        )}
+
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-1.5">
+          {(app.status === "developing" && !hasPreview) || app.status === "stopped" ? (
+            <>
+              <Button size="sm" variant="outline" onClick={() => doAction("dev-start")} disabled={loading}>
+                <Play className="h-3.5 w-3.5" />
+                Dev
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => doAction("publish")} disabled={loading}>
+                <Upload className="h-3.5 w-3.5" />
+                {t("publish")}
+              </Button>
+            </>
+          ) : app.status === "developing" && hasPreview ? (
+            <>
+              <Button size="sm" variant="outline" onClick={() => doAction("dev-stop")} disabled={loading}>
+                <Square className="h-3.5 w-3.5" />
+                {t("devStop")}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => doAction("publish")} disabled={loading}>
+                <Upload className="h-3.5 w-3.5" />
+                {t("publish")}
+              </Button>
+            </>
+          ) : app.status === "running" ? (
+            <>
+              <Button size="sm" variant="outline" onClick={() => doAction("stop")} disabled={loading}>
+                <Square className="h-3.5 w-3.5" />
+                {t("stop")}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => doAction("restart")} disabled={loading}>
+                <RotateCw className="h-3.5 w-3.5" />
+                {t("restart")}
+              </Button>
+            </>
+          ) : null}
+
+          <Button size="sm" variant="outline" onClick={() => doAction("logs")} disabled={loading}>
+            <Terminal className="h-3.5 w-3.5" />
+          </Button>
+
+          <Button size="sm" variant="destructive" onClick={handleDelete} disabled={loading}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
+      {/* Logs overlay */}
+      {showLogs && (
+        <div className="mb-3 relative">
+          <div className="rounded-lg border bg-muted">
+            <div className="flex items-center justify-between px-3 py-1.5 border-b">
+              <span className="text-xs font-medium">Logs</span>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowLogs(false)}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+            <pre className="max-h-48 overflow-auto p-3 text-xs font-mono whitespace-pre-wrap">
+              {logs || "No logs available"}
+            </pre>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content: Chat + Preview */}
       <div className="flex flex-1 gap-4 min-h-0">
         {/* Chat Panel */}
         <div className="flex flex-1 flex-col min-h-0">
@@ -216,234 +281,74 @@ export default function AppDetailPage() {
           )}
         </div>
 
-        {/* App Info Panel */}
-        <div className="hidden lg:flex lg:w-[400px] flex-col gap-4 overflow-y-auto">
-          <div className="grid gap-4 grid-cols-2">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">{t("template")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="font-mono text-sm">{app.template}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">{t("port")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="font-mono text-sm">{app.port || "—"}</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Token Usage Card */}
-          {totalTokens > 0 && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-1.5">
-                  <Zap className="h-4 w-4" />
-                  {t("tokenUsage")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{t("totalTokens")}</span>
-                    <span className="font-mono font-medium">{formatTokenCount(totalTokens)}</span>
-                  </div>
-                  {Object.entries(tokenUsage).map(([modelId, usage]) => {
-                    const label =
-                      AVAILABLE_MODELS.find((m) => m.id === modelId)?.label ??
-                      modelId.split("/").pop();
-                    return (
-                      <div key={modelId} className="rounded-md bg-muted/50 p-2 text-xs space-y-1">
-                        <div className="flex justify-between font-medium">
-                          <span>{label}</span>
-                          <span className="font-mono">{formatTokenCount(usage.totalTokens)}</span>
-                        </div>
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>{t("promptTokens")}</span>
-                          <span className="font-mono">{formatTokenCount(usage.promptTokens)}</span>
-                        </div>
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>{t("completionTokens")}</span>
-                          <span className="font-mono">{formatTokenCount(usage.completionTokens)}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">{t("actions")}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              {app.status === "developing" && !hasPreview ? (
-                <>
-                  <Button
-                    size="sm"
-                    onClick={() => doAction("dev-start")}
-                    disabled={loading}
-                  >
-                    <Play className="h-4 w-4" />
-                    Dev {t("start")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => doAction("publish")}
-                    disabled={loading}
-                  >
-                    <Upload className="h-4 w-4" />
-                    {t("publish")}
-                  </Button>
-                </>
-              ) : app.status === "developing" && hasPreview ? (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => doAction("dev-stop")}
-                    disabled={loading}
-                  >
-                    <Square className="h-4 w-4" />
-                    {t("devStop")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => doAction("publish")}
-                    disabled={loading}
-                  >
-                    <Upload className="h-4 w-4" />
-                    {t("publish")}
-                  </Button>
-                </>
-              ) : app.status === "stopped" ? (
-                <>
-                  <Button
-                    size="sm"
-                    onClick={() => doAction("dev-start")}
-                    disabled={loading}
-                  >
-                    <Play className="h-4 w-4" />
-                    Dev {t("start")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => doAction("publish")}
-                    disabled={loading}
-                  >
-                    <Upload className="h-4 w-4" />
-                    {t("publish")}
-                  </Button>
-                </>
-              ) : app.status === "running" ? (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => doAction("stop")}
-                    disabled={loading}
-                  >
-                    <Square className="h-4 w-4" />
-                    {t("stop")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => doAction("restart")}
-                    disabled={loading}
-                  >
-                    <RotateCw className="h-4 w-4" />
-                    {t("restart")}
-                  </Button>
-                </>
-              ) : null}
-
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => doAction("logs")}
-                disabled={loading}
-              >
-                <Terminal className="h-4 w-4" />
-                {t("viewLogs")}
-              </Button>
-
-              {hasPreview && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => window.open(`http://localhost:${app.port}`, "_blank")}
-                >
-                  <Globe className="h-4 w-4" />
-                  Open
-                </Button>
-              )}
-
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={handleDelete}
-                disabled={loading}
-              >
-                <Trash2 className="h-4 w-4" />
-                {t("delete")}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {showLogs && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Logs</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <pre className="max-h-96 overflow-auto rounded-lg bg-muted p-4 text-xs font-mono whitespace-pre-wrap">
-                  {logs || "No logs available"}
-                </pre>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Preview iframe when app is running */}
+        {/* Preview Panel — browser-like chrome */}
+        <div className="hidden lg:flex lg:w-[480px] flex-col min-h-0">
           {hasPreview ? (
-            <Card className="flex-1 min-h-[300px] overflow-hidden">
-              <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-medium">{t("preview")}</CardTitle>
+            <div className="flex flex-1 flex-col rounded-lg border overflow-hidden bg-background">
+              {/* Browser toolbar */}
+              <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
+                {/* Traffic lights */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="h-3 w-3 rounded-full bg-[#FF5F57]" />
+                  <span className="h-3 w-3 rounded-full bg-[#FEBC2E]" />
+                  <span className="h-3 w-3 rounded-full bg-[#28C840]" />
+                </div>
+                {/* Address bar */}
+                <div className="flex flex-1 items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 min-w-0">
+                  <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <span className="flex-1 text-xs font-mono text-muted-foreground truncate">
+                    {previewUrl}
+                  </span>
+                  <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={copyUrl}>
+                    {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                  </Button>
+                </div>
+                {/* Actions */}
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7"
+                  className="h-6 w-6 shrink-0"
+                  onClick={() => window.open(previewUrl!, "_blank")}
+                  title="Open in browser"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0"
                   onClick={() => setPreviewFullscreen(true)}
                   title={t("fullscreen")}
                 >
-                  <Maximize2 className="h-4 w-4" />
+                  <Maximize2 className="h-3 w-3" />
                 </Button>
-              </CardHeader>
-              <CardContent className="p-0 flex-1">
-                <iframe
-                  src={`http://localhost:${app.port}`}
-                  className="w-full h-[400px] border-0"
-                  title="App Preview"
-                />
-              </CardContent>
-            </Card>
+              </div>
+              <iframe
+                src={`http://localhost:${app.port}`}
+                className="flex-1 w-full border-0"
+                title="App Preview"
+              />
+            </div>
           ) : (
-            <Card className="flex-1 min-h-[200px] overflow-hidden">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">{t("preview")}</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col items-center justify-center h-[200px] text-muted-foreground">
-                <Globe className="h-10 w-10 mb-3 opacity-30" />
+            <div className="flex flex-1 flex-col rounded-lg border overflow-hidden bg-background">
+              {/* Browser toolbar — disabled state */}
+              <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
+                  <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
+                  <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
+                </div>
+                <div className="flex flex-1 items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 min-w-0 opacity-50">
+                  <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <span className="flex-1 text-xs font-mono text-muted-foreground">—</span>
+                </div>
+              </div>
+              <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
+                <Globe className="h-10 w-10 mb-3 opacity-20" />
                 <p className="text-sm font-medium">{t("serverNotRunning")}</p>
                 <p className="text-xs mt-1">{t("startDevServer")}</p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
         </div>
       </div>
