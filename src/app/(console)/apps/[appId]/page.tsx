@@ -20,7 +20,8 @@ import {
   Check,
   ExternalLink,
 } from "lucide-react";
-import { ChatPanel, type Message, type TokenUsageMap } from "@/components/chat/chat-panel";
+import { AgentChatPanel, type AgentMessage } from "@/components/chat/agent-chat-panel";
+import type { AgentRole, PipelineStage, PipelineState } from "@/lib/agents/types";
 
 interface AppData {
   id: string;
@@ -44,13 +45,13 @@ export default function AppDetailPage() {
   const { appId } = useParams();
   const router = useRouter();
   const t = useTranslations("apps");
+  const tAgents = useTranslations("agents");
   const [app, setApp] = useState<AppData | null>(null);
   const [logs, setLogs] = useState("");
   const [loading, setLoading] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
-  const [chatMessages, setChatMessages] = useState<Message[]>([]);
+  const [chatMessages, setChatMessages] = useState<AgentMessage[]>([]);
   const [chatLoaded, setChatLoaded] = useState(false);
-  const [tokenUsage, setTokenUsage] = useState<TokenUsageMap>({});
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
@@ -58,6 +59,14 @@ export default function AppDetailPage() {
   const isDevRunning = app?.status === "running" || app?.status === "developing";
   const hasPreview = app?.port && isDevRunning;
   const previewUrl = hasPreview ? `http://localhost:${app.port}` : null;
+
+  const stageLabels: Record<PipelineStage, string> = {
+    requirements: tAgents("stages.requirements"),
+    architecture: tAgents("stages.architecture"),
+    coding: tAgents("stages.coding"),
+    review: tAgents("stages.review"),
+    deployment: tAgents("stages.deployment"),
+  };
 
   useEffect(() => {
     fetch(`/api/apps/${appId}`)
@@ -68,10 +77,12 @@ export default function AppDetailPage() {
       .then((data) => {
         if (data.messages) {
           setChatMessages(
-            data.messages.map((m: { id: string; role: string; content: string }) => ({
+            data.messages.map((m: { id: string; role: string; content: string; agentRole?: string; stage?: string }) => ({
               id: m.id,
               role: m.role as "user" | "assistant",
               content: m.content,
+              agentRole: (m.agentRole as AgentRole) || null,
+              stage: (m.stage as PipelineStage) || null,
             }))
           );
         }
@@ -109,12 +120,12 @@ export default function AppDetailPage() {
   }
 
   const saveMessage = useCallback(
-    async (role: string, content: string) => {
+    async (role: string, content: string, agentRole?: AgentRole, stage?: PipelineStage) => {
       try {
         await fetch(`/api/apps/${appId}/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role, content }),
+          body: JSON.stringify({ role, content, agentRole, stage }),
         });
       } catch {}
     },
@@ -129,14 +140,14 @@ export default function AppDetailPage() {
   );
 
   const handleAssistantComplete = useCallback(
-    (content: string) => {
-      saveMessage("assistant", content);
+    (content: string, agentRole?: AgentRole) => {
+      saveMessage("assistant", content, agentRole);
     },
     [saveMessage]
   );
 
   const handleAssistantResponse = useCallback(
-    (content: string) => {
+    (content: string, agentRole?: AgentRole) => {
       const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
       if (!jsonMatch) return;
       try {
@@ -156,10 +167,6 @@ export default function AppDetailPage() {
     },
     [appId]
   );
-
-  const handleTokenUsageChange = useCallback((usage: TokenUsageMap) => {
-    setTokenUsage(usage);
-  }, []);
 
   function copyUrl() {
     if (!previewUrl) return;
@@ -264,10 +271,10 @@ export default function AppDetailPage() {
 
       {/* Main Content: Chat + Preview */}
       <div className="flex flex-1 gap-4 min-h-0">
-        {/* Chat Panel */}
+        {/* Multi-Agent Chat Panel */}
         <div className="flex flex-1 flex-col min-h-0">
           {chatLoaded && (
-            <ChatPanel
+            <AgentChatPanel
               initialMessages={chatMessages}
               extraRequestBody={{ appId: appId as string }}
               placeholder={t("chatPlaceholder")}
@@ -277,7 +284,8 @@ export default function AppDetailPage() {
               onUserMessage={handleUserMessage}
               onAssistantComplete={handleAssistantComplete}
               onAssistantResponse={handleAssistantResponse}
-              onTokenUsageChange={handleTokenUsageChange}
+              showPipeline={true}
+              stageLabels={stageLabels}
             />
           )}
         </div>

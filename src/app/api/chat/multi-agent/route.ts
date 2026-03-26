@@ -4,8 +4,10 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
   streamChat,
+  translateForUser,
   buildAppContextPrompt,
   DEFAULT_MODEL,
+  OUTPUT_MODEL,
   type ChatMessage,
 } from "@/lib/ai";
 import {
@@ -14,6 +16,9 @@ import {
   createInitialPipelineState,
 } from "@/lib/agents/orchestrator";
 import type { AgentMessage, PipelineState } from "@/lib/agents/types";
+
+/** Maximum number of auto-chained agent calls per request */
+const MAX_CHAIN_DEPTH = 5;
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -112,97 +117,168 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Route to the appropriate agent
-  const dispatch = routeMessage(agentMessages, {
-    allowedServices,
-    appContext,
-    pipelineState,
-  });
-
-  // Build the system prompt with context from previous agents
-  const agentContext = buildAgentContext(agentMessages, dispatch.pipelineState);
-  const systemPrompt = dispatch.systemPrompt + agentContext;
-
   // Create a TransformStream for SSE
   const encoder = new TextEncoder();
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
 
-  // Start streaming in background
+  /** Helper to send an SSE event */
+  const sendEvent = (data: unknown) =>
+    writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+
+  // Start streaming in background with auto-chaining
   (async () => {
     try {
-      // Send agent metadata first
-      const metaData = JSON.stringify({
-        agentRole: dispatch.agentRole,
-        stage: dispatch.stage,
-        pipelineState: dispatch.pipelineState,
-      });
-      writer.write(encoder.encode(`data: ${metaData}\n\n`));
+      let currentMessages = [...agentMessages];
+      let currentPipelineState = pipelineState;
+      let chainDepth = 0;
 
-      const result = await streamChat(
-        messages,
-        (chunk) => {
-          const data = JSON.stringify({
-            content: chunk,
+      while (chainDepth < MAX_CHAIN_DEPTH) {
+        chainDepth++;
+
+        // Route to the appropriate agent
+        const dispatch = routeMessage(currentMessages, {
+          allowedServices,
+          appContext,
+          pipelineState: currentPipelineState,
+        });
+
+        // Build the system prompt with context from previous agents
+        const agentContext = buildAgentContext(currentMessages, dispatch.pipelineState);
+        const systemPrompt = dispatch.systemPrompt + agentContext;
+
+        // 1. Send agent metadata
+        await sendEvent({
+          agentRole: dispatch.agentRole,
+          stage: dispatch.stage,
+          pipelineState: dispatch.pipelineState,
+        });
+
+        // 2. Signal that the agent is thinking (frontend shows loader)
+        await sendEvent({
+          thinking: true,
+          agentRole: dispatch.agentRole,
+        });
+
+        // 3. Accumulate agent output silently (no streaming to user)
+        const chatMessages: ChatMessage[] = currentMessages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
+
+        const result = await streamChat(
+          chatMessages,
+          () => {}, // no-op: don't stream raw chunks to user
+          model || DEFAULT_MODEL,
+          allowedServices,
+          systemPrompt
+        );
+
+        // 4. Send raw generation usage
+        if (result.usage) {
+          await sendEvent({
+            usage: result.usage,
+            model: model || DEFAULT_MODEL,
+          });
+        }
+
+        // 5. Translate agent output for user display
+        await sendEvent({
+          translating: true,
+          agentRole: dispatch.agentRole,
+        });
+
+        const translated = await translateForUser(
+          result.content,
+          dispatch.agentRole,
+        );
+
+        // 6. Send translated content as a single chunk
+        const displayContent = translated.content || result.content;
+        if (displayContent) {
+          await sendEvent({
+            content: displayContent,
             agentRole: dispatch.agentRole,
           });
-          writer.write(encoder.encode(`data: ${data}\n\n`));
-        },
-        model || DEFAULT_MODEL,
-        allowedServices,
-        systemPrompt
-      );
+        }
 
-      // Send usage data
-      if (result.usage) {
-        const usageData = JSON.stringify({
-          usage: result.usage,
-          model: model || DEFAULT_MODEL,
-        });
-        writer.write(encoder.encode(`data: ${usageData}\n\n`));
-      }
+        // 7. Send translation usage
+        if (translated.usage) {
+          await sendEvent({
+            usage: translated.usage,
+            model: OUTPUT_MODEL,
+          });
+        }
 
-      // Check if the response advances the pipeline
-      const updatedDispatch = routeMessage(
-        [
-          ...agentMessages,
+        // 8. Check if the response advances the pipeline
+        const messagesWithResponse: AgentMessage[] = [
+          ...currentMessages,
           {
             role: "assistant",
-            content: result.content,
+            content: result.content, // raw content for action parsing
             agentRole: dispatch.agentRole,
             stage: dispatch.stage,
           },
-        ],
-        { allowedServices, appContext, pipelineState: dispatch.pipelineState }
-      );
+        ];
 
-      // Send updated pipeline state
-      const pipelineUpdate = JSON.stringify({
-        pipelineState: updatedDispatch.pipelineState,
-        nextAgent: updatedDispatch.agentRole,
-        nextStage: updatedDispatch.stage,
-      });
-      writer.write(encoder.encode(`data: ${pipelineUpdate}\n\n`));
+        const updatedDispatch = routeMessage(messagesWithResponse, {
+          allowedServices,
+          appContext,
+          pipelineState: dispatch.pipelineState,
+        });
+
+        // 9. Send pipeline state update
+        await sendEvent({
+          pipelineState: updatedDispatch.pipelineState,
+          nextAgent: updatedDispatch.agentRole,
+          nextStage: updatedDispatch.stage,
+        });
+
+        // Check if the pipeline advanced to a new stage
+        const stageAdvanced =
+          updatedDispatch.pipelineState.currentStage !== dispatch.pipelineState.currentStage;
+
+        if (stageAdvanced && updatedDispatch.pipelineState.status !== "completed") {
+          // 10. Signal agent completion with raw content for action parsing
+          await sendEvent({
+            agentComplete: true,
+            agentRole: dispatch.agentRole,
+            rawContent: result.content,
+          });
+
+          // Update state for next iteration
+          currentMessages = messagesWithResponse;
+          currentPipelineState = updatedDispatch.pipelineState;
+        } else {
+          // Pipeline didn't advance or completed — send raw content for action parsing and stop
+          await sendEvent({
+            agentComplete: true,
+            agentRole: dispatch.agentRole,
+            rawContent: result.content,
+          });
+          currentPipelineState = updatedDispatch.pipelineState;
+          break;
+        }
+      }
 
       // Persist pipeline state if we have a pipelineId
-      if (pipelineId) {
+      if (pipelineId && currentPipelineState) {
         await prisma.agentPipeline.update({
           where: { id: pipelineId },
           data: {
-            status: updatedDispatch.pipelineState.status,
-            currentStage: updatedDispatch.pipelineState.currentStage,
-            completedStages: updatedDispatch.pipelineState.completedStages,
-            stageData: JSON.parse(JSON.stringify(updatedDispatch.pipelineState.stages)),
+            status: currentPipelineState.status,
+            currentStage: currentPipelineState.currentStage,
+            completedStages: currentPipelineState.completedStages,
+            stageData: JSON.parse(JSON.stringify(currentPipelineState.stages)),
           },
         });
       }
 
-      writer.write(encoder.encode("data: [DONE]\n\n"));
+      await sendEvent("[DONE]");
+      await writer.write(encoder.encode("data: [DONE]\n\n"));
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Unknown error";
-      writer.write(
-        encoder.encode(`data: ${JSON.stringify({ error: msg })}\n\n`)
-      );
+      await sendEvent({ error: msg });
     } finally {
       writer.close();
     }
