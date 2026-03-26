@@ -10,6 +10,7 @@ import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/ai";
 import { AGENT_DEFINITIONS, createInitialOrchestrationState } from "@/lib/agents/types";
 import type { AgentRole, OrchestrationState } from "@/lib/agents/types";
 import { PipelineProgress } from "./pipeline-progress";
+import { MarkdownContent } from "@/components/chat/markdown-content";
 import { AgentAvatar } from "./agent-avatar";
 
 export interface AgentMessage {
@@ -400,14 +401,18 @@ export function AgentChatPanel({
                   </div>
                 )}
                 <div
-                  className={`rounded-lg px-4 py-2 text-sm whitespace-pre-wrap ${
+                  className={`rounded-lg px-4 py-2 text-sm ${
                     message.role === "user"
-                      ? "bg-primary text-primary-foreground"
+                      ? "bg-primary text-primary-foreground whitespace-pre-wrap"
                       : "bg-muted"
                   }`}
                 >
                   {message.content ? (
-                    message.content
+                    message.role === "assistant" ? (
+                      <MarkdownContent content={message.content} />
+                    ) : (
+                      message.content
+                    )
                   ) : (
                     <span className="flex items-center gap-2 animate-pulse">
                       <Loader2 className="h-3 w-3 animate-spin" />
