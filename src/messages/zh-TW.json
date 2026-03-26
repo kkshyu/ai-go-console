@@ -58,7 +58,15 @@
     "generating": "正在產生...",
     "totalTokens": "Token 用量",
     "chatPlaceholder": "詢問關於這個應用的問題...",
-    "chatEmptyState": "透過對話來繼續開發這個應用"
+    "chatEmptyState": "透過對話來繼續開發這個應用",
+    "tokenUsage": "Token 用量",
+    "promptTokens": "提示",
+    "completionTokens": "回覆",
+    "devStop": "停止開發伺服器",
+    "serverNotRunning": "伺服器未啟動",
+    "startDevServer": "啟動開發伺服器以查看即時預覽",
+    "fullscreen": "全螢幕",
+    "closePreview": "關閉"
   },
   "create": {
     "title": "建立應用",

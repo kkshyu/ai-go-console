@@ -20,8 +20,12 @@ import {
   Globe,
   ArrowLeft,
   Terminal,
+  Zap,
+  Maximize2,
+  X,
 } from "lucide-react";
-import { ChatPanel, type Message } from "@/components/chat/chat-panel";
+import { ChatPanel, type Message, type TokenUsageMap } from "@/components/chat/chat-panel";
+import { AVAILABLE_MODELS } from "@/lib/ai";
 
 interface AppData {
   id: string;
@@ -31,6 +35,13 @@ interface AppData {
   template: string;
   status: string;
   port: number | null;
+}
+
+function formatTokenCount(count: number): string {
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}k`;
+  }
+  return count.toString();
 }
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
@@ -51,6 +62,11 @@ export default function AppDetailPage() {
   const [showLogs, setShowLogs] = useState(false);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
   const [chatLoaded, setChatLoaded] = useState(false);
+  const [tokenUsage, setTokenUsage] = useState<TokenUsageMap>({});
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
+
+  const isDevRunning = app?.status === "running" || app?.status === "developing";
+  const hasPreview = app?.port && isDevRunning;
 
   useEffect(() => {
     fetch(`/api/apps/${appId}`)
@@ -153,7 +169,16 @@ export default function AppDetailPage() {
     [appId]
   );
 
+  const handleTokenUsageChange = useCallback((usage: TokenUsageMap) => {
+    setTokenUsage(usage);
+  }, []);
+
   if (!app) return <div className="p-8">Loading...</div>;
+
+  const totalTokens = Object.values(tokenUsage).reduce(
+    (sum, u) => sum + u.totalTokens,
+    0
+  );
 
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col">
@@ -186,6 +211,7 @@ export default function AppDetailPage() {
               onUserMessage={handleUserMessage}
               onAssistantComplete={handleAssistantComplete}
               onAssistantResponse={handleAssistantResponse}
+              onTokenUsageChange={handleTokenUsageChange}
             />
           )}
         </div>
@@ -211,12 +237,92 @@ export default function AppDetailPage() {
             </Card>
           </div>
 
+          {/* Token Usage Card */}
+          {totalTokens > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+                  <Zap className="h-4 w-4" />
+                  {t("tokenUsage")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{t("totalTokens")}</span>
+                    <span className="font-mono font-medium">{formatTokenCount(totalTokens)}</span>
+                  </div>
+                  {Object.entries(tokenUsage).map(([modelId, usage]) => {
+                    const label =
+                      AVAILABLE_MODELS.find((m) => m.id === modelId)?.label ??
+                      modelId.split("/").pop();
+                    return (
+                      <div key={modelId} className="rounded-md bg-muted/50 p-2 text-xs space-y-1">
+                        <div className="flex justify-between font-medium">
+                          <span>{label}</span>
+                          <span className="font-mono">{formatTokenCount(usage.totalTokens)}</span>
+                        </div>
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>{t("promptTokens")}</span>
+                          <span className="font-mono">{formatTokenCount(usage.promptTokens)}</span>
+                        </div>
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>{t("completionTokens")}</span>
+                          <span className="font-mono">{formatTokenCount(usage.completionTokens)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium">{t("actions")}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              {app.status === "developing" || app.status === "stopped" ? (
+              {app.status === "developing" && !hasPreview ? (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={() => doAction("dev-start")}
+                    disabled={loading}
+                  >
+                    <Play className="h-4 w-4" />
+                    Dev {t("start")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => doAction("publish")}
+                    disabled={loading}
+                  >
+                    <Upload className="h-4 w-4" />
+                    {t("publish")}
+                  </Button>
+                </>
+              ) : app.status === "developing" && hasPreview ? (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => doAction("dev-stop")}
+                    disabled={loading}
+                  >
+                    <Square className="h-4 w-4" />
+                    {t("devStop")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => doAction("publish")}
+                    disabled={loading}
+                  >
+                    <Upload className="h-4 w-4" />
+                    {t("publish")}
+                  </Button>
+                </>
+              ) : app.status === "stopped" ? (
                 <>
                   <Button
                     size="sm"
@@ -268,7 +374,7 @@ export default function AppDetailPage() {
                 {t("viewLogs")}
               </Button>
 
-              {app.port && (app.status === "running" || app.status === "developing") && (
+              {hasPreview && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -305,10 +411,19 @@ export default function AppDetailPage() {
           )}
 
           {/* Preview iframe when app is running */}
-          {app.port && (app.status === "running" || app.status === "developing") && (
+          {hasPreview ? (
             <Card className="flex-1 min-h-[300px] overflow-hidden">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-2 flex flex-row items-center justify-between">
                 <CardTitle className="text-sm font-medium">{t("preview")}</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setPreviewFullscreen(true)}
+                  title={t("fullscreen")}
+                >
+                  <Maximize2 className="h-4 w-4" />
+                </Button>
               </CardHeader>
               <CardContent className="p-0 flex-1">
                 <iframe
@@ -318,9 +433,44 @@ export default function AppDetailPage() {
                 />
               </CardContent>
             </Card>
+          ) : (
+            <Card className="flex-1 min-h-[200px] overflow-hidden">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">{t("preview")}</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col items-center justify-center h-[200px] text-muted-foreground">
+                <Globe className="h-10 w-10 mb-3 opacity-30" />
+                <p className="text-sm font-medium">{t("serverNotRunning")}</p>
+                <p className="text-xs mt-1">{t("startDevServer")}</p>
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>
+
+      {/* Fullscreen Preview Modal */}
+      {previewFullscreen && hasPreview && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center">
+          <div className="relative w-[95vw] h-[95vh] bg-background rounded-lg border shadow-lg flex flex-col">
+            <div className="flex items-center justify-between px-4 py-2 border-b">
+              <span className="text-sm font-medium">{t("preview")} — {app.name}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setPreviewFullscreen(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <iframe
+              src={`http://localhost:${app.port}`}
+              className="flex-1 w-full border-0"
+              title="App Preview Fullscreen"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

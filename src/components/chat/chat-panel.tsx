@@ -26,11 +26,16 @@ function formatTokenCount(count: number): string {
   return count.toString();
 }
 
+export interface TokenUsageMap {
+  [modelId: string]: ModelTokenUsage;
+}
+
 export interface ChatPanelProps {
   initialMessages?: Message[];
   onAssistantResponse?: (content: string) => void;
   onUserMessage?: (content: string) => void;
   onAssistantComplete?: (content: string) => void;
+  onTokenUsageChange?: (usage: TokenUsageMap) => void;
   extraRequestBody?: Record<string, unknown>;
   placeholder?: string;
   emptyStateText?: string;
@@ -44,6 +49,7 @@ export function ChatPanel({
   onAssistantResponse,
   onUserMessage,
   onAssistantComplete,
+  onTokenUsageChange,
   extraRequestBody,
   placeholder = "Type a message...",
   emptyStateText = "Start a conversation",
@@ -174,7 +180,7 @@ export function ChatPanel({
                     completionTokens: 0,
                     totalTokens: 0,
                   };
-                  return {
+                  const next = {
                     ...prev,
                     [parsed.model]: {
                       promptTokens:
@@ -188,6 +194,8 @@ export function ChatPanel({
                         (parsed.usage.totalTokens || 0),
                     },
                   };
+                  onTokenUsageChange?.(next);
+                  return next;
                 });
               }
             } catch {}
@@ -223,6 +231,7 @@ export function ChatPanel({
       onUserMessage,
       onAssistantResponse,
       onAssistantComplete,
+      onTokenUsageChange,
     ]
   );
 

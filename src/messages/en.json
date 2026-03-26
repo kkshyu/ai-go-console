@@ -58,7 +58,15 @@
     "generating": "Generating...",
     "totalTokens": "Tokens",
     "chatPlaceholder": "Ask about this app...",
-    "chatEmptyState": "Continue developing this app through conversation"
+    "chatEmptyState": "Continue developing this app through conversation",
+    "tokenUsage": "Token Usage",
+    "promptTokens": "Prompt",
+    "completionTokens": "Completion",
+    "devStop": "Dev Stop",
+    "serverNotRunning": "Server is not running",
+    "startDevServer": "Start the dev server to see a live preview",
+    "fullscreen": "Fullscreen",
+    "closePreview": "Close"
   },
   "create": {
     "title": "Create App",
