@@ -20,6 +20,14 @@ export interface AgentMessage {
   stage?: PipelineStage | null;
 }
 
+/**
+ * Strip JSON code blocks (```json ... ```) from message content
+ * so users only see the human-friendly text.
+ */
+function stripJsonBlocks(content: string): string {
+  return content.replace(/```json\s*\n[\s\S]*?\n```/g, "").trim();
+}
+
 interface ModelTokenUsage {
   promptTokens: number;
   completionTokens: number;
@@ -59,6 +67,8 @@ const DEFAULT_STAGE_LABELS: Record<PipelineStage, string> = {
   deployment: "Deployment",
 };
 
+type AgentPhase = "thinking" | "translating" | null;
+
 export function AgentChatPanel({
   initialMessages = [],
   onAssistantResponse,
@@ -85,6 +95,7 @@ export function AgentChatPanel({
     createInitialPipelineState()
   );
   const [currentAgent, setCurrentAgent] = useState<AgentRole | null>(null);
+  const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
 
@@ -162,8 +173,10 @@ export function AgentChatPanel({
         if (!reader) throw new Error("No response body");
 
         const decoder = new TextDecoder();
-        let fullContent = "";
+        let displayContent = "";
+        let rawContent = "";
         let resolvedAgent: AgentRole | null = null;
+        let currentMsgId = assistantId;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -181,7 +194,38 @@ export function AgentChatPanel({
             try {
               const parsed = JSON.parse(data);
 
-              // Agent metadata (first message)
+              // Agent is thinking (generating raw output silently)
+              if (parsed.thinking) {
+                setAgentPhase("thinking");
+                continue;
+              }
+
+              // Agent output is being translated for user
+              if (parsed.translating) {
+                setAgentPhase("translating");
+                continue;
+              }
+
+              // Agent completed — rawContent available for action parsing
+              if (parsed.agentComplete) {
+                rawContent = parsed.rawContent || rawContent;
+                setAgentPhase(null);
+                // Notify with raw content (for JSON action parsing)
+                onAssistantResponse?.(rawContent, resolvedAgent || undefined);
+                onAssistantComplete?.(displayContent, resolvedAgent || undefined);
+                // Reset for next agent's message
+                displayContent = "";
+                rawContent = "";
+                resolvedAgent = null;
+                currentMsgId = (Date.now() + Math.random()).toString();
+                setMessages((prev) => [
+                  ...prev,
+                  { id: currentMsgId, role: "assistant", content: "", agentRole: null },
+                ]);
+                continue;
+              }
+
+              // Agent metadata (first message of each agent)
               if (parsed.agentRole && parsed.stage && parsed.pipelineState) {
                 resolvedAgent = parsed.agentRole;
                 setCurrentAgent(parsed.agentRole);
@@ -189,29 +233,31 @@ export function AgentChatPanel({
                 onPipelineUpdate?.(parsed.pipelineState);
                 setMessages((prev) =>
                   prev.map((m) =>
-                    m.id === assistantId
+                    m.id === currentMsgId
                       ? { ...m, agentRole: parsed.agentRole, stage: parsed.stage }
                       : m
                   )
                 );
               }
 
-              // Content chunk
+              // Translated content for display
               if (parsed.content) {
-                fullContent += parsed.content;
+                displayContent += parsed.content;
+                setAgentPhase(null);
                 setMessages((prev) =>
                   prev.map((m) =>
-                    m.id === assistantId ? { ...m, content: fullContent } : m
+                    m.id === currentMsgId ? { ...m, content: displayContent } : m
                   )
                 );
               }
 
               // Error
               if (parsed.error) {
-                fullContent += `\n\nError: ${parsed.error}`;
+                setAgentPhase(null);
+                displayContent += `\n\nError: ${parsed.error}`;
                 setMessages((prev) =>
                   prev.map((m) =>
-                    m.id === assistantId ? { ...m, content: fullContent } : m
+                    m.id === currentMsgId ? { ...m, content: displayContent } : m
                   )
                 );
               }
@@ -239,7 +285,7 @@ export function AgentChatPanel({
                 });
               }
 
-              // Pipeline state update (final message)
+              // Pipeline state update
               if (parsed.pipelineState && parsed.nextAgent) {
                 setPipelineState(parsed.pipelineState);
                 onPipelineUpdate?.(parsed.pipelineState);
@@ -248,8 +294,11 @@ export function AgentChatPanel({
           }
         }
 
-        onAssistantResponse?.(fullContent, resolvedAgent || undefined);
-        onAssistantComplete?.(fullContent, resolvedAgent || undefined);
+        // Final agent (no agentComplete event for the last one)
+        if (displayContent) {
+          onAssistantResponse?.(rawContent || displayContent, resolvedAgent || undefined);
+          onAssistantComplete?.(displayContent, resolvedAgent || undefined);
+        }
       } catch {
         setMessages((prev) =>
           prev.map((m) =>
@@ -266,6 +315,7 @@ export function AgentChatPanel({
       } finally {
         setIsLoading(false);
         setCurrentAgent(null);
+        setAgentPhase(null);
       }
     },
     [
@@ -302,6 +352,19 @@ export function AgentChatPanel({
         {showPipeline && (
           <div className="mb-3">
             <PipelineProgress state={pipelineState} labels={stageLabels} />
+            {(isLoading || externalLoading) && currentAgent && (
+              <div className="flex items-center gap-2 mt-1.5 px-3 py-1 text-xs text-muted-foreground animate-pulse">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>
+                  {AGENT_DEFINITIONS[currentAgent]?.label}
+                  {agentPhase === "thinking"
+                    ? ` ${generatingText}`
+                    : agentPhase === "translating"
+                      ? " ..."
+                      : ` ${generatingText}`}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -353,7 +416,9 @@ export function AgentChatPanel({
                       : "bg-muted"
                   }`}
                 >
-                  {message.content || (
+                  {message.content ? (
+                    message.content
+                  ) : (
                     <span className="flex items-center gap-2 animate-pulse">
                       <Loader2 className="h-3 w-3 animate-spin" />
                       {currentAgent

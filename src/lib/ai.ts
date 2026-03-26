@@ -247,17 +247,72 @@ export async function streamChat(
 /**
  * Non-streaming chat completion
  */
+/** Model used for translating agent output into user-friendly messages */
+export const OUTPUT_MODEL = "anthropic/claude-haiku-4";
+
+/**
+ * Strip JSON code blocks from content
+ */
+export function stripJsonBlocks(content: string): string {
+  return content.replace(/```json\s*\n[\s\S]*?\n```/g, "").trim();
+}
+
+/**
+ * Translate raw agent output into a user-friendly message.
+ * Uses a fast/cheap model to rewrite technical agent output
+ * as clear, conversational text for end users.
+ */
+export async function translateForUser(
+  rawContent: string,
+  agentRole: string,
+): Promise<StreamChatResult> {
+  const humanText = stripJsonBlocks(rawContent);
+
+  // If there's no meaningful text to translate, return empty
+  if (!humanText.trim() || humanText.trim().length < 5) {
+    return { content: "", usage: null };
+  }
+
+  const systemPrompt = `You are a UX writer for AI Go, an app-building platform. Your job is to rewrite internal agent output into clear, friendly messages for end users.
+
+Rules:
+- Keep the SAME language as the input (if input is Chinese, output Chinese)
+- Never include JSON, code blocks, technical jargon, or internal action names
+- Be concise — one short paragraph or a few bullet points max
+- Use a warm, professional tone
+- If the agent is asking the user a question, preserve the question clearly
+- If the agent is reporting progress or results, summarize what was done
+- Do not add information that wasn't in the original
+- Do not mention other agents, pipeline stages, or internal system details`;
+
+  const result = await chat(
+    [
+      {
+        role: "user",
+        content: `Rewrite this ${agentRole} agent output as a user-friendly message:\n\n${humanText}`,
+      },
+    ],
+    OUTPUT_MODEL,
+  );
+
+  return result;
+}
+
+/**
+ * Non-streaming chat completion
+ */
 export async function chat(
   messages: ChatMessage[],
   model: string = DEFAULT_MODEL,
-  allowedServices?: string[]
+  allowedServices?: string[],
+  systemPromptOverride?: string
 ): Promise<StreamChatResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error("OPENROUTER_API_KEY is not set");
   }
 
-  const systemPrompt = buildSystemPrompt(allowedServices);
+  const systemPrompt = systemPromptOverride || buildSystemPrompt(allowedServices);
 
   const response = await fetch(OPENROUTER_API_URL, {
     method: "POST",
