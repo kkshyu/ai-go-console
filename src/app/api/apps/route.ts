@@ -25,11 +25,28 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { name, description, template, config, credentialIds, userId } = body;
 
-  if (!name || !template || !userId) {
+  if (!name || !template) {
     return NextResponse.json(
-      { error: "Name, template, and userId are required" },
+      { error: "Name and template are required" },
       { status: 400 }
     );
+  }
+
+  // Resolve userId: use provided one if valid, otherwise fallback to first admin
+  let resolvedUserId = userId;
+  if (resolvedUserId) {
+    const user = await prisma.user.findUnique({ where: { id: resolvedUserId } });
+    if (!user) resolvedUserId = null;
+  }
+  if (!resolvedUserId) {
+    const admin = await prisma.user.findFirst({ where: { role: "admin" } });
+    if (!admin) {
+      return NextResponse.json(
+        { error: "No admin user found. Please register first." },
+        { status: 400 }
+      );
+    }
+    resolvedUserId = admin.id;
   }
 
   let slug = slugify(name);
@@ -55,7 +72,7 @@ export async function POST(request: NextRequest) {
       template,
       port,
       config: config || {},
-      userId,
+      userId: resolvedUserId,
       credentials: credentialIds
         ? {
             create: credentialIds.map(
