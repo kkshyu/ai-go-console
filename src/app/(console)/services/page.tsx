@@ -18,6 +18,7 @@ import {
   SERVICE_TYPE_CONFIG_FIELDS,
   SERVICE_CATEGORY_LABELS,
   SERVICE_TYPE_CATEGORY,
+  SERVICE_TYPE_HTTP_MODE,
   type ConfigFieldDef,
 } from "@/lib/service-types";
 import type { ServiceType } from "@prisma/client";
@@ -173,17 +174,35 @@ export default function ServicesPage() {
                 </div>
               </div>
 
-              {/* Endpoint URL - common to all types */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  {t("endpointUrl")}
-                </label>
-                <Input
-                  value={formEndpointUrl}
-                  onChange={(e) => setFormEndpointUrl(e.target.value)}
-                  placeholder="https://..."
-                />
-              </div>
+              {/* Endpoint URL - only for user-provided httpMode */}
+              {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] === "user-provided" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    {t("endpointUrl")}
+                  </label>
+                  <Input
+                    value={formEndpointUrl}
+                    onChange={(e) => setFormEndpointUrl(e.target.value)}
+                    placeholder="https://..."
+                    required
+                  />
+                </div>
+              )}
+              {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] === "proxy" && (
+                <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+                  {t("proxyHint")}
+                </p>
+              )}
+              {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] === "fixed" && (
+                <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+                  {t("fixedHint")}
+                </p>
+              )}
+              {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] === "sdk" && (
+                <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
+                  {t("sdkHint")}
+                </p>
+              )}
 
               {/* Dynamic config fields based on service type */}
               {configFields.length > 0 && (
@@ -256,11 +275,15 @@ export default function ServicesPage() {
                     <p className="font-medium">{svc.name}</p>
                     <div className="flex items-center gap-2">
                       <Badge variant="secondary">{svc.type}</Badge>
-                      {svc.endpointUrl && (
+                      {SERVICE_TYPE_HTTP_MODE[svc.type as ServiceType] === "proxy" ? (
+                        <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                          Proxy: /api/proxy/{svc.id}/query
+                        </span>
+                      ) : svc.endpointUrl ? (
                         <span className="text-xs text-muted-foreground truncate max-w-[200px]">
                           {svc.endpointUrl}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                     {testResults[svc.id] && (
                       <p

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
+import { getDbDriver, getMongoDriver } from "@/lib/db-drivers";
 import type { ServiceType } from "@prisma/client";
 
 interface TestResult {
@@ -51,16 +52,22 @@ function configOnlyTester(label: string, requiredFields: string[]): ServiceTeste
 }
 
 const testers: Record<ServiceType, ServiceTester> = {
-  // --- database ---
-  postgresql: httpEndpointTester("PostgreSQL", (c) =>
-    c.apiKey ? { Authorization: `Bearer ${c.apiKey}` } : ({} as Record<string, string>)
-  ),
-  mysql: httpEndpointTester("MySQL", (c) =>
-    c.apiKey ? { Authorization: `Bearer ${c.apiKey}` } : ({} as Record<string, string>)
-  ),
-  mongodb: httpEndpointTester("MongoDB", (c) =>
-    c.apiKey ? { Authorization: `Bearer ${c.apiKey}` } : ({} as Record<string, string>)
-  ),
+  // --- database (direct TCP connection test) ---
+  postgresql: async (config) => {
+    const driver = getDbDriver("postgresql");
+    await driver.testConnection(config);
+    return { success: true, message: "PostgreSQL connection OK" };
+  },
+  mysql: async (config) => {
+    const driver = getDbDriver("mysql");
+    await driver.testConnection(config);
+    return { success: true, message: "MySQL connection OK" };
+  },
+  mongodb: async (config) => {
+    const driver = getMongoDriver();
+    await driver.testConnection(config);
+    return { success: true, message: "MongoDB connection OK" };
+  },
 
   // --- storage ---
   s3: async (config, endpointUrl) => {

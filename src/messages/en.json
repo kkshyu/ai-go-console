@@ -124,6 +124,9 @@
     "testConnection": "Test Connection",
     "connectionSuccess": "Connection successful",
     "connectionFailed": "Connection failed",
+    "proxyHint": "An HTTP proxy URL will be auto-generated for this database service.",
+    "fixedHint": "This service uses a well-known API endpoint. No URL needed.",
+    "sdkHint": "This service uses SDK-based access. No HTTP endpoint needed.",
     "emptyState": "No services configured",
     "types": {
       "postgresql": "PostgreSQL",
