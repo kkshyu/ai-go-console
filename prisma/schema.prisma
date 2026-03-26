@@ -111,6 +111,7 @@ model App {
 
   services     AppService[]
   chatMessages ChatMessage[]
+  pipelines    AgentPipeline[]
 
   @@map("apps")
 }
@@ -162,6 +163,8 @@ model ChatMessage {
   id        String   @id @default(cuid())
   role      String
   content   String
+  agentRole String?  @map("agent_role")
+  stage     String?
   createdAt DateTime @default(now()) @map("created_at")
 
   appId  String? @map("app_id")
@@ -170,5 +173,25 @@ model ChatMessage {
   userId String? @map("user_id")
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  pipelineId String?        @map("pipeline_id")
+  pipeline   AgentPipeline? @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
+
   @@map("chat_messages")
+}
+
+model AgentPipeline {
+  id            String   @id @default(cuid())
+  status        String   @default("idle")
+  currentStage  String   @default("requirements") @map("current_stage")
+  completedStages String[] @map("completed_stages")
+  stageData     Json?    @map("stage_data")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  appId String? @map("app_id")
+  app   App?    @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  messages ChatMessage[]
+
+  @@map("agent_pipelines")
 }
