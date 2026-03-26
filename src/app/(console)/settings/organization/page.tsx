@@ -11,20 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Building2, Users, Shield, ShieldOff, Globe, Plus, Trash2 } from "lucide-react";
-import {
-  CATEGORY_SERVICE_TYPES,
-  SERVICE_TYPE_LABELS,
-  SERVICE_CATEGORY_LABELS,
-  ServiceCategory,
-} from "@/lib/service-types";
-
-interface AllowedService {
-  id: string;
-  serviceType: string;
-  enabled: boolean;
-}
+import { Building2, Globe, Plus, Trash2, Check } from "lucide-react";
 
 interface OrgDomain {
   id: string;
@@ -33,32 +20,19 @@ interface OrgDomain {
   sslStatus: string;
 }
 
-interface Member {
-  id: string;
-  email: string;
-  name: string;
-  role: string;
-  createdAt: string;
-}
-
 interface OrgData {
   id: string;
   name: string;
   slug: string;
-  allowedServices: AllowedService[];
-  _count: { users: number; services: number };
 }
-
-const allCategories = Object.keys(CATEGORY_SERVICE_TYPES) as ServiceCategory[];
 
 export default function OrganizationSettingsPage() {
   const t = useTranslations("organization");
   const [org, setOrg] = useState<OrgData | null>(null);
-  const [members, setMembers] = useState<Member[]>([]);
+  const [orgName, setOrgName] = useState("");
   const [domains, setDomains] = useState<OrgDomain[]>([]);
-  const [inviteEmail, setInviteEmail] = useState("");
   const [newDomain, setNewDomain] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [savingName, setSavingName] = useState(false);
 
   useEffect(() => {
     fetch("/api/organizations")
@@ -69,10 +43,7 @@ export default function OrganizationSettingsPage() {
       .then((data) => {
         if (!data || !data.id) return;
         setOrg(data);
-        fetch(`/api/organizations/${data.id}/members`)
-          .then((r) => r.json())
-          .then(setMembers)
-          .catch(() => {});
+        setOrgName(data.name);
         fetch(`/api/organizations/${data.id}/domains`)
           .then((r) => r.json())
           .then(setDomains)
@@ -81,46 +52,21 @@ export default function OrganizationSettingsPage() {
       .catch(() => {});
   }, []);
 
-  async function toggleService(serviceType: string, enabled: boolean) {
-    if (!org) return;
-    setSaving(true);
+  async function handleSaveName(e: React.FormEvent) {
+    e.preventDefault();
+    if (!org || !orgName.trim() || orgName === org.name) return;
+    setSavingName(true);
 
-    await fetch(`/api/organizations/${org.id}/allowed-services`, {
+    const res = await fetch(`/api/organizations/${org.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        services: [{ serviceType, enabled }],
-      }),
-    });
-
-    setOrg((prev) =>
-      prev
-        ? {
-            ...prev,
-            allowedServices: prev.allowedServices.map((s) =>
-              s.serviceType === serviceType ? { ...s, enabled } : s
-            ),
-          }
-        : null
-    );
-    setSaving(false);
-  }
-
-  async function handleInvite(e: React.FormEvent) {
-    e.preventDefault();
-    if (!org || !inviteEmail.trim()) return;
-
-    const res = await fetch(`/api/organizations/${org.id}/members`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: inviteEmail.trim() }),
+      body: JSON.stringify({ name: orgName.trim() }),
     });
 
     if (res.ok) {
-      const member = await res.json();
-      setMembers((prev) => [...prev, { ...member, createdAt: new Date().toISOString() }]);
-      setInviteEmail("");
+      setOrg((prev) => (prev ? { ...prev, name: orgName.trim() } : null));
     }
+    setSavingName(false);
   }
 
   async function handleAddDomain(e: React.FormEvent) {
@@ -168,72 +114,30 @@ export default function OrganizationSettingsPage() {
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{t("title")}</h1>
       </div>
 
-      {/* Org Info */}
+      {/* Org Name */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Building2 className="h-5 w-5" />
-            {org.name}
+            {t("orgName")}
           </CardTitle>
-          <CardDescription>
-            {org._count?.users ?? 0} {t("members")} &middot; {org._count?.services ?? 0} {t("servicesCount")}
-          </CardDescription>
+          <CardDescription>{t("orgNameDescription")}</CardDescription>
         </CardHeader>
-      </Card>
-
-      {/* Allowed Services */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("allowedServices")}</CardTitle>
-          <CardDescription>{t("allowedServicesDescription")}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {allCategories.map((cat) => {
-            const typesInCat = CATEGORY_SERVICE_TYPES[cat];
-            const svcsInCat = org.allowedServices.filter((s) =>
-              typesInCat.includes(s.serviceType as never)
-            );
-            if (svcsInCat.length === 0) return null;
-            return (
-              <div key={cat} className="space-y-2">
-                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                  {SERVICE_CATEGORY_LABELS[cat]}
-                </h3>
-                {svcsInCat.map((svc) => (
-                  <div
-                    key={svc.serviceType}
-                    className="flex items-center justify-between rounded-lg border p-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      {svc.enabled ? (
-                        <Shield className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <ShieldOff className="h-5 w-5 text-muted-foreground" />
-                      )}
-                      <div>
-                        <p className="font-medium">
-                          {SERVICE_TYPE_LABELS[svc.serviceType as keyof typeof SERVICE_TYPE_LABELS] || svc.serviceType}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {svc.serviceType}
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      variant={svc.enabled ? "outline" : "default"}
-                      size="sm"
-                      disabled={saving}
-                      onClick={() =>
-                        toggleService(svc.serviceType, !svc.enabled)
-                      }
-                    >
-                      {svc.enabled ? t("disable") : t("enable")}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
+        <CardContent>
+          <form onSubmit={handleSaveName} className="flex gap-2">
+            <Input
+              value={orgName}
+              onChange={(e) => setOrgName(e.target.value)}
+              className="flex-1"
+            />
+            <Button
+              type="submit"
+              disabled={savingName || !orgName.trim() || orgName === org.name}
+            >
+              <Check className="h-4 w-4" />
+              {t("save")}
+            </Button>
+          </form>
         </CardContent>
       </Card>
 
@@ -284,47 +188,6 @@ export default function OrganizationSettingsPage() {
             {domains.length === 0 && (
               <p className="text-sm text-muted-foreground">{t("noDomainsYet")}</p>
             )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Members */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            {t("members")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <form onSubmit={handleInvite} className="flex gap-2">
-            <Input
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder={t("invitePlaceholder")}
-              type="email"
-              className="flex-1"
-            />
-            <Button type="submit" disabled={!inviteEmail.trim()}>
-              {t("invite")}
-            </Button>
-          </form>
-
-          <div className="space-y-2">
-            {members.map((member) => (
-              <div
-                key={member.id}
-                className="flex items-center justify-between rounded-lg border p-3"
-              >
-                <div>
-                  <p className="font-medium">{member.name}</p>
-                  <p className="text-sm text-muted-foreground">{member.email}</p>
-                </div>
-                <Badge variant={member.role === "admin" ? "default" : "secondary"}>
-                  {member.role}
-                </Badge>
-              </div>
-            ))}
           </div>
         </CardContent>
       </Card>
