@@ -12,12 +12,19 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Users, Shield, ShieldOff } from "lucide-react";
+import { Building2, Users, Shield, ShieldOff, Globe, Plus, Trash2 } from "lucide-react";
 
 interface AllowedService {
   id: string;
   serviceType: string;
   enabled: boolean;
+}
+
+interface OrgDomain {
+  id: string;
+  domain: string;
+  isActive: boolean;
+  sslStatus: string;
 }
 
 interface Member {
@@ -48,7 +55,9 @@ export default function OrganizationSettingsPage() {
   const t = useTranslations("organization");
   const [org, setOrg] = useState<OrgData | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
+  const [domains, setDomains] = useState<OrgDomain[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [newDomain, setNewDomain] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -63,6 +72,10 @@ export default function OrganizationSettingsPage() {
         fetch(`/api/organizations/${data.id}/members`)
           .then((r) => r.json())
           .then(setMembers)
+          .catch(() => {});
+        fetch(`/api/organizations/${data.id}/domains`)
+          .then((r) => r.json())
+          .then(setDomains)
           .catch(() => {});
       })
       .catch(() => {});
@@ -107,6 +120,37 @@ export default function OrganizationSettingsPage() {
       const member = await res.json();
       setMembers((prev) => [...prev, { ...member, createdAt: new Date().toISOString() }]);
       setInviteEmail("");
+    }
+  }
+
+  async function handleAddDomain(e: React.FormEvent) {
+    e.preventDefault();
+    if (!org || !newDomain.trim()) return;
+
+    const res = await fetch(`/api/organizations/${org.id}/domains`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain: newDomain.trim() }),
+    });
+
+    if (res.ok) {
+      const domain = await res.json();
+      setDomains((prev) => [domain, ...prev]);
+      setNewDomain("");
+    }
+  }
+
+  async function handleRemoveDomain(domainId: string) {
+    if (!org) return;
+
+    const res = await fetch(`/api/organizations/${org.id}/domains`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domainId }),
+    });
+
+    if (res.ok) {
+      setDomains((prev) => prev.filter((d) => d.id !== domainId));
     }
   }
 
@@ -172,6 +216,57 @@ export default function OrganizationSettingsPage() {
               </Button>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      {/* Custom Domains */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Globe className="h-5 w-5" />
+            {t("customDomains")}
+          </CardTitle>
+          <CardDescription>{t("customDomainsDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form onSubmit={handleAddDomain} className="flex gap-2">
+            <Input
+              value={newDomain}
+              onChange={(e) => setNewDomain(e.target.value)}
+              placeholder={t("domainPlaceholder")}
+              className="flex-1"
+            />
+            <Button type="submit" disabled={!newDomain.trim()}>
+              <Plus className="h-4 w-4" />
+              {t("addDomain")}
+            </Button>
+          </form>
+
+          <div className="space-y-2">
+            {domains.map((domain) => (
+              <div
+                key={domain.id}
+                className="flex items-center justify-between rounded-lg border p-3"
+              >
+                <div>
+                  <p className="font-mono text-sm font-medium">{domain.domain}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {domain.isActive ? t("domainActive") : t("domainPending")}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleRemoveDomain(domain.id)}
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            ))}
+            {domains.length === 0 && (
+              <p className="text-sm text-muted-foreground">{t("noDomainsYet")}</p>
+            )}
+          </div>
         </CardContent>
       </Card>
 

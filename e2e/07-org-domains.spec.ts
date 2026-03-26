@@ -1,89 +1,76 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("App Domains", () => {
+test.describe("Organization Domains", () => {
   const ts = Date.now();
-  let appId: string;
+  let orgId: string;
   let domainId: string;
   const testDomain = `e2e-${ts}.example.com`;
 
-  test("setup: create user and app", async ({ request }) => {
+  test("setup: create user and get org", async ({ request }) => {
     const userRes = await request.post("/api/auth/register", {
       data: {
-        email: `dom-${ts}@test.com`,
+        email: `orgdom-${ts}@test.com`,
         password: "Test1234!",
-        name: "Domain User",
+        name: "OrgDomain User",
       },
     });
     expect(userRes.status()).toBe(201);
     const user = await userRes.json();
-
-    const appRes = await request.post("/api/apps", {
-      data: {
-        name: `E2E Dom ${ts}`,
-        template: "react-spa",
-        userId: user.id,
-      },
-    });
-    expect(appRes.status()).toBe(201);
-    const app = await appRes.json();
-    appId = app.id;
+    orgId = user.organizationId;
   });
 
   test("GET domains returns empty array", async ({ request }) => {
-    expect(appId).toBeDefined();
-    const res = await request.get(`/api/apps/${appId}/domains`);
+    expect(orgId).toBeDefined();
+    const res = await request.get(`/api/organizations/${orgId}/domains`);
     expect(res.status()).toBe(200);
     expect(await res.json()).toEqual([]);
   });
 
   test("POST domains adds a domain", async ({ request }) => {
-    expect(appId).toBeDefined();
-    const res = await request.post(`/api/apps/${appId}/domains`, {
+    expect(orgId).toBeDefined();
+    const res = await request.post(`/api/organizations/${orgId}/domains`, {
       data: { domain: testDomain },
     });
     expect(res.status()).toBe(201);
     const body = await res.json();
     expect(body.domain).toBe(testDomain);
     expect(body.isActive).toBe(true);
+    expect(body.organizationId).toBe(orgId);
     domainId = body.id;
   });
 
   test("POST domains rejects duplicate", async ({ request }) => {
-    expect(appId).toBeDefined();
-    const res = await request.post(`/api/apps/${appId}/domains`, {
+    expect(orgId).toBeDefined();
+    const res = await request.post(`/api/organizations/${orgId}/domains`, {
       data: { domain: testDomain },
     });
     expect(res.status()).toBe(409);
   });
 
   test("POST domains rejects empty", async ({ request }) => {
-    expect(appId).toBeDefined();
-    const res = await request.post(`/api/apps/${appId}/domains`, {
+    expect(orgId).toBeDefined();
+    const res = await request.post(`/api/organizations/${orgId}/domains`, {
       data: { domain: "" },
     });
     expect(res.status()).toBe(400);
   });
 
   test("GET domains lists added domain", async ({ request }) => {
-    expect(appId).toBeDefined();
-    const res = await request.get(`/api/apps/${appId}/domains`);
+    expect(orgId).toBeDefined();
+    const res = await request.get(`/api/organizations/${orgId}/domains`);
     const body = await res.json();
     expect(body.length).toBe(1);
     expect(body[0].id).toBe(domainId);
   });
 
   test("DELETE domains removes domain", async ({ request }) => {
-    expect(appId).toBeDefined();
+    expect(orgId).toBeDefined();
     expect(domainId).toBeDefined();
-    const res = await request.delete(`/api/apps/${appId}/domains`, {
+    const res = await request.delete(`/api/organizations/${orgId}/domains`, {
       data: { domainId },
     });
     expect(res.status()).toBe(200);
-    const getRes = await request.get(`/api/apps/${appId}/domains`);
+    const getRes = await request.get(`/api/organizations/${orgId}/domains`);
     expect((await getRes.json()).length).toBe(0);
-  });
-
-  test("cleanup", async ({ request }) => {
-    if (appId) await request.delete(`/api/apps/${appId}`);
   });
 });
