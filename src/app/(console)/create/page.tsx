@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle } from "lucide-react";
-import { ChatPanel } from "@/components/chat/chat-panel";
+import { AgentChatPanel } from "@/components/chat/agent-chat-panel";
+import type { AgentRole, PipelineStage, PipelineState } from "@/lib/agents/types";
 
 interface CreateAppAction {
   action: "create_app";
@@ -17,10 +18,20 @@ interface CreateAppAction {
 
 export default function CreateAppPage() {
   const t = useTranslations("create");
+  const tAgents = useTranslations("agents");
   const [previewPort, setPreviewPort] = useState<number | null>(null);
   const [creatingApp, setCreatingApp] = useState(false);
   const [serviceWarning, setServiceWarning] = useState<string | null>(null);
   const [allowedServices, setAllowedServices] = useState<string[]>([]);
+  const [pipelineId, setPipelineId] = useState<string | null>(null);
+
+  const stageLabels: Record<PipelineStage, string> = {
+    requirements: tAgents("stages.requirements"),
+    architecture: tAgents("stages.architecture"),
+    coding: tAgents("stages.coding"),
+    review: tAgents("stages.review"),
+    deployment: tAgents("stages.deployment"),
+  };
 
   // Load allowed services for this org
   useEffect(() => {
@@ -37,9 +48,20 @@ export default function CreateAppPage() {
       .catch(() => {});
   }, []);
 
+  // Create a pipeline on mount
+  useEffect(() => {
+    fetch("/api/pipelines", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+      .then((r) => r.json())
+      .then((pipeline) => setPipelineId(pipeline.id))
+      .catch(() => {});
+  }, []);
+
   const handleCreateApp = useCallback(
     async (action: CreateAppAction) => {
-      // Check service authorization
       if (action.requiredServices && action.requiredServices.length > 0) {
         const unauthorized = action.requiredServices.filter(
           (s) => !allowedServices.includes(s)
@@ -90,7 +112,7 @@ export default function CreateAppPage() {
   );
 
   const handleAssistantResponse = useCallback(
-    (content: string) => {
+    (content: string, agentRole?: AgentRole) => {
       const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
       if (!jsonMatch) return;
       try {
@@ -103,10 +125,15 @@ export default function CreateAppPage() {
     [handleCreateApp]
   );
 
+  const handlePipelineUpdate = useCallback((state: PipelineState) => {
+    // Could trigger additional actions based on pipeline state changes
+  }, []);
+
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col">
       <div className="mb-4">
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{t("title")}</h1>
+        <p className="text-sm text-muted-foreground mt-1">{tAgents("subtitle")}</p>
       </div>
 
       {serviceWarning && (
@@ -119,13 +146,17 @@ export default function CreateAppPage() {
       <div className="flex flex-1 gap-4 min-h-0">
         {/* Chat Panel */}
         <div className="flex flex-1 flex-col">
-          <ChatPanel
+          <AgentChatPanel
             placeholder={t("placeholder")}
-            emptyStateText={t("placeholder")}
+            emptyStateText={tAgents("emptyState")}
             generatingText={t("generating")}
             totalTokensLabel={t("totalTokens")}
             externalLoading={creatingApp}
             onAssistantResponse={handleAssistantResponse}
+            onPipelineUpdate={handlePipelineUpdate}
+            pipelineId={pipelineId || undefined}
+            showPipeline={true}
+            stageLabels={stageLabels}
           />
         </div>
 
@@ -142,9 +173,7 @@ export default function CreateAppPage() {
               <CardContent className="flex flex-1 items-center justify-center text-center text-muted-foreground">
                 <div>
                   <p className="text-lg font-medium">{t("preview")}</p>
-                  <p className="text-sm mt-1">
-                    App preview will appear here after creation
-                  </p>
+                  <p className="text-sm mt-1">{tAgents("previewHint")}</p>
                 </div>
               </CardContent>
             )}

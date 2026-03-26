@@ -12,7 +12,7 @@ export async function GET(
   const messages = await prisma.chatMessage.findMany({
     where: { appId },
     orderBy: { createdAt: "asc" },
-    select: { id: true, role: true, content: true, createdAt: true },
+    select: { id: true, role: true, content: true, agentRole: true, stage: true, createdAt: true },
   });
 
   return NextResponse.json({ messages });
@@ -27,7 +27,7 @@ export async function POST(
   const userId = session?.user?.id || null;
 
   const body = await request.json();
-  const { role, content } = body;
+  const { role, content, agentRole, stage } = body;
 
   if (!role || !content) {
     return NextResponse.json(
@@ -37,7 +37,14 @@ export async function POST(
   }
 
   const message = await prisma.chatMessage.create({
-    data: { appId, userId, role, content },
+    data: {
+      appId,
+      userId,
+      role,
+      content,
+      ...(agentRole ? { agentRole } : {}),
+      ...(stage ? { stage } : {}),
+    },
   });
 
   return NextResponse.json(message, { status: 201 });
