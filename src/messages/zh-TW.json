@@ -176,7 +176,7 @@
     "orgNameDescription": "變更組織的顯示名稱",
     "save": "儲存",
     "customDomains": "自訂網域",
-    "customDomainsDescription": "為組織新增自訂網域，應用程式可透過 {domain}/{app-slug} 存取",
+    "customDomainsDescription": "為組織新增自訂網域，應用程式可透過 '{domain}/{app-slug}' 存取",
     "addDomain": "新增",
     "domainPlaceholder": "例如 app.example.com",
     "domainActive": "啟用中",
