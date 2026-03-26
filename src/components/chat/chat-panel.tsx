@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Send, Bot, User, Loader2, ChevronDown, Zap } from "lucide-react";
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/ai";
+import { MarkdownContent } from "@/components/chat/markdown-content";
 
 export interface Message {
   id: string;
@@ -270,13 +271,19 @@ export function ChatPanel({
                 </div>
               )}
               <div
-                className={`max-w-[80%] rounded-lg px-4 py-2 text-sm whitespace-pre-wrap ${
+                className={`max-w-[80%] rounded-lg px-4 py-2 text-sm ${
                   message.role === "user"
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-primary text-primary-foreground whitespace-pre-wrap"
                     : "bg-muted"
                 }`}
               >
-                {message.content || (
+                {message.content ? (
+                  message.role === "assistant" ? (
+                    <MarkdownContent content={message.content} />
+                  ) : (
+                    message.content
+                  )
+                ) : (
                   <span className="animate-pulse">{generatingText}</span>
                 )}
               </div>
