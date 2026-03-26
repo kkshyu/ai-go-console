@@ -53,7 +53,12 @@
     "stopped": "已停止",
     "building": "建置中",
     "running": "執行中",
-    "error": "錯誤"
+    "error": "錯誤",
+    "preview": "預覽",
+    "generating": "正在產生...",
+    "totalTokens": "Token 用量",
+    "chatPlaceholder": "詢問關於這個應用的問題...",
+    "chatEmptyState": "透過對話來繼續開發這個應用"
   },
   "create": {
     "title": "建立應用",

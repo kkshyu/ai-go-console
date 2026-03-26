@@ -96,7 +96,6 @@ test.describe("Apps CRUD", () => {
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(body.id).toBe(appId);
-    expect(body.domains).toBeDefined();
     expect(body.services).toBeDefined();
   });
 

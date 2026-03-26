@@ -53,7 +53,12 @@
     "stopped": "Stopped",
     "building": "Building",
     "running": "Running",
-    "error": "Error"
+    "error": "Error",
+    "preview": "Preview",
+    "generating": "Generating...",
+    "totalTokens": "Tokens",
+    "chatPlaceholder": "Ask about this app...",
+    "chatEmptyState": "Continue developing this app through conversation"
   },
   "create": {
     "title": "Create App",

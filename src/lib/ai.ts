@@ -26,7 +26,7 @@ export const AVAILABLE_MODELS = [
 
 export const DEFAULT_MODEL = AVAILABLE_MODELS[0].id;
 
-function buildSystemPrompt(allowedServices?: string[]): string {
+export function buildSystemPrompt(allowedServices?: string[]): string {
   const serviceList = allowedServices && allowedServices.length > 0
     ? allowedServices.join(", ")
     : "disk, postgresql, supabase, stripe, hasura";
@@ -73,6 +73,68 @@ Guidelines:
 Be concise and helpful. Respond in the same language as the user.`;
 }
 
+export interface AppContext {
+  name: string;
+  template: string;
+  description?: string | null;
+  status: string;
+  port?: number | null;
+  services?: Array<{ name: string; type: string }>;
+}
+
+export function buildAppContextPrompt(
+  app: AppContext,
+  allowedServices?: string[]
+): string {
+  const serviceList =
+    allowedServices && allowedServices.length > 0
+      ? allowedServices.join(", ")
+      : "disk, postgresql, supabase, stripe, hasura";
+
+  const connectedServices =
+    app.services && app.services.length > 0
+      ? app.services.map((s) => `${s.name} (${s.type})`).join(", ")
+      : "None";
+
+  return `You are AI Go, an intelligent assistant that helps users develop and improve their web applications.
+
+You are working on an existing app with these details:
+- Name: ${app.name}
+- Template: ${app.template}
+- Description: ${app.description || "No description"}
+- Status: ${app.status}
+- Port: ${app.port || "Not assigned"}
+- Connected services: ${connectedServices}
+
+Available templates:
+- "react-spa": Single-page React application with Vite and TypeScript.
+- "node-api": Express.js REST API with TypeScript.
+- "nextjs-fullstack": Full-stack Next.js application with App Router and Tailwind.
+
+Available service types for this organization: ${serviceList}
+
+When the user wants to update the app configuration, add services, or change settings, respond with a JSON block:
+\`\`\`json
+{
+  "action": "update_app",
+  "changes": {
+    "description": "updated description",
+    "addServices": ["postgresql"],
+    "config": {}
+  }
+}
+\`\`\`
+
+Guidelines:
+1. Help the user develop, debug, and improve their existing app
+2. Suggest code changes, architecture improvements, or service additions
+3. When changes need to be applied to the app, output the JSON action block
+4. Only suggest service types available for the organization
+5. Be specific about file changes and provide code examples when relevant
+
+Be concise and helpful. Respond in the same language as the user.`;
+}
+
 /**
  * Stream chat completion from OpenRouter
  */
@@ -80,14 +142,15 @@ export async function streamChat(
   messages: ChatMessage[],
   onChunk: (text: string) => void,
   model: string = DEFAULT_MODEL,
-  allowedServices?: string[]
+  allowedServices?: string[],
+  systemPromptOverride?: string
 ): Promise<StreamChatResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error("OPENROUTER_API_KEY is not set");
   }
 
-  const systemPrompt = buildSystemPrompt(allowedServices);
+  const systemPrompt = systemPromptOverride || buildSystemPrompt(allowedServices);
 
   const response = await fetch(OPENROUTER_API_URL, {
     method: "POST",

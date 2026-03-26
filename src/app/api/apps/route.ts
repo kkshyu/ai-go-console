@@ -18,7 +18,6 @@ export async function GET() {
     where,
     orderBy: { createdAt: "desc" },
     include: {
-      domains: true,
       services: {
         include: {
           service: {

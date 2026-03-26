@@ -2,13 +2,14 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { streamChat, DEFAULT_MODEL, type ChatMessage } from "@/lib/ai";
+import { streamChat, buildAppContextPrompt, DEFAULT_MODEL, type ChatMessage } from "@/lib/ai";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { messages, model } = body as {
+  const { messages, model, appId } = body as {
     messages: ChatMessage[];
     model?: string;
+    appId?: string;
   };
 
   if (!messages || !Array.isArray(messages)) {
@@ -31,6 +32,37 @@ export async function POST(request: NextRequest) {
     allowedServices = orgAllowed.map((s) => s.serviceType);
   }
 
+  // Build app-context system prompt if appId is provided
+  let systemPromptOverride: string | undefined;
+  if (appId) {
+    const app = await prisma.app.findUnique({
+      where: { id: appId },
+      include: {
+        services: {
+          include: {
+            service: { select: { name: true, type: true } },
+          },
+        },
+      },
+    });
+    if (app) {
+      systemPromptOverride = buildAppContextPrompt(
+        {
+          name: app.name,
+          template: app.template,
+          description: app.description,
+          status: app.status,
+          port: app.port,
+          services: app.services.map((s) => ({
+            name: s.service.name,
+            type: s.service.type,
+          })),
+        },
+        allowedServices
+      );
+    }
+  }
+
   // Create a TransformStream for SSE
   const encoder = new TextEncoder();
   const stream = new TransformStream();
@@ -46,7 +78,8 @@ export async function POST(request: NextRequest) {
           writer.write(encoder.encode(`data: ${data}\n\n`));
         },
         model || DEFAULT_MODEL,
-        allowedServices
+        allowedServices,
+        systemPromptOverride
       );
       // Send usage data before closing
       if (result.usage) {

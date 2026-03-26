@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -21,12 +21,7 @@ import {
   ArrowLeft,
   Terminal,
 } from "lucide-react";
-
-interface OrgDomain {
-  id: string;
-  domain: string;
-  isActive: boolean;
-}
+import { ChatPanel, type Message } from "@/components/chat/chat-panel";
 
 interface AppData {
   id: string;
@@ -51,27 +46,32 @@ export default function AppDetailPage() {
   const router = useRouter();
   const t = useTranslations("apps");
   const [app, setApp] = useState<AppData | null>(null);
-  const [orgDomains, setOrgDomains] = useState<OrgDomain[]>([]);
   const [logs, setLogs] = useState("");
   const [loading, setLoading] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Message[]>([]);
+  const [chatLoaded, setChatLoaded] = useState(false);
 
   useEffect(() => {
     fetch(`/api/apps/${appId}`)
       .then((res) => res.json())
       .then(setApp);
-    // Fetch org domains
-    fetch("/api/organizations")
-      .then((r) => r.ok ? r.json() : null)
-      .then((org) => {
-        if (org?.id) {
-          fetch(`/api/organizations/${org.id}/domains`)
-            .then((r) => r.json())
-            .then(setOrgDomains)
-            .catch(() => {});
+    // Load chat history
+    fetch(`/api/apps/${appId}/chat`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.messages) {
+          setChatMessages(
+            data.messages.map((m: { id: string; role: string; content: string }) => ({
+              id: m.id,
+              role: m.role as "user" | "assistant",
+              content: m.content,
+            }))
+          );
         }
+        setChatLoaded(true);
       })
-      .catch(() => {});
+      .catch(() => setChatLoaded(true));
   }, [appId]);
 
   async function doAction(action: string) {
@@ -87,7 +87,6 @@ export default function AppDetailPage() {
         setLogs(data.logs || "No logs");
         setShowLogs(true);
       }
-      // Refresh app data
       const appRes = await fetch(`/api/apps/${appId}`);
       setApp(await appRes.json());
     } catch (err) {
@@ -103,11 +102,62 @@ export default function AppDetailPage() {
     router.push("/apps");
   }
 
+  const saveMessage = useCallback(
+    async (role: string, content: string) => {
+      try {
+        await fetch(`/api/apps/${appId}/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role, content }),
+        });
+      } catch {}
+    },
+    [appId]
+  );
+
+  const handleUserMessage = useCallback(
+    (content: string) => {
+      saveMessage("user", content);
+    },
+    [saveMessage]
+  );
+
+  const handleAssistantComplete = useCallback(
+    (content: string) => {
+      saveMessage("assistant", content);
+    },
+    [saveMessage]
+  );
+
+  const handleAssistantResponse = useCallback(
+    (content: string) => {
+      // Parse for update_app action
+      const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
+      if (!jsonMatch) return;
+      try {
+        const parsed = JSON.parse(jsonMatch[1]);
+        if (parsed.action === "update_app" && parsed.changes) {
+          // Apply update
+          fetch(`/api/apps/${appId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(parsed.changes),
+          })
+            .then(() => fetch(`/api/apps/${appId}`))
+            .then((res) => res.json())
+            .then(setApp)
+            .catch(() => {});
+        }
+      } catch {}
+    },
+    [appId]
+  );
+
   if (!app) return <div className="p-8">Loading...</div>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
+    <div className="flex h-[calc(100vh-7rem)] flex-col">
+      <div className="flex items-center gap-4 mb-4">
         <Button variant="ghost" size="icon" onClick={() => router.push("/apps")}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
@@ -122,135 +172,155 @@ export default function AppDetailPage() {
         </Badge>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">{t("template")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="font-mono text-sm">{app.template}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">{t("port")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="font-mono text-sm">{app.port || "—"}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">{t("domain")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {orgDomains.filter((d) => d.isActive).length > 0 ? (
-              orgDomains
-                .filter((d) => d.isActive)
-                .map((d) => (
-                  <p key={d.id} className="font-mono text-sm">
-                    {d.domain}/{app.slug}
-                  </p>
-                ))
-            ) : (
-              <p className="text-sm text-muted-foreground">—</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <div className="flex flex-1 gap-4 min-h-0">
+        {/* Chat Panel */}
+        <div className="flex flex-1 flex-col min-h-0">
+          {chatLoaded && (
+            <ChatPanel
+              initialMessages={chatMessages}
+              extraRequestBody={{ appId: appId as string }}
+              placeholder={t("chatPlaceholder")}
+              emptyStateText={t("chatEmptyState")}
+              generatingText={t("generating")}
+              totalTokensLabel={t("totalTokens")}
+              onUserMessage={handleUserMessage}
+              onAssistantComplete={handleAssistantComplete}
+              onAssistantResponse={handleAssistantResponse}
+            />
+          )}
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">{t("actions")}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          {app.status === "developing" || app.status === "stopped" ? (
-            <>
-              <Button
-                size="sm"
-                onClick={() => doAction("dev-start")}
-                disabled={loading}
-              >
-                <Play className="h-4 w-4" />
-                Dev {t("start")}
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => doAction("publish")}
-                disabled={loading}
-              >
-                <Upload className="h-4 w-4" />
-                {t("publish")}
-              </Button>
-            </>
-          ) : app.status === "running" ? (
-            <>
+        {/* App Info Panel */}
+        <div className="hidden lg:flex lg:w-[400px] flex-col gap-4 overflow-y-auto">
+          <div className="grid gap-4 grid-cols-2">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">{t("template")}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="font-mono text-sm">{app.template}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">{t("port")}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="font-mono text-sm">{app.port || "—"}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">{t("actions")}</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              {app.status === "developing" || app.status === "stopped" ? (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={() => doAction("dev-start")}
+                    disabled={loading}
+                  >
+                    <Play className="h-4 w-4" />
+                    Dev {t("start")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => doAction("publish")}
+                    disabled={loading}
+                  >
+                    <Upload className="h-4 w-4" />
+                    {t("publish")}
+                  </Button>
+                </>
+              ) : app.status === "running" ? (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => doAction("stop")}
+                    disabled={loading}
+                  >
+                    <Square className="h-4 w-4" />
+                    {t("stop")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => doAction("restart")}
+                    disabled={loading}
+                  >
+                    <RotateCw className="h-4 w-4" />
+                    {t("restart")}
+                  </Button>
+                </>
+              ) : null}
+
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => doAction("stop")}
+                onClick={() => doAction("logs")}
                 disabled={loading}
               >
-                <Square className="h-4 w-4" />
-                {t("stop")}
+                <Terminal className="h-4 w-4" />
+                {t("viewLogs")}
               </Button>
+
+              {app.port && (app.status === "running" || app.status === "developing") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => window.open(`http://localhost:${app.port}`, "_blank")}
+                >
+                  <Globe className="h-4 w-4" />
+                  Open
+                </Button>
+              )}
+
               <Button
                 size="sm"
-                variant="outline"
-                onClick={() => doAction("restart")}
+                variant="destructive"
+                onClick={handleDelete}
                 disabled={loading}
               >
-                <RotateCw className="h-4 w-4" />
-                {t("restart")}
+                <Trash2 className="h-4 w-4" />
+                {t("delete")}
               </Button>
-            </>
-          ) : null}
+            </CardContent>
+          </Card>
 
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => doAction("logs")}
-            disabled={loading}
-          >
-            <Terminal className="h-4 w-4" />
-            {t("viewLogs")}
-          </Button>
-
-          {app.port && (app.status === "running" || app.status === "developing") && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => window.open(`http://localhost:${app.port}`, "_blank")}
-            >
-              <Globe className="h-4 w-4" />
-              Open
-            </Button>
+          {showLogs && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Logs</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <pre className="max-h-96 overflow-auto rounded-lg bg-muted p-4 text-xs font-mono whitespace-pre-wrap">
+                  {logs || "No logs available"}
+                </pre>
+              </CardContent>
+            </Card>
           )}
 
-          <Button
-            size="sm"
-            variant="destructive"
-            onClick={handleDelete}
-            disabled={loading}
-          >
-            <Trash2 className="h-4 w-4" />
-            {t("delete")}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {showLogs && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Logs</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="max-h-96 overflow-auto rounded-lg bg-muted p-4 text-xs font-mono whitespace-pre-wrap">
-              {logs || "No logs available"}
-            </pre>
-          </CardContent>
-        </Card>
-      )}
+          {/* Preview iframe when app is running */}
+          {app.port && (app.status === "running" || app.status === "developing") && (
+            <Card className="flex-1 min-h-[300px] overflow-hidden">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">{t("preview")}</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0 flex-1">
+                <iframe
+                  src={`http://localhost:${app.port}`}
+                  className="w-full h-[400px] border-0"
+                  title="App Preview"
+                />
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
