@@ -52,5 +52,16 @@
     "prisma": "^6.4.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "sharp",
+      "@swc/core",
+      "@parcel/watcher",
+      "unrs-resolver"
+    ]
   }
 }
