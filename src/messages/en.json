@@ -176,7 +176,7 @@
     "orgNameDescription": "Change the display name of your organization",
     "save": "Save",
     "customDomains": "Custom Domains",
-    "customDomainsDescription": "Add custom domains for your organization. Apps are accessible at {domain}/{app-slug}",
+    "customDomainsDescription": "Add custom domains for your organization. Apps are accessible at '{domain}/{app-slug}'",
     "addDomain": "Add",
     "domainPlaceholder": "e.g. app.example.com",
     "domainActive": "Active",
