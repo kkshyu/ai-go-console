@@ -53,6 +53,7 @@ export default function AppDetailPage() {
   const [tokenUsage, setTokenUsage] = useState<TokenUsageMap>({});
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [iframeKey, setIframeKey] = useState(0);
 
   const isDevRunning = app?.status === "running" || app?.status === "developing";
   const hasPreview = app?.port && isDevRunning;
@@ -299,6 +300,15 @@ export default function AppDetailPage() {
                   <span className="flex-1 text-xs font-mono text-muted-foreground truncate">
                     {previewUrl}
                   </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5 shrink-0"
+                    onClick={() => setIframeKey((k) => k + 1)}
+                    title="Refresh"
+                  >
+                    <RotateCw className="h-3 w-3" />
+                  </Button>
                   <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={copyUrl}>
                     {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
                   </Button>
@@ -324,6 +334,7 @@ export default function AppDetailPage() {
                 </Button>
               </div>
               <iframe
+                key={iframeKey}
                 src={`http://localhost:${app.port}`}
                 className="flex-1 w-full border-0"
                 title="App Preview"
