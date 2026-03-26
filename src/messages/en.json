@@ -1,0 +1,116 @@
+{
+  "common": {
+    "appName": "AI Go",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "confirm": "Confirm",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "search": "Search",
+    "actions": "Actions",
+    "back": "Back",
+    "submit": "Submit"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "apps": "Apps",
+    "createApp": "Create App",
+    "dataSources": "Data Sources",
+    "users": "User Management",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "totalApps": "Total Apps",
+    "runningApps": "Running",
+    "dataSources": "Data Sources",
+    "emptyState": "No apps created yet",
+    "emptyStateAction": "Create your first app",
+    "recentApps": "Recent Apps"
+  },
+  "apps": {
+    "title": "Apps",
+    "create": "Create App",
+    "name": "Name",
+    "template": "Template",
+    "status": "Status",
+    "port": "Port",
+    "domain": "Domain",
+    "actions": "Actions",
+    "start": "Start",
+    "stop": "Stop",
+    "restart": "Restart",
+    "publish": "Publish",
+    "delete": "Delete",
+    "viewLogs": "View Logs",
+    "developing": "Developing",
+    "stopped": "Stopped",
+    "building": "Building",
+    "running": "Running",
+    "error": "Error"
+  },
+  "create": {
+    "title": "Create App",
+    "placeholder": "Describe the app you want to create...",
+    "send": "Send",
+    "preview": "Preview",
+    "generating": "Generating app..."
+  },
+  "dataSources": {
+    "title": "Data Sources",
+    "add": "Add Data Source",
+    "name": "Name",
+    "type": "Type",
+    "host": "Host",
+    "port": "Port",
+    "database": "Database",
+    "username": "Username",
+    "password": "Password",
+    "apiKey": "API Key",
+    "projectUrl": "Project URL",
+    "testConnection": "Test Connection",
+    "connectionSuccess": "Connection successful",
+    "connectionFailed": "Connection failed",
+    "types": {
+      "postgres": "PostgreSQL",
+      "supabase": "Supabase",
+      "mysql": "MySQL",
+      "redis": "Redis"
+    }
+  },
+  "users": {
+    "title": "User Management",
+    "invite": "Invite User",
+    "email": "Email",
+    "name": "Name",
+    "role": "Role",
+    "admin": "Admin",
+    "user": "User",
+    "createdAt": "Created At"
+  },
+  "auth": {
+    "login": "Login",
+    "register": "Register",
+    "email": "Email",
+    "password": "Password",
+    "name": "Name",
+    "loginTitle": "Login to AI Go",
+    "registerTitle": "Register for AI Go",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?"
+  },
+  "domains": {
+    "title": "Custom Domains",
+    "add": "Add Domain",
+    "domain": "Domain Name",
+    "status": "Status",
+    "active": "Active",
+    "pending": "Pending",
+    "dnsInstructions": "Point your domain's DNS A record to the server IP"
+  }
+}

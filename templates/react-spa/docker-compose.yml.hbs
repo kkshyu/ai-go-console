@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    container_name: aigo-app-{{slug}}
+    restart: unless-stopped
+    ports:
+      - "{{port}}:80"
+    {{#if envVars}}
+    environment:
+      {{#each envVars}}
+      {{@key}}: "{{this}}"
+      {{/each}}
+    {{/if}}

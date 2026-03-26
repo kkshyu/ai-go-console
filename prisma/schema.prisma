@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  user
+}
+
+enum AppStatus {
+  developing
+  stopped
+  building
+  running
+  error
+}
+
+enum DataSourceType {
+  postgres
+  supabase
+  mysql
+  redis
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(user)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  apps         App[]
+  chatMessages ChatMessage[]
+
+  @@map("users")
+}
+
+model App {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  template    String
+  status      AppStatus @default(developing)
+  port        Int?
+  config      Json?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  domains      AppDomain[]
+  dataSources  AppDataSource[]
+  chatMessages ChatMessage[]
+
+  @@map("apps")
+}
+
+model AppDomain {
+  id        String   @id @default(cuid())
+  domain    String   @unique
+  isActive  Boolean  @default(false) @map("is_active")
+  sslStatus String   @default("pending") @map("ssl_status")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  appId String @map("app_id")
+  app   App    @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@map("app_domains")
+}
+
+model DataSource {
+  id                   String         @id @default(cuid())
+  name                 String
+  type                 DataSourceType
+  credentialsEncrypted String         @map("credentials_encrypted")
+  iv                   String
+  authTag              String         @map("auth_tag")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  apps AppDataSource[]
+
+  @@map("data_sources")
+}
+
+model AppDataSource {
+  appId        String @map("app_id")
+  dataSourceId String @map("data_source_id")
+  envVarPrefix String @default("DB") @map("env_var_prefix")
+
+  app        App        @relation(fields: [appId], references: [id], onDelete: Cascade)
+  dataSource DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+
+  @@id([appId, dataSourceId])
+  @@map("app_data_sources")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  role      String
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  appId  String? @map("app_id")
+  app    App?    @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  userId String? @map("user_id")
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("chat_messages")
+}

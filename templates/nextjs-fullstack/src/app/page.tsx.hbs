@@ -1,0 +1,13 @@
+export default function Home() {
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-center p-24">
+      <h1 className="text-4xl font-bold">{{name}}</h1>
+      {{#if description}}
+      <p className="mt-4 text-xl text-gray-600">{{description}}</p>
+      {{/if}}
+      <p className="mt-8 text-gray-500">
+        Edit <code className="font-mono bg-gray-100 px-2 py-1 rounded">src/app/page.tsx</code> to get started.
+      </p>
+    </main>
+  );
+}
