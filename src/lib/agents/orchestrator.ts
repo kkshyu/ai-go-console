@@ -23,8 +23,16 @@ import {
   buildAppDevDeveloperPrompt,
 } from "./prompts";
 
+export interface ServiceInstance {
+  id: string;
+  name: string;
+  type: string;
+}
+
 export interface OrchestratorContext {
   allowedServices: string[];
+  /** Actual service instances configured in the organization */
+  serviceInstances?: ServiceInstance[];
   appContext?: string; // For existing app development
   orchestrationState?: OrchestrationState;
   /** When set, PM has dispatched to this agent — route to it instead of PM */
@@ -222,7 +230,7 @@ function buildSpecialistDispatch(
 ): AgentDispatch {
   const promptBuilders: Record<AgentRole, () => string> = {
     pm: () => buildPMPrompt(context.allowedServices),
-    architect: () => buildArchitectPrompt(context.allowedServices),
+    architect: () => buildArchitectPrompt(context.allowedServices, context.serviceInstances),
     developer: () =>
       context.appContext
         ? buildAppDevDeveloperPrompt(context.appContext)

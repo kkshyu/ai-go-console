@@ -18,7 +18,7 @@ export interface StreamChatResult {
 
 export const AVAILABLE_MODELS = [
   { id: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4" },
-  { id: "anthropic/claude-haiku-4", label: "Claude Haiku 4" },
+  { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5" },
   { id: "openai/gpt-4o-mini", label: "GPT-4o Mini" },
   { id: "openai/gpt-4o", label: "GPT-4o" },
   { id: "google/gemini-2.5-flash-preview", label: "Gemini 2.5 Flash" },
@@ -248,7 +248,7 @@ export async function streamChat(
  * Non-streaming chat completion
  */
 /** Model used for translating agent output into user-friendly messages */
-export const OUTPUT_MODEL = "anthropic/claude-haiku-4";
+export const OUTPUT_MODEL = "anthropic/claude-haiku-4.5";
 
 /**
  * Strip JSON code blocks from content
@@ -266,36 +266,47 @@ export async function translateForUser(
   rawContent: string,
   agentRole: string,
 ): Promise<StreamChatResult> {
-  const humanText = stripJsonBlocks(rawContent);
-
-  // If there's no meaningful text to translate, return empty
-  if (!humanText.trim() || humanText.trim().length < 5) {
+  // Use full content (including JSON) for translation context.
+  // The translator will extract the meaningful parts.
+  const trimmed = rawContent.trim();
+  if (!trimmed || trimmed.length < 5) {
     return { content: "", usage: null };
   }
+
+  // Cap input to avoid wasting tokens — translator only needs a summary
+  const truncated = trimmed.length > 2000 ? trimmed.slice(0, 2000) + "\n..." : trimmed;
 
   const systemPrompt = `You are a UX writer for AI Go, an app-building platform. Your job is to rewrite internal agent output into clear, friendly messages for end users.
 
 Rules:
 - Keep the SAME language as the input (if input is Chinese, output Chinese)
-- Never include JSON, code blocks, technical jargon, or internal action names
+- Never include raw JSON, code blocks, technical jargon, or internal action names in your output
 - Be concise — one short paragraph or a few bullet points max
 - Use a warm, professional tone
-- If the agent is asking the user a question, preserve the question clearly
-- If the agent is reporting progress or results, summarize what was done
-- Do not add information that wasn't in the original
-- Do not mention other agents, pipeline stages, or internal system details`;
+- Summarize what the agent decided or accomplished, based on the JSON data
+- If the agent is dispatching work, briefly describe what's being done next
+- If the agent designed architecture, summarize the technology choices
+- If the agent created an app, summarize the app name, features, and services
+- Do not mention other agents, pipeline stages, or internal system details
+- ALWAYS produce output — never say you didn't receive content`;
 
-  const result = await chat(
-    [
-      {
-        role: "user",
-        content: `Rewrite this ${agentRole} agent output as a user-friendly message:\n\n${humanText}`,
-      },
-    ],
-    OUTPUT_MODEL,
-  );
+  try {
+    const result = await chat(
+      [
+        {
+          role: "user",
+          content: `Rewrite this ${agentRole} agent output as a user-friendly message:\n\n${truncated}`,
+        },
+      ],
+      OUTPUT_MODEL,
+    );
 
-  return result;
+    return result;
+  } catch {
+    // If translation fails, return stripped version as fallback
+    const fallback = stripJsonBlocks(rawContent);
+    return { content: fallback || "", usage: null };
+  }
 }
 
 /**

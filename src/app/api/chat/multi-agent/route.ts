@@ -23,6 +23,55 @@ import type { AgentMessage, AgentRole, OrchestrationState } from "@/lib/agents/t
 /** Maximum number of auto-chained agent calls per request */
 const MAX_CHAIN_DEPTH = 10;
 
+/** Interval for sending progress updates to the user (ms) */
+const PROGRESS_INTERVAL_MS = 2500;
+
+/**
+ * Progress messages shown to the user while waiting for each agent.
+ * PM sends these on behalf of specialist agents to keep the user informed.
+ */
+const PROGRESS_MESSAGES: Record<string, string[]> = {
+  architect: [
+    "正在分析您的需求...",
+    "正在評估最佳技術方案...",
+    "正在選擇合適的框架和服務...",
+    "正在規劃系統架構...",
+    "正在確認技術細節...",
+    "架構設計即將完成...",
+  ],
+  developer: [
+    "正在準備開發環境...",
+    "正在規劃應用程式結構...",
+    "正在設計資料模型...",
+    "正在實作核心功能...",
+    "正在整合所需服務...",
+    "應用程式即將建立完成...",
+  ],
+  reviewer: [
+    "正在檢查程式碼品質...",
+    "正在進行安全性審查...",
+    "正在評估效能表現...",
+    "正在整理審查結果...",
+  ],
+  devops: [
+    "正在配置部署環境...",
+    "正在設定服務連接...",
+    "正在準備啟動應用程式...",
+    "正在進行最終檢查...",
+    "部署設定即將完成...",
+  ],
+  pm: [
+    "正在分析進度...",
+    "正在規劃下一步...",
+    "正在整理結果...",
+    "正在準備派發下一個任務...",
+    "正在確認工作流程...",
+    "正在彙整各方資訊...",
+    "仍在處理中，請稍候...",
+    "即將完成分析...",
+  ],
+};
+
 /**
  * Map agent action types to artifact types for persistence.
  */
@@ -106,8 +155,9 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // Get allowed services for the user's org
+  // Get allowed services and actual service instances for the user's org
   let allowedServices: string[] = [];
+  let serviceInstances: Array<{ id: string; name: string; type: string }> = [];
   const session = await getServerSession(authOptions);
   if (session?.user?.organizationId) {
     const orgAllowed = await prisma.orgAllowedService.findMany({
@@ -117,6 +167,17 @@ export async function POST(request: NextRequest) {
       },
     });
     allowedServices = orgAllowed.map((s) => s.serviceType);
+
+    // Load actual service instances the org has configured
+    const services = await prisma.service.findMany({
+      where: { organizationId: session.user.organizationId },
+      select: { id: true, name: true, type: true },
+    });
+    serviceInstances = services.map((s) => ({
+      id: s.id,
+      name: s.name,
+      type: s.type,
+    }));
   }
 
   // Build app context if working on existing app
@@ -209,6 +270,34 @@ export async function POST(request: NextRequest) {
 
   // Start streaming in background with PM-controlled chaining
   (async () => {
+    /**
+     * Translate agent output with a progress timer so the user sees updates
+     * during the translation phase (which can take 3-8 seconds).
+     */
+    const translateWithProgress = async (
+      content: string,
+      agentRole: AgentRole
+    ) => {
+      const TRANSLATE_MESSAGES = [
+        "正在整理回覆內容...",
+        "正在準備顯示結果...",
+      ];
+      let idx = 0;
+      const timer = setInterval(async () => {
+        const msg = TRANSLATE_MESSAGES[Math.min(idx, TRANSLATE_MESSAGES.length - 1)];
+        idx++;
+        try {
+          await sendEvent({ statusUpdate: msg, agentRole });
+        } catch { /* stream may have closed */ }
+      }, PROGRESS_INTERVAL_MS);
+
+      try {
+        return await translateForUser(content, agentRole);
+      } finally {
+        clearInterval(timer);
+      }
+    };
+
     try {
       let currentMessages = [...agentMessages];
       let currentState = orchState || createInitialOrchestrationState();
@@ -224,6 +313,7 @@ export async function POST(request: NextRequest) {
         // Route to the appropriate agent
         const dispatch = routeMessage(currentMessages, {
           allowedServices,
+          serviceInstances,
           appContext,
           orchestrationState: currentState,
           dispatchedAgent: dispatchedAgent as AgentMessage["agentRole"],
@@ -246,18 +336,81 @@ export async function POST(request: NextRequest) {
         });
 
         // 3. Generate agent response silently
-        const chatMessages: ChatMessage[] = currentMessages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        }));
+        // Annotate messages so the current agent understands who said what.
+        // Specialist agent outputs are prefixed with their role so PM can
+        // distinguish its own messages from specialist responses.
+        const chatMessages: ChatMessage[] = currentMessages.map((m) => {
+          if (
+            m.role === "assistant" &&
+            m.agentRole &&
+            m.agentRole !== dispatch.agentRole
+          ) {
+            return {
+              role: m.role,
+              content: `[${m.agentRole.toUpperCase()} AGENT OUTPUT]:\n${m.content}`,
+            };
+          }
+          return { role: m.role, content: m.content };
+        });
 
-        const result = await streamChat(
-          chatMessages,
-          () => {},
-          model || DEFAULT_MODEL,
-          allowedServices,
-          systemPrompt
-        );
+        // Send periodic progress updates while the agent generates
+        let progressIdx = 0;
+        const agentMsgs = PROGRESS_MESSAGES[dispatch.agentRole] || PROGRESS_MESSAGES.pm;
+        const progressTimer = setInterval(async () => {
+          const msg = agentMsgs[Math.min(progressIdx, agentMsgs.length - 1)];
+          progressIdx++;
+          try {
+            await sendEvent({
+              statusUpdate: msg,
+              agentRole: dispatch.agentRole,
+            });
+          } catch {
+            // Stream may have closed
+          }
+        }, PROGRESS_INTERVAL_MS);
+
+        let result;
+        try {
+          result = await streamChat(
+            chatMessages,
+            () => {},
+            model || DEFAULT_MODEL,
+            allowedServices,
+            systemPrompt
+          );
+        } catch (err) {
+          clearInterval(progressTimer);
+          const errMsg = err instanceof Error ? err.message : "Unknown error";
+          await sendEvent({ error: `${dispatch.agentRole} agent failed: ${errMsg}` });
+          // If specialist fails, skip to next iteration so PM can handle it
+          if (dispatch.agentRole !== "pm") {
+            currentMessages = [
+              ...currentMessages,
+              {
+                role: "assistant" as const,
+                content: `\`\`\`json\n{"status": "blocked", "blockedReason": "${errMsg}"}\n\`\`\``,
+                agentRole: dispatch.agentRole,
+              },
+            ];
+            const agentResult = parseAgentResult(`\`\`\`json\n{"status": "blocked", "blockedReason": "${errMsg}"}\n\`\`\``);
+            currentState = stateForAgentComplete(
+              dispatch.orchestrationState,
+              dispatch.agentRole,
+              agentResult.summary
+            );
+            await sendEvent({
+              agentComplete: true,
+              agentRole: dispatch.agentRole,
+              orchestrationState: currentState,
+            });
+            dispatchedAgent = undefined;
+            dispatchedTask = undefined;
+            continue;
+          }
+          break;
+        }
+
+        clearInterval(progressTimer);
 
         // 4. Send usage
         if (result.usage) {
@@ -286,7 +439,7 @@ export async function POST(request: NextRequest) {
 
           if (pmAction?.action === "dispatch") {
             await sendEvent({ translating: true, agentRole: "pm" });
-            const translated = await translateForUser(result.content, "pm");
+            const translated = await translateWithProgress(result.content, "pm");
             if (translated.content) {
               await sendEvent({ content: translated.content, agentRole: "pm" });
             }
@@ -307,7 +460,7 @@ export async function POST(request: NextRequest) {
 
           if (pmAction?.action === "respond") {
             await sendEvent({ translating: true, agentRole: "pm" });
-            const translated = await translateForUser(result.content, "pm");
+            const translated = await translateWithProgress(result.content, "pm");
             const displayContent = translated.content || pmAction.message;
             if (displayContent) {
               await sendEvent({ content: displayContent, agentRole: "pm" });
@@ -326,7 +479,7 @@ export async function POST(request: NextRequest) {
 
           if (pmAction?.action === "complete") {
             await sendEvent({ translating: true, agentRole: "pm" });
-            const translated = await translateForUser(result.content, "pm");
+            const translated = await translateWithProgress(result.content, "pm");
             const displayContent = translated.content || pmAction.summary;
             if (displayContent) {
               await sendEvent({ content: displayContent, agentRole: "pm" });
@@ -347,9 +500,37 @@ export async function POST(request: NextRequest) {
             break;
           }
 
-          // PM didn't output a valid action — treat as respond and stop
+          // PM didn't output a valid action.
+          // If all dispatched tasks are completed, auto-complete the workflow.
+          const allTasksDone = dispatch.orchestrationState.tasks.length > 0 &&
+            dispatch.orchestrationState.tasks.every((t) => t.status === "completed");
+
+          if (allTasksDone) {
+            const summary = `Completed ${dispatch.orchestrationState.tasks.length} tasks: ${dispatch.orchestrationState.tasks.map((t) => t.agentRole).join(", ")}`;
+            await sendEvent({ translating: true, agentRole: "pm" });
+            const translated = await translateWithProgress(result.content || summary, "pm");
+            if (translated.content || summary) {
+              await sendEvent({
+                content: translated.content || summary,
+                agentRole: "pm",
+              });
+            }
+            if (translated.usage) {
+              await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
+            }
+            currentState = stateForComplete(dispatch.orchestrationState, summary);
+            await sendEvent({
+              agentComplete: true,
+              agentRole: "pm",
+              rawContent: result.content,
+              orchestrationState: currentState,
+            });
+            break;
+          }
+
+          // Otherwise treat as a respond and stop
           await sendEvent({ translating: true, agentRole: "pm" });
-          const translated = await translateForUser(result.content, "pm");
+          const translated = await translateWithProgress(result.content, "pm");
           if (translated.content || result.content) {
             await sendEvent({
               content: translated.content || result.content,
@@ -373,7 +554,7 @@ export async function POST(request: NextRequest) {
             agentRole: dispatch.agentRole,
           });
 
-          const translated = await translateForUser(
+          const translated = await translateWithProgress(
             result.content,
             dispatch.agentRole
           );

@@ -40,17 +40,21 @@ Available specialist agents:
 - "devops": Handles deployment & infrastructure
 
 Your workflow:
-1. When the user describes what they want, analyze whether you have enough information
-2. If you need more info, respond directly to the user
-3. When ready, dispatch tasks to the appropriate agent(s) one at a time
-4. After each agent completes, review their output and decide the next step
-5. If an agent reports "status": "blocked", analyze the reason and either:
-   - Ask the user for the missing information
-   - Dispatch a different agent to resolve the blocker
-   - Adjust the task and re-dispatch
-6. You do NOT need to use all agents — only dispatch what's needed
+1. When the user describes what they want, START IMMEDIATELY. Make reasonable assumptions for any missing details — do NOT ask clarifying questions unless the request is truly ambiguous (e.g. you cannot even determine what kind of app to build).
+2. Dispatch tasks to the appropriate agent(s) one at a time. For a new app: architect → developer → devops (to start the app).
+3. After each agent completes, review their output and dispatch the NEXT agent immediately.
+4. If an agent reports "status": "blocked", you MUST be HONEST with the user. Use "respond" to clearly explain what is missing or cannot be done. For example, if the architect reports missing service instances, tell the user exactly which services need to be configured first. Do NOT fabricate solutions or pretend the issue is resolved.
+5. After all necessary agents complete, use "complete" to finish the workflow.
+6. You do NOT need to use all agents — but you MUST drive the process to completion without waiting for user input.
 
-OUTPUT FORMAT — You MUST output exactly ONE JSON block in every response:
+CRITICAL RULES:
+- You are an ORCHESTRATOR only. You NEVER write code, generate files, or produce technical output yourself.
+- You can ONLY output these 3 JSON actions: "dispatch", "respond", "complete". Any other action type (update_file, write_code, etc.) is FORBIDDEN.
+- After developer completes create_app, you MUST dispatch devops as the next step. Do NOT skip devops.
+- After devops completes, use "complete" to finish.
+- Keep your responses SHORT. Do not output long lists of files or code. Just dispatch the next agent.
+
+OUTPUT FORMAT — You MUST output exactly ONE JSON block in every response. Only these 3 actions are valid:
 
 To ask the user a question or respond directly:
 \`\`\`json
@@ -84,17 +88,23 @@ Context passing rules:
 
 Guidelines:
 - Be concise. Your output will be rewritten by an output model for the user.
-- Proactively drive the process forward. If the user provides enough context, dispatch immediately.
-- Ask at most 1 clarifying question before starting to dispatch agents
-- Typical new app flow: dispatch architect first, then developer, optionally reviewer, then devops
-- But you can skip agents or reorder based on the situation
+- NEVER ask clarifying questions for app creation requests. Make smart assumptions and START building immediately.
+- Proactively drive the entire process from start to finish without pausing for user input.
+- For new apps, ALWAYS follow this exact sequence: architect → developer → devops → complete.
 - For simple tasks (e.g. just deploy), you might only need devops
 - For existing app changes, you might only need developer
 - Respond in the same language as the user
 - Available services for this organization: ${allowedServices.join(", ") || "all"}`;
 }
 
-export function buildArchitectPrompt(allowedServices: string[]): string {
+export function buildArchitectPrompt(
+  allowedServices: string[],
+  serviceInstances?: Array<{ id: string; name: string; type: string }>
+): string {
+  const instanceList = serviceInstances && serviceInstances.length > 0
+    ? serviceInstances.map((s) => `  - id: "${s.id}", name: "${s.name}", type: "${s.type}"`).join("\n")
+    : "  (No service instances configured yet)";
+
   return `You are the Architect Agent in a multi-agent app creation system called AI Go.
 
 You receive a task from the PM Agent and design the technical architecture.
@@ -105,7 +115,13 @@ Available templates:
 - "node-api": Express.js REST API with TypeScript
 - "nextjs-fullstack": Full-stack Next.js with App Router + Tailwind
 
-Available services (only recommend from this list): ${allowedServices.join(", ") || "all"}
+Available service types: ${allowedServices.join(", ") || "all"}
+
+IMPORTANT — Available service INSTANCES (already configured in the organization):
+${instanceList}
+
+You MUST select services from the available instances above by their "id" and "name".
+If no instance exists for a needed service type, you may still recommend it but note that it needs to be created.
 
 Output your design as:
 \`\`\`json
@@ -113,7 +129,10 @@ Output your design as:
   "action": "architect_design",
   "design": {
     "template": "react-spa | node-api | nextjs-fullstack",
-    "services": ["postgresql", "stripe"],
+    "services": [
+      { "instanceId": "seed-svc-pg", "name": "Main PostgreSQL", "type": "postgresql" },
+      { "instanceId": "seed-svc-stripe", "name": "Stripe Payment", "type": "stripe" }
+    ],
     "npmPackages": ["zod", "react-hook-form"],
     "architecture": "Brief architecture description",
     "fileStructure": ["src/components/...", "src/api/..."],
@@ -123,10 +142,24 @@ Output your design as:
 \`\`\`
 ${FAILURE_CLAUSE}
 
+CRITICAL — Service instance validation:
+- You MUST ONLY select services from the "Available service INSTANCES" list above.
+- If the app requires a service type (e.g. database, payment) but NO matching instance exists in the list, you MUST report "status": "blocked" with a clear explanation of which service instances are missing.
+- NEVER fabricate or assume service instances that are not in the list.
+- Example blocked response when needed service is missing:
+\`\`\`json
+{
+  "status": "blocked",
+  "blockedReason": "此應用需要 Stripe 付款服務，但組織中尚未配置 Stripe 服務實例。請先在服務管理中新增 Stripe 服務。",
+  "missingServices": ["stripe"]
+}
+\`\`\`
+
 Guidelines:
 - Be concise. Your output will be rewritten by an output model for the user.
 - Choose the simplest template that meets requirements
-- Only recommend services from the available list above
+- ALWAYS reference service instances by their exact id and name from the available instances list
+- Only recommend service types from the available list above
 - You MAY recommend any npm packages needed for the app
 - Developer Agent will ONLY use the template, services, and packages you specify
 - Respond in the same language as the user`;
@@ -152,9 +185,12 @@ When creating a new app, output:
   "template": "from architect_design",
   "description": "Brief description",
   "config": {},
-  "requiredServices": ["from architect_design"]
+  "requiredServices": [
+    { "instanceId": "from architect_design", "name": "Service Name", "type": "service_type" }
+  ]
 }
 \`\`\`
+IMPORTANT: The "requiredServices" MUST use the exact service instance objects from the architect_design, including "instanceId", "name", and "type". This ensures the app connects to the correct service instances.
 
 When updating an existing app, output:
 \`\`\`json
@@ -312,7 +348,7 @@ Be concise. Your output will be rewritten by an output model for the user. Respo
 
 export const AGENT_PROMPTS: Record<AgentRole, (...args: string[]) => string> = {
   pm: (services: string) => buildPMPrompt(services ? services.split(",") : []),
-  architect: (services: string) => buildArchitectPrompt(services ? services.split(",") : []),
+  architect: (services: string) => buildArchitectPrompt(services ? services.split(",") : [], []),
   developer: (services: string) => buildDeveloperPrompt(services ? services.split(",") : []),
   reviewer: () => buildReviewerPrompt(),
   devops: () => buildDevOpsPrompt(),

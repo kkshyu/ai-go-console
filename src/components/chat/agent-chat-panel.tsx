@@ -49,7 +49,7 @@ export interface AgentChatPanelProps {
   showProgress?: boolean;
 }
 
-type AgentPhase = "thinking" | "translating" | null;
+type AgentPhase = "thinking" | "translating" | "progress" | null;
 
 export function AgentChatPanel({
   initialMessages = [],
@@ -77,6 +77,7 @@ export function AgentChatPanel({
   );
   const [currentAgent, setCurrentAgent] = useState<AgentRole | null>(null);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
+  const [statusMessage, setStatusMessage] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
 
@@ -183,6 +184,14 @@ export function AgentChatPanel({
               // Agent output is being translated
               if (parsed.translating) {
                 setAgentPhase("translating");
+                setStatusMessage("");
+                continue;
+              }
+
+              // Progress status update from PM
+              if (parsed.statusUpdate) {
+                setAgentPhase("progress");
+                setStatusMessage(parsed.statusUpdate);
                 continue;
               }
 
@@ -230,6 +239,7 @@ export function AgentChatPanel({
               if (parsed.content) {
                 displayContent += parsed.content;
                 setAgentPhase(null);
+                setStatusMessage("");
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === currentMsgId ? { ...m, content: displayContent } : m
@@ -305,6 +315,7 @@ export function AgentChatPanel({
         setIsLoading(false);
         setCurrentAgent(null);
         setAgentPhase(null);
+        setStatusMessage("");
       }
     },
     [
@@ -345,12 +356,11 @@ export function AgentChatPanel({
               <div className="flex items-center gap-2 mt-1.5 px-3 py-1 text-xs text-muted-foreground animate-pulse">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 <span>
-                  {AGENT_DEFINITIONS[currentAgent]?.label}
-                  {agentPhase === "thinking"
-                    ? ` ${generatingText}`
-                    : agentPhase === "translating"
-                      ? " ..."
-                      : ` ${generatingText}`}
+                  {agentPhase === "progress" && statusMessage
+                    ? statusMessage
+                    : `${AGENT_DEFINITIONS[currentAgent]?.label}${
+                        agentPhase === "translating" ? " ..." : ` ${generatingText}`
+                      }`}
                 </span>
               </div>
             )}
