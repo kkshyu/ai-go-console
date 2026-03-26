@@ -5,6 +5,7 @@ import Handlebars from "handlebars";
 import { getTemplate } from "@/lib/templates";
 import { prisma } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
+import { toScreamingSnake } from "@/lib/service-types";
 
 const APPS_ROOT = path.join(process.cwd(), "apps");
 
@@ -57,15 +58,11 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
       const prefix = as_.envVarPrefix;
 
       if (svc.endpointUrl) envVars[`${prefix}_ENDPOINT_URL`] = svc.endpointUrl;
-      if (config.host) envVars[`${prefix}_HOST`] = config.host;
-      if (config.port) envVars[`${prefix}_PORT`] = config.port;
-      if (config.database) envVars[`${prefix}_DATABASE`] = config.database;
-      if (config.username) envVars[`${prefix}_USER`] = config.username;
-      if (config.password) envVars[`${prefix}_PASSWORD`] = config.password;
-      if (config.apiKey) envVars[`${prefix}_API_KEY`] = config.apiKey;
-      if (config.projectUrl) envVars[`${prefix}_PROJECT_URL`] = config.projectUrl;
-      if (config.adminSecret) envVars[`${prefix}_ADMIN_SECRET`] = config.adminSecret;
-      if (config.webhookSecret) envVars[`${prefix}_WEBHOOK_SECRET`] = config.webhookSecret;
+      for (const [key, value] of Object.entries(config)) {
+        if (value) {
+          envVars[`${prefix}_${toScreamingSnake(key)}`] = String(value);
+        }
+      }
     }
   }
 

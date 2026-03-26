@@ -21,10 +21,32 @@ enum AppStatus {
 }
 
 enum ServiceType {
-  disk
+  // database
   postgresql
-  supabase
+  mysql
+  mongodb
+  // storage
+  s3
+  gcs
+  azure_blob
+  // payment
   stripe
+  paypal
+  ecpay
+  // email
+  sendgrid
+  ses
+  mailgun
+  // sms
+  twilio
+  vonage
+  aws_sns
+  // auth
+  auth0
+  firebase_auth
+  line_login
+  // platform
+  supabase
   hasura
 }
 

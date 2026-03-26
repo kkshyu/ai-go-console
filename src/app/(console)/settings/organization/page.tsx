@@ -13,6 +13,12 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Building2, Users, Shield, ShieldOff, Globe, Plus, Trash2 } from "lucide-react";
+import {
+  CATEGORY_SERVICE_TYPES,
+  SERVICE_TYPE_LABELS,
+  SERVICE_CATEGORY_LABELS,
+  ServiceCategory,
+} from "@/lib/service-types";
 
 interface AllowedService {
   id: string;
@@ -43,13 +49,7 @@ interface OrgData {
   _count: { users: number; services: number };
 }
 
-const SERVICE_TYPE_LABELS: Record<string, string> = {
-  disk: "Disk Storage",
-  postgresql: "PostgreSQL",
-  supabase: "Supabase",
-  stripe: "Stripe",
-  hasura: "Hasura",
-};
+const allCategories = Object.keys(CATEGORY_SERVICE_TYPES) as ServiceCategory[];
 
 export default function OrganizationSettingsPage() {
   const t = useTranslations("organization");
@@ -187,35 +187,53 @@ export default function OrganizationSettingsPage() {
           <CardTitle>{t("allowedServices")}</CardTitle>
           <CardDescription>{t("allowedServicesDescription")}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {org.allowedServices.map((svc) => (
-            <div
-              key={svc.serviceType}
-              className="flex items-center justify-between rounded-lg border p-3"
-            >
-              <div className="flex items-center gap-3">
-                {svc.enabled ? (
-                  <Shield className="h-5 w-5 text-green-600" />
-                ) : (
-                  <ShieldOff className="h-5 w-5 text-muted-foreground" />
-                )}
-                <div>
-                  <p className="font-medium">
-                    {SERVICE_TYPE_LABELS[svc.serviceType] || svc.serviceType}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{svc.serviceType}</p>
-                </div>
+        <CardContent className="space-y-6">
+          {allCategories.map((cat) => {
+            const typesInCat = CATEGORY_SERVICE_TYPES[cat];
+            const svcsInCat = org.allowedServices.filter((s) =>
+              typesInCat.includes(s.serviceType as never)
+            );
+            if (svcsInCat.length === 0) return null;
+            return (
+              <div key={cat} className="space-y-2">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                  {SERVICE_CATEGORY_LABELS[cat]}
+                </h3>
+                {svcsInCat.map((svc) => (
+                  <div
+                    key={svc.serviceType}
+                    className="flex items-center justify-between rounded-lg border p-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      {svc.enabled ? (
+                        <Shield className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <ShieldOff className="h-5 w-5 text-muted-foreground" />
+                      )}
+                      <div>
+                        <p className="font-medium">
+                          {SERVICE_TYPE_LABELS[svc.serviceType as keyof typeof SERVICE_TYPE_LABELS] || svc.serviceType}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {svc.serviceType}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant={svc.enabled ? "outline" : "default"}
+                      size="sm"
+                      disabled={saving}
+                      onClick={() =>
+                        toggleService(svc.serviceType, !svc.enabled)
+                      }
+                    >
+                      {svc.enabled ? t("disable") : t("enable")}
+                    </Button>
+                  </div>
+                ))}
               </div>
-              <Button
-                variant={svc.enabled ? "outline" : "default"}
-                size="sm"
-                disabled={saving}
-                onClick={() => toggleService(svc.serviceType, !svc.enabled)}
-              >
-                {svc.enabled ? t("disable") : t("enable")}
-              </Button>
-            </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
 

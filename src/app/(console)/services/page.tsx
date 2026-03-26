@@ -13,48 +13,33 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Server, Plus, Trash2, TestTube } from "lucide-react";
+import {
+  CATEGORY_SERVICE_TYPES,
+  SERVICE_TYPE_CONFIG_FIELDS,
+  SERVICE_CATEGORY_LABELS,
+  SERVICE_TYPE_CATEGORY,
+  type ConfigFieldDef,
+} from "@/lib/service-types";
+import type { ServiceType } from "@prisma/client";
 
-interface ServiceForm {
-  name: string;
-  type: string;
-  endpointUrl: string;
-  host: string;
-  port: string;
-  database: string;
-  username: string;
-  password: string;
-  apiKey: string;
-  projectUrl: string;
-  adminSecret: string;
-  webhookSecret: string;
-}
-
-const emptyForm: ServiceForm = {
-  name: "",
-  type: "postgresql",
-  endpointUrl: "",
-  host: "",
-  port: "",
-  database: "",
-  username: "",
-  password: "",
-  apiKey: "",
-  projectUrl: "",
-  adminSecret: "",
-  webhookSecret: "",
-};
-
-const serviceTypes = ["disk", "postgresql", "supabase", "stripe", "hasura"] as const;
+const allCategories = Object.keys(CATEGORY_SERVICE_TYPES) as Array<
+  keyof typeof CATEGORY_SERVICE_TYPES
+>;
 
 export default function ServicesPage() {
   const t = useTranslations("services");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<ServiceForm>(emptyForm);
+  const [formType, setFormType] = useState<string>("postgresql");
+  const [formName, setFormName] = useState("");
+  const [formEndpointUrl, setFormEndpointUrl] = useState("");
+  const [formConfig, setFormConfig] = useState<Record<string, string>>({});
   const [services, setServices] = useState<
     { id: string; name: string; type: string; endpointUrl: string | null }[]
   >([]);
-  const [allowedTypes, setAllowedTypes] = useState<Set<string>>(new Set(serviceTypes));
-  const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
+  const [allowedTypes, setAllowedTypes] = useState<Set<string>>(new Set());
+  const [testResults, setTestResults] = useState<
+    Record<string, { success: boolean; message: string }>
+  >({});
 
   useEffect(() => {
     fetch("/api/services")
@@ -77,8 +62,16 @@ export default function ServicesPage() {
       .catch(() => {});
   }, []);
 
-  function updateForm(key: keyof ServiceForm, value: string) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+  function resetForm() {
+    setFormName("");
+    setFormType("postgresql");
+    setFormEndpointUrl("");
+    setFormConfig({});
+  }
+
+  function handleTypeChange(newType: string) {
+    setFormType(newType);
+    setFormConfig({});
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -87,13 +80,18 @@ export default function ServicesPage() {
     const res = await fetch("/api/services", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        name: formName,
+        type: formType,
+        endpointUrl: formEndpointUrl,
+        ...formConfig,
+      }),
     });
 
     if (res.ok) {
       const svc = await res.json();
       setServices((prev) => [svc, ...prev]);
-      setForm(emptyForm);
+      resetForm();
       setShowForm(false);
     }
   }
@@ -111,12 +109,17 @@ export default function ServicesPage() {
     setTestResults((prev) => ({ ...prev, [id]: result }));
   }
 
-  const filteredTypes = serviceTypes.filter((t) => allowedTypes.has(t));
+  const configFields: ConfigFieldDef[] =
+    SERVICE_TYPE_CONFIG_FIELDS[formType as ServiceType] || [];
+
+  const category = SERVICE_TYPE_CATEGORY[formType as ServiceType];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{t("title")}</h1>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+          {t("title")}
+        </h1>
         <Button onClick={() => setShowForm(!showForm)}>
           <Plus className="h-4 w-4" />
           {t("add")}
@@ -127,9 +130,7 @@ export default function ServicesPage() {
         <Card>
           <CardHeader>
             <CardTitle>{t("add")}</CardTitle>
-            <CardDescription>
-              {t("addDescription")}
-            </CardDescription>
+            <CardDescription>{t("addDescription")}</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -137,8 +138,8 @@ export default function ServicesPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">{t("name")}</label>
                   <Input
-                    value={form.name}
-                    onChange={(e) => updateForm("name", e.target.value)}
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
                     placeholder="My Service"
                     required
                   />
@@ -146,142 +147,77 @@ export default function ServicesPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">{t("type")}</label>
                   <select
-                    value={form.type}
-                    onChange={(e) => updateForm("type", e.target.value)}
+                    value={formType}
+                    onChange={(e) => handleTypeChange(e.target.value)}
                     className="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                   >
-                    {filteredTypes.map((type) => (
-                      <option key={type} value={type}>
-                        {t(`types.${type}`)}
-                      </option>
-                    ))}
+                    {allCategories.map((cat) => {
+                      const types = CATEGORY_SERVICE_TYPES[cat].filter((st) =>
+                        allowedTypes.has(st)
+                      );
+                      if (types.length === 0) return null;
+                      return (
+                        <optgroup
+                          key={cat}
+                          label={t(`categories.${cat}`)}
+                        >
+                          {types.map((st) => (
+                            <option key={st} value={st}>
+                              {t(`types.${st}`)}
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
                   </select>
                 </div>
               </div>
 
               {/* Endpoint URL - common to all types */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">{t("endpointUrl")}</label>
+                <label className="text-sm font-medium">
+                  {t("endpointUrl")}
+                </label>
                 <Input
-                  value={form.endpointUrl}
-                  onChange={(e) => updateForm("endpointUrl", e.target.value)}
+                  value={formEndpointUrl}
+                  onChange={(e) => setFormEndpointUrl(e.target.value)}
                   placeholder="https://..."
                 />
               </div>
 
-              {form.type === "postgresql" && (
+              {/* Dynamic config fields based on service type */}
+              {configFields.length > 0 && (
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t("host")}</label>
-                    <Input
-                      value={form.host}
-                      onChange={(e) => updateForm("host", e.target.value)}
-                      placeholder="localhost"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t("port")}</label>
-                    <Input
-                      value={form.port}
-                      onChange={(e) => updateForm("port", e.target.value)}
-                      placeholder="5432"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t("database")}</label>
-                    <Input
-                      value={form.database}
-                      onChange={(e) => updateForm("database", e.target.value)}
-                      placeholder="mydb"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t("username")}</label>
-                    <Input
-                      value={form.username}
-                      onChange={(e) => updateForm("username", e.target.value)}
-                      placeholder="user"
-                    />
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium">{t("password")}</label>
-                    <Input
-                      type="password"
-                      value={form.password}
-                      onChange={(e) => updateForm("password", e.target.value)}
-                      placeholder="********"
-                    />
-                  </div>
+                  {configFields.map((field) => (
+                    <div
+                      key={field.key}
+                      className={`space-y-2 ${
+                        configFields.length === 1 ? "md:col-span-2" : ""
+                      }`}
+                    >
+                      <label className="text-sm font-medium">
+                        {t(field.key)}
+                      </label>
+                      <Input
+                        type={field.type}
+                        value={formConfig[field.key] || ""}
+                        onChange={(e) =>
+                          setFormConfig((prev) => ({
+                            ...prev,
+                            [field.key]: e.target.value,
+                          }))
+                        }
+                        placeholder={field.placeholder}
+                      />
+                    </div>
+                  ))}
                 </div>
               )}
 
-              {form.type === "supabase" && (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t("projectUrl")}</label>
-                    <Input
-                      value={form.projectUrl}
-                      onChange={(e) => updateForm("projectUrl", e.target.value)}
-                      placeholder="https://xxx.supabase.co"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t("apiKey")}</label>
-                    <Input
-                      type="password"
-                      value={form.apiKey}
-                      onChange={(e) => updateForm("apiKey", e.target.value)}
-                      placeholder="your-anon-key"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {form.type === "disk" && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">{t("apiKey")}</label>
-                  <Input
-                    type="password"
-                    value={form.apiKey}
-                    onChange={(e) => updateForm("apiKey", e.target.value)}
-                    placeholder="your-api-key"
-                  />
-                </div>
-              )}
-
-              {form.type === "stripe" && (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t("apiKey")}</label>
-                    <Input
-                      type="password"
-                      value={form.apiKey}
-                      onChange={(e) => updateForm("apiKey", e.target.value)}
-                      placeholder="sk_..."
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t("webhookSecret")}</label>
-                    <Input
-                      type="password"
-                      value={form.webhookSecret}
-                      onChange={(e) => updateForm("webhookSecret", e.target.value)}
-                      placeholder="whsec_..."
-                    />
-                  </div>
-                </div>
-              )}
-
-              {form.type === "hasura" && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">{t("adminSecret")}</label>
-                  <Input
-                    type="password"
-                    value={form.adminSecret}
-                    onChange={(e) => updateForm("adminSecret", e.target.value)}
-                    placeholder="your-admin-secret"
-                  />
-                </div>
+              {category && (
+                <p className="text-xs text-muted-foreground">
+                  {t(`categories.${category}`)}
+                </p>
               )}
 
               <div className="flex gap-2">
@@ -291,7 +227,7 @@ export default function ServicesPage() {
                   variant="outline"
                   onClick={() => {
                     setShowForm(false);
-                    setForm(emptyForm);
+                    resetForm();
                   }}
                 >
                   Cancel
@@ -306,9 +242,7 @@ export default function ServicesPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Server className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-lg text-muted-foreground">
-              {t("emptyState")}
-            </p>
+            <p className="text-lg text-muted-foreground">{t("emptyState")}</p>
           </CardContent>
         </Card>
       ) : (
@@ -329,7 +263,13 @@ export default function ServicesPage() {
                       )}
                     </div>
                     {testResults[svc.id] && (
-                      <p className={`text-xs mt-1 ${testResults[svc.id].success ? "text-green-600" : "text-red-600"}`}>
+                      <p
+                        className={`text-xs mt-1 ${
+                          testResults[svc.id].success
+                            ? "text-green-600"
+                            : "text-red-600"
+                        }`}
+                      >
                         {testResults[svc.id].message}
                       </p>
                     )}
@@ -342,7 +282,9 @@ export default function ServicesPage() {
                     onClick={() => handleTest(svc.id)}
                   >
                     <TestTube className="h-4 w-4" />
-                    <span className="hidden sm:inline">{t("testConnection")}</span>
+                    <span className="hidden sm:inline">
+                      {t("testConnection")}
+                    </span>
                   </Button>
                   <Button
                     variant="outline"
