@@ -1,10 +1,10 @@
 services:
   app:
     build: .
-    container_name: aigo-app-{{slug}}
+    container_name: aigo-{{orgSlug}}-{{slug}}
     restart: unless-stopped
     ports:
-      - "{{port}}:3000"
+      - "{{prodPort}}:3000"
     environment:
       PORT: "3000"
       NODE_ENV: "production"

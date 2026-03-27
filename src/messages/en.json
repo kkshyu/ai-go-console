@@ -72,7 +72,22 @@
     "closePreview": "Close",
     "logs": "Logs",
     "console": "Console",
-    "clearConsole": "Clear"
+    "clearConsole": "Clear",
+    "deployments": "Deployments",
+    "deploymentHistory": "Deployment History",
+    "rollback": "Rollback",
+    "version": "Version",
+    "buildLog": "Build Log",
+    "systemLog": "System Log",
+    "noDeployments": "No deployments yet",
+    "rollingBack": "Rolling back...",
+    "deployedAt": "Deployed at",
+    "rollbackTo": "Rollback to",
+    "currentVersion": "Current",
+    "devServer": "Dev Server",
+    "prodServer": "Production",
+    "devPort": "Dev",
+    "prodPort": "Prod"
   },
   "create": {
     "title": "Create App",

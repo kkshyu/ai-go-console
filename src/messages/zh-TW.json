@@ -72,7 +72,22 @@
     "closePreview": "關閉",
     "logs": "日誌",
     "console": "Console",
-    "clearConsole": "清除"
+    "clearConsole": "清除",
+    "deployments": "部署",
+    "deploymentHistory": "部署紀錄",
+    "rollback": "回滾",
+    "version": "版本",
+    "buildLog": "建置日誌",
+    "systemLog": "系統日誌",
+    "noDeployments": "尚無部署紀錄",
+    "rollingBack": "回滾中...",
+    "deployedAt": "部署時間",
+    "rollbackTo": "回滾至",
+    "currentVersion": "目前版本",
+    "devServer": "開發伺服器",
+    "prodServer": "生產環境",
+    "devPort": "開發",
+    "prodPort": "生產"
   },
   "create": {
     "title": "建立應用",

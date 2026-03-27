@@ -11,17 +11,33 @@ function composeFile(slug: string): string {
   return path.join(getAppPath(slug), "docker-compose.yml");
 }
 
+function containerName(orgSlug: string, slug: string): string {
+  return `aigo-${orgSlug}-${slug}`;
+}
+
 /**
  * Build Docker image for an app
  */
-export async function buildApp(slug: string): Promise<string> {
+export async function buildApp(orgSlug: string, slug: string): Promise<string> {
   const appDir = getAppPath(slug);
   const { stdout, stderr } = await execFileAsync(
     "docker",
-    ["build", "-t", `aigo-app-${slug}`, "."],
+    ["build", "-t", containerName(orgSlug, slug), "."],
     { cwd: appDir, timeout: 300_000 }
   );
   return stdout + stderr;
+}
+
+/**
+ * Tag a docker image with a version for rollback
+ */
+export async function tagImage(orgSlug: string, slug: string, version: number): Promise<void> {
+  const base = containerName(orgSlug, slug);
+  await execFileAsync(
+    "docker",
+    ["tag", base, `${base}:v${version}`],
+    { timeout: TIMEOUT }
+  );
 }
 
 /**
@@ -32,6 +48,34 @@ export async function startApp(slug: string): Promise<string> {
     "docker",
     ["compose", "-f", composeFile(slug), "up", "-d", "--build"],
     { timeout: 300_000 }
+  );
+  return stdout + stderr;
+}
+
+/**
+ * Start app from a specific tagged image version (for rollback)
+ */
+export async function startAppFromImage(orgSlug: string, slug: string, version: number): Promise<string> {
+  const base = containerName(orgSlug, slug);
+  const imageTag = `${base}:v${version}`;
+
+  // Stop existing container first
+  try {
+    await stopApp(slug);
+  } catch {
+    // ignore if not running
+  }
+
+  // Run the tagged image directly
+  const { stdout, stderr } = await execFileAsync(
+    "docker",
+    [
+      "run", "-d",
+      "--name", base,
+      "--restart", "unless-stopped",
+      imageTag,
+    ],
+    { timeout: TIMEOUT }
   );
   return stdout + stderr;
 }
