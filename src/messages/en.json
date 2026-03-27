@@ -379,7 +379,15 @@
     "domainPlaceholder": "e.g. app.example.com",
     "domainActive": "Active",
     "domainPending": "Pending",
-    "noDomainsYet": "No custom domains configured"
+    "noDomainsYet": "No custom domains configured",
+    "localAccess": "Local Access",
+    "localAccessDescription": "Your apps are automatically accessible at this local URL via Caddy reverse proxy",
+    "localUrl": "Local URL",
+    "copyUrl": "Copy",
+    "copied": "Copied!",
+    "proxyConnected": "Caddy Connected",
+    "proxyNotDetected": "Caddy not detected. Start with: docker compose up -d",
+    "appAccessPattern": "Apps accessible at: {url}/{app-slug}"
   },
   "users": {
     "title": "User Management",

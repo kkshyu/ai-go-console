@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Building2, Globe, Plus, Trash2, Check, Link } from "lucide-react";
+import { Building2, Globe, Plus, Trash2, Check, Link, Copy, Wifi, WifiOff } from "lucide-react";
 
 interface OrgDomain {
   id: string;
@@ -26,6 +26,13 @@ interface OrgData {
   slug: string;
 }
 
+interface ProxyStatus {
+  available: boolean;
+  mode: string;
+  localDomain: string;
+  localUrl: string;
+}
+
 export default function OrganizationSettingsPage() {
   const t = useTranslations("organization");
   const [org, setOrg] = useState<OrgData | null>(null);
@@ -36,6 +43,8 @@ export default function OrganizationSettingsPage() {
   const [savingName, setSavingName] = useState(false);
   const [savingSlug, setSavingSlug] = useState(false);
   const [slugError, setSlugError] = useState("");
+  const [proxyStatus, setProxyStatus] = useState<ProxyStatus | null>(null);
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/organizations")
@@ -53,6 +62,11 @@ export default function OrganizationSettingsPage() {
           .then(setDomains)
           .catch(() => {});
       })
+      .catch(() => {});
+
+    fetch("/api/proxy/status")
+      .then((r) => r.json())
+      .then(setProxyStatus)
       .catch(() => {});
   }, []);
 
@@ -125,6 +139,12 @@ export default function OrganizationSettingsPage() {
     if (res.ok) {
       setDomains((prev) => prev.filter((d) => d.id !== domainId));
     }
+  }
+
+  function handleCopyUrl(url: string) {
+    navigator.clipboard.writeText(url);
+    setCopiedUrl(url);
+    setTimeout(() => setCopiedUrl(null), 2000);
   }
 
   if (!org) {
@@ -204,6 +224,52 @@ export default function OrganizationSettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Local Access */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            {proxyStatus?.available ? (
+              <Wifi className="h-5 w-5 text-green-500" />
+            ) : (
+              <WifiOff className="h-5 w-5 text-muted-foreground" />
+            )}
+            {t("localAccess")}
+            {proxyStatus?.available && (
+              <span className="ml-auto text-xs font-normal text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                {t("proxyConnected")}
+              </span>
+            )}
+          </CardTitle>
+          <CardDescription>{t("localAccessDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {proxyStatus?.available ? (
+            <>
+              <div className="flex items-center gap-2 rounded-lg border p-3 bg-muted/50">
+                <code className="flex-1 text-sm font-mono">
+                  {proxyStatus.localUrl}
+                </code>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleCopyUrl(proxyStatus.localUrl)}
+                >
+                  <Copy className="h-3.5 w-3.5 mr-1" />
+                  {copiedUrl === proxyStatus.localUrl ? t("copied") : t("copyUrl")}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t("appAccessPattern", { url: proxyStatus.localUrl })}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {t("proxyNotDetected")}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Custom Domains */}
       <Card>
         <CardHeader>
@@ -233,19 +299,28 @@ export default function OrganizationSettingsPage() {
                 key={domain.id}
                 className="flex items-center justify-between rounded-lg border p-3"
               >
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="font-mono text-sm font-medium">{domain.domain}</p>
                   <p className="text-xs text-muted-foreground">
                     {domain.isActive ? t("domainActive") : t("domainPending")}
                   </p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleRemoveDomain(domain.id)}
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleCopyUrl(`https://${domain.domain}`)}
+                  >
+                    <Copy className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRemoveDomain(domain.id)}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
               </div>
             ))}
             {domains.length === 0 && (
