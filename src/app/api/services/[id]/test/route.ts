@@ -192,6 +192,54 @@ const testers: Record<ServiceType, ServiceTester> = {
   firebase_auth: configOnlyTester("Firebase Auth", ["projectId", "apiKey"]),
   line_login: configOnlyTester("LINE Login", ["channelId", "channelSecret"]),
 
+  // --- chat ---
+  line_bot: async (config) => {
+    if (!config.channelAccessToken) throw new Error("LINE Bot channel access token not configured");
+    const res = await fetch("https://api.line.me/v2/bot/info", {
+      headers: { Authorization: `Bearer ${config.channelAccessToken}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      return { success: true, message: "LINE Bot API connection OK" };
+    }
+    throw new Error(`LINE Bot API returned ${res.status}`);
+  },
+  whatsapp: async (config) => {
+    if (!config.phoneNumberId || !config.accessToken) throw new Error("WhatsApp phone number ID and access token required");
+    const res = await fetch(
+      `https://graph.facebook.com/v18.0/${config.phoneNumberId}`,
+      {
+        headers: { Authorization: `Bearer ${config.accessToken}` },
+        signal: AbortSignal.timeout(5000),
+      }
+    );
+    if (res.ok) {
+      return { success: true, message: "WhatsApp API connection OK" };
+    }
+    throw new Error(`WhatsApp API returned ${res.status}`);
+  },
+  discord: async (config) => {
+    if (!config.botToken) throw new Error("Discord bot token not configured");
+    const res = await fetch("https://discord.com/api/v10/users/@me", {
+      headers: { Authorization: `Bot ${config.botToken}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      return { success: true, message: "Discord Bot API connection OK" };
+    }
+    throw new Error(`Discord API returned ${res.status}`);
+  },
+  telegram: async (config) => {
+    if (!config.botToken) throw new Error("Telegram bot token not configured");
+    const res = await fetch(`https://api.telegram.org/bot${config.botToken}/getMe`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      return { success: true, message: "Telegram Bot API connection OK" };
+    }
+    throw new Error(`Telegram API returned ${res.status}`);
+  },
+
   // --- platform ---
   supabase: async (config, endpointUrl) => {
     const url = endpointUrl || config.projectUrl;

@@ -290,7 +290,11 @@
       "firebase_auth": "Firebase Auth",
       "line_login": "LINE 登入",
       "supabase": "Supabase",
-      "hasura": "Hasura"
+      "hasura": "Hasura",
+      "line_bot": "LINE Bot",
+      "whatsapp": "WhatsApp",
+      "discord": "Discord",
+      "telegram": "Telegram"
     },
     "categories": {
       "database": "資料庫",
@@ -299,7 +303,8 @@
       "email": "電子郵件",
       "sms": "簡訊",
       "auth": "第三方登入",
-      "platform": "平台"
+      "platform": "平台",
+      "chat": "聊天"
     }
   },
   "organization": {

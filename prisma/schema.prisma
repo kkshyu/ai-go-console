@@ -48,6 +48,11 @@ enum ServiceType {
   // platform
   supabase
   hasura
+  // chat
+  line_bot
+  whatsapp
+  discord
+  telegram
 }
 
 model Organization {
