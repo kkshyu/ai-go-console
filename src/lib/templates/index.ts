@@ -48,6 +48,18 @@ export const templates: Record<string, TemplateDefinition> = {
     installCommand: "npm",
     installArgs: ["install"],
   },
+  "line-bot": {
+    id: "line-bot",
+    name: "LINE Bot",
+    description:
+      "LINE Bot webhook server with @line/bot-sdk, Express, and TypeScript",
+    directory: path.join(TEMPLATES_ROOT, "line-bot"),
+    defaultPort: 3000,
+    devCommand: "npx",
+    devArgs: ["tsx", "watch", "src/index.ts"],
+    installCommand: "npm",
+    installArgs: ["install"],
+  },
 };
 
 export function getTemplate(id: string): TemplateDefinition | undefined {

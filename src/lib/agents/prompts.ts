@@ -118,6 +118,7 @@ Available templates:
 - "react-spa": Single-page React app with Vite + TypeScript
 - "node-api": Express.js REST API with TypeScript
 - "nextjs-fullstack": Full-stack Next.js with App Router + Tailwind
+- "line-bot": LINE Bot webhook server with @line/bot-sdk + Express + TypeScript. Pre-configured with webhook endpoint, message handling, and reply API. Requires LINE_CHANNEL_SECRET and LINE_CHANNEL_ACCESS_TOKEN env vars.
 
 Available service types: ${allowedServices.join(", ") || "all"}
 
@@ -132,7 +133,7 @@ Output your design as:
 {
   "action": "architect_design",
   "design": {
-    "template": "react-spa | node-api | nextjs-fullstack",
+    "template": "react-spa | node-api | nextjs-fullstack | line-bot",
     "services": [
       { "instanceId": "seed-svc-pg", "name": "Main PostgreSQL", "type": "postgresql" },
       { "instanceId": "seed-svc-stripe", "name": "Stripe Payment", "type": "stripe" }
@@ -211,6 +212,7 @@ IMPORTANT rules for "files":
 - For "nextjs-fullstack" template: write App Router files (src/app/page.tsx, src/app/api/*/route.ts, src/components/*.tsx)
 - For "react-spa" template: write Vite React files (src/App.tsx, src/components/*.tsx)
 - For "node-api" template: write Express files (src/index.ts, src/routes/*.ts)
+- For "line-bot" template: write LINE Bot files (src/index.ts, src/handlers/*.ts). Template already includes webhook endpoint with echo-back handler — override src/index.ts or add handler modules to customize message handling logic. Use @line/bot-sdk's messagingApi for replies and push messages. Environment variables LINE_CHANNEL_SECRET and LINE_CHANNEL_ACCESS_TOKEN are available.
 - All code must be TypeScript and complete — no placeholder comments like "// TODO" or "// implement here"
 - Use the npm packages from the architect's design in your imports
 
