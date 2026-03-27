@@ -56,6 +56,11 @@ enum ServiceType {
   // built-in (platform-managed)
   built_in_pg
   built_in_disk
+  // ai_model
+  openai
+  gemini
+  claude
+  openrouter
 }
 
 model Organization {

@@ -9,6 +9,7 @@ export enum ServiceCategory {
   auth = "auth",
   platform = "platform",
   chat = "chat",
+  ai_model = "ai_model",
 }
 
 export const ALL_SERVICE_TYPES: ServiceType[] = [
@@ -47,6 +48,11 @@ export const ALL_SERVICE_TYPES: ServiceType[] = [
   // built-in
   "built_in_pg",
   "built_in_disk",
+  // ai_model
+  "openai",
+  "gemini",
+  "claude",
+  "openrouter",
 ];
 
 export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
@@ -77,6 +83,10 @@ export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
   // built-in
   built_in_pg: ServiceCategory.database,
   built_in_disk: ServiceCategory.storage,
+  openai: ServiceCategory.ai_model,
+  gemini: ServiceCategory.ai_model,
+  claude: ServiceCategory.ai_model,
+  openrouter: ServiceCategory.ai_model,
 };
 
 export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
@@ -88,6 +98,7 @@ export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
   [ServiceCategory.auth]: ["auth0", "firebase_auth", "line_login"],
   [ServiceCategory.platform]: ["supabase", "hasura"],
   [ServiceCategory.chat]: ["line_bot", "whatsapp", "discord", "telegram"],
+  [ServiceCategory.ai_model]: ["openai", "gemini", "claude", "openrouter"],
 };
 
 export const BUILT_IN_SERVICE_TYPES: ReadonlySet<ServiceType> = new Set([
@@ -238,6 +249,24 @@ export const SERVICE_TYPE_CONFIG_FIELDS: Record<ServiceType, ConfigFieldDef[]> =
   // built-in (auto-configured by platform)
   built_in_pg: [],
   built_in_disk: [],
+  // --- ai_model ---
+  openai: [
+    { key: "apiKey", type: "password", placeholder: "sk-..." },
+    { key: "organizationId", type: "text", placeholder: "org-..." },
+    { key: "model", type: "text", placeholder: "gpt-4o" },
+  ],
+  gemini: [
+    { key: "apiKey", type: "password", placeholder: "AIzaSy..." },
+    { key: "model", type: "text", placeholder: "gemini-2.0-flash" },
+  ],
+  claude: [
+    { key: "apiKey", type: "password", placeholder: "sk-ant-..." },
+    { key: "model", type: "text", placeholder: "claude-sonnet-4-20250514" },
+  ],
+  openrouter: [
+    { key: "apiKey", type: "password", placeholder: "sk-or-..." },
+    { key: "model", type: "text", placeholder: "openai/gpt-4o" },
+  ],
 };
 
 export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
@@ -267,6 +296,10 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   telegram: "Telegram",
   built_in_pg: "Built-in PostgreSQL",
   built_in_disk: "Built-in Disk Storage",
+  openai: "OpenAI",
+  gemini: "Google Gemini",
+  claude: "Claude (Anthropic)",
+  openrouter: "OpenRouter",
 };
 
 export const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
@@ -278,6 +311,7 @@ export const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
   [ServiceCategory.auth]: "Authentication",
   [ServiceCategory.platform]: "Platform",
   [ServiceCategory.chat]: "Chat",
+  [ServiceCategory.ai_model]: "AI Model",
 };
 
 /**
@@ -325,6 +359,11 @@ export const SERVICE_TYPE_HTTP_MODE: Record<ServiceType, HttpMode> = {
   // built-in
   built_in_pg: "proxy",
   built_in_disk: "sdk",
+  // ai_model — fixed well-known API URLs
+  openai: "fixed",
+  gemini: "fixed",
+  claude: "fixed",
+  openrouter: "fixed",
 };
 
 export const FIXED_ENDPOINT_URLS: Partial<Record<ServiceType, string>> = {
@@ -338,6 +377,10 @@ export const FIXED_ENDPOINT_URLS: Partial<Record<ServiceType, string>> = {
   whatsapp: "https://graph.facebook.com",
   discord: "https://discord.com/api",
   telegram: "https://api.telegram.org",
+  openai: "https://api.openai.com",
+  gemini: "https://generativelanguage.googleapis.com",
+  claude: "https://api.anthropic.com",
+  openrouter: "https://openrouter.ai/api",
 };
 
 /**

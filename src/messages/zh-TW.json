@@ -343,7 +343,11 @@
       "discord": "Discord",
       "telegram": "Telegram",
       "built_in_pg": "內建 PostgreSQL",
-      "built_in_disk": "內建磁碟儲存"
+      "built_in_disk": "內建磁碟儲存",
+      "openai": "OpenAI",
+      "gemini": "Google Gemini",
+      "claude": "Claude (Anthropic)",
+      "openrouter": "OpenRouter"
     },
     "categories": {
       "database": "資料庫",
@@ -353,8 +357,11 @@
       "sms": "簡訊",
       "auth": "第三方登入",
       "platform": "平台",
-      "chat": "聊天"
-    }
+      "chat": "聊天",
+      "ai_model": "AI 模型"
+    },
+    "model": "模型",
+    "organizationId": "組織 ID"
   },
   "organization": {
     "title": "組織設定",

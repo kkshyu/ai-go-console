@@ -343,7 +343,11 @@
       "discord": "Discord",
       "telegram": "Telegram",
       "built_in_pg": "Built-in PostgreSQL",
-      "built_in_disk": "Built-in Disk Storage"
+      "built_in_disk": "Built-in Disk Storage",
+      "openai": "OpenAI",
+      "gemini": "Google Gemini",
+      "claude": "Claude (Anthropic)",
+      "openrouter": "OpenRouter"
     },
     "categories": {
       "database": "Database",
@@ -353,8 +357,11 @@
       "sms": "SMS",
       "auth": "Authentication",
       "platform": "Platform",
-      "chat": "Chat"
-    }
+      "chat": "Chat",
+      "ai_model": "AI Model"
+    },
+    "model": "Model",
+    "organizationId": "Organization ID"
   },
   "organization": {
     "title": "Organization Settings",

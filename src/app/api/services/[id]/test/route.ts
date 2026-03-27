@@ -281,6 +281,51 @@ const testers: Record<ServiceType, ServiceTester> = {
     }
     throw new Error(`Hasura returned ${res.status}`);
   },
+
+  // --- ai_model ---
+  openai: async (config) => {
+    const res = await fetch("https://api.openai.com/v1/models", {
+      headers: { Authorization: `Bearer ${config.apiKey || ""}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      return { success: true, message: "OpenAI API connection OK" };
+    }
+    throw new Error(`OpenAI returned ${res.status}`);
+  },
+  gemini: async (config) => {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${config.apiKey || ""}`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (res.ok) {
+      return { success: true, message: "Gemini API connection OK" };
+    }
+    throw new Error(`Gemini returned ${res.status}`);
+  },
+  claude: async (config) => {
+    const res = await fetch("https://api.anthropic.com/v1/models", {
+      headers: {
+        "x-api-key": config.apiKey || "",
+        "anthropic-version": "2023-06-01",
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      return { success: true, message: "Claude API connection OK" };
+    }
+    throw new Error(`Claude returned ${res.status}`);
+  },
+  openrouter: async (config) => {
+    const res = await fetch("https://openrouter.ai/api/v1/models", {
+      headers: { Authorization: `Bearer ${config.apiKey || ""}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      return { success: true, message: "OpenRouter API connection OK" };
+    }
+    throw new Error(`OpenRouter returned ${res.status}`);
+  },
 };
 
 export async function POST(
