@@ -1,5 +1,16 @@
 # AI Go Console
 
+## 套件管理
+
+本專案使用 **pnpm** 作為套件管理工具。所有安裝、新增、移除套件的操作皆須使用 `pnpm`（例如 `pnpm install`、`pnpm add`），不要使用 npm 或 yarn。
+
+## Worktree 環境設定
+
+使用 worktree 開發時，須確保環境正確：
+
+1. **自動建立 `.env.local` symbolic link**：若 worktree 中不存在 `.env.local`，自動從主專案建立 symbolic link（`ln -s`），確保環境變數可用。
+2. **使用 pnpm 安裝依賴**：在 worktree 中執行 `pnpm install` 安裝套件，確保 dev server 可正常啟動。
+
 ## 驗證流程 — 使用 Seed 測試帳號登入
 
 每次需求開發完成後，必須透過 preview 工具啟動 dev server，使用 seed 資料中的測試帳號登入，驗證新功能是否正常運作。
