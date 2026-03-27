@@ -51,6 +51,7 @@
     "start": "啟動",
     "stop": "停止",
     "restart": "重新啟動",
+    "refresh": "重整",
     "publish": "發布",
     "delete": "刪除",
     "viewLogs": "查看日誌",

@@ -51,6 +51,7 @@
     "start": "Start",
     "stop": "Stop",
     "restart": "Restart",
+    "refresh": "Refresh",
     "publish": "Publish",
     "delete": "Delete",
     "viewLogs": "View Logs",

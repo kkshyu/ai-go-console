@@ -721,27 +721,18 @@ export default function AppDetailPage() {
           {/* Preview Panel */}
           {rightPanel === "preview" && (
             <div className="flex flex-1 flex-col rounded-b-lg border border-t-0 overflow-hidden bg-background min-h-0">
-              {/* Dev server action bar */}
-              <div className="flex items-center gap-1.5 px-3 py-1.5 border-b bg-muted/30">
-                {devRunning ? (
-                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => doAction("dev-stop")} disabled={loading}>
-                    <Square className="h-3 w-3" />
-                    {t("previewStop")}
-                  </Button>
-                ) : (
-                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => doAction("dev-start")} disabled={loading}>
-                    <Play className="h-3 w-3" />
-                    {t("previewStart")}
-                  </Button>
-                )}
-              </div>
               {hasPreview ? (
                 <>
                   {/* Browser toolbar */}
                   <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
-                    {/* Traffic lights */}
+                    {/* Traffic lights — red is stop button */}
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="h-3 w-3 rounded-full bg-[#FF5F57]" />
+                      <button
+                        className="h-3 w-3 rounded-full bg-[#FF5F57] hover:brightness-110 transition-all disabled:opacity-50"
+                        onClick={() => doAction("dev-stop")}
+                        disabled={loading}
+                        title={t("previewStop")}
+                      />
                       <span className="h-3 w-3 rounded-full bg-[#FEBC2E]" />
                       <span className="h-3 w-3 rounded-full bg-[#28C840]" />
                     </div>
@@ -792,25 +783,18 @@ export default function AppDetailPage() {
                   />
                 </>
               ) : (
-                <>
-                  {/* Browser toolbar — disabled state */}
-                  <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
-                      <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
-                      <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
-                    </div>
-                    <div className="flex flex-1 items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 min-w-0 opacity-50">
-                      <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <span className="flex-1 text-xs font-mono text-muted-foreground">—</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
-                    <Globe className="h-10 w-10 mb-3 opacity-20" />
-                    <p className="text-sm font-medium">{t("serverNotRunning")}</p>
-                    <p className="text-xs mt-1">{t("startDevServer")}</p>
-                  </div>
-                </>
+                <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => doAction("dev-start")}
+                    disabled={loading}
+                  >
+                    <Play className="h-4 w-4" />
+                    {t("previewStart")}
+                  </Button>
+                </div>
               )}
 
               {/* Bottom toolbar — Dev Logs / Console tabs */}
@@ -831,7 +815,7 @@ export default function AppDetailPage() {
                   <Upload className="h-3 w-3" />
                   {t("publish")}
                 </Button>
-                {isProdRunning && (
+                {isProdRunning ? (
                   <>
                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => doAction("restart")} disabled={loading}>
                       <RotateCw className="h-3 w-3" />
@@ -842,6 +826,11 @@ export default function AppDetailPage() {
                       {t("stop")}
                     </Button>
                   </>
+                ) : (
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => doAction("start")} disabled={loading}>
+                    <Play className="h-3 w-3" />
+                    {t("start")}
+                  </Button>
                 )}
               </div>
               {/* Deploy sub-tabs */}
@@ -977,7 +966,17 @@ export default function AppDetailPage() {
 
           {/* Files Panel */}
           {rightPanel === "files" && (
-            <FileManager key={fileManagerKey} appId={app.id} />
+            <div className="flex flex-1 flex-col rounded-b-lg border border-t-0 overflow-hidden bg-background min-h-0">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 border-b bg-muted/30">
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setFileManagerKey((k) => k + 1)}>
+                  <RotateCw className="h-3 w-3" />
+                  {t("refresh")}
+                </Button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <FileManager key={fileManagerKey} appId={app.id} />
+              </div>
+            </div>
           )}
         </div>
       </div>
