@@ -16,19 +16,19 @@ import type { ServiceType } from "@prisma/client";
 const APPS_ROOT = path.join(process.cwd(), "apps");
 
 export interface GenerateAppOptions {
+  appId: string;
   slug: string;
   name: string;
   description?: string;
   template: string;
   port: number;
-  serviceIds?: string[];
 }
 
 /**
  * Generates an app from a template into apps/<slug>/
  */
 export async function generateApp(options: GenerateAppOptions): Promise<string> {
-  const { slug, name, description, template, port, serviceIds } = options;
+  const { appId, slug, name, description, template, port } = options;
 
   const tmpl = getTemplate(template);
   if (!tmpl) {
@@ -46,57 +46,7 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
   }
 
   // Resolve environment variables from linked services
-  const envVars: Record<string, string> = {};
-  if (serviceIds && serviceIds.length > 0) {
-    const appServices = await prisma.appService.findMany({
-      where: {
-        appId: slug,
-        serviceId: { in: serviceIds },
-      },
-      include: { service: true },
-    });
-
-    const consolePort = process.env.PORT || "3000";
-
-    for (const as_ of appServices) {
-      const svc = as_.service;
-      const config = JSON.parse(
-        decrypt(svc.configEncrypted, svc.iv, svc.authTag)
-      );
-      const prefix = as_.envVarPrefix;
-      const httpMode = SERVICE_TYPE_HTTP_MODE[svc.type as ServiceType];
-
-      // Inject endpoint URL based on httpMode
-      switch (httpMode) {
-        case "proxy":
-          // Auto-generate proxy URL and token — user doesn't provide endpoint
-          envVars[`${prefix}_ENDPOINT_URL`] =
-            `http://host.docker.internal:${consolePort}/api/proxy/${svc.id}/query`;
-          envVars[`${prefix}_API_TOKEN`] = generateProxyToken(svc.id);
-          break;
-        case "fixed": {
-          // Use well-known API URL
-          const fixedUrl = FIXED_ENDPOINT_URLS[svc.type as ServiceType];
-          if (fixedUrl) envVars[`${prefix}_ENDPOINT_URL`] = fixedUrl;
-          break;
-        }
-        case "user-provided":
-          // User provides the endpoint URL
-          if (svc.endpointUrl) envVars[`${prefix}_ENDPOINT_URL`] = svc.endpointUrl;
-          break;
-        case "sdk":
-          // No endpoint URL — app uses SDK with config credentials
-          break;
-      }
-
-      // Always inject all config fields as env vars
-      for (const [key, value] of Object.entries(config)) {
-        if (value) {
-          envVars[`${prefix}_${toScreamingSnake(key)}`] = String(value);
-        }
-      }
-    }
-  }
+  const envVars = await resolveServiceEnvVars(appId);
 
   // Template context for Handlebars
   const context = {
@@ -155,6 +105,79 @@ async function copyDirectory(
       }
     }
   }
+}
+
+/**
+ * Resolve service env vars for an app from the database.
+ */
+async function resolveServiceEnvVars(appId: string): Promise<Record<string, string>> {
+  const envVars: Record<string, string> = {};
+
+  const appServices = await prisma.appService.findMany({
+    where: { appId },
+    include: { service: true },
+  });
+
+  if (appServices.length === 0) return envVars;
+
+  const consolePort = process.env.PORT || "3000";
+
+  for (const as_ of appServices) {
+    const svc = as_.service;
+    const config = JSON.parse(
+      decrypt(svc.configEncrypted, svc.iv, svc.authTag)
+    );
+    const prefix = as_.envVarPrefix;
+    const httpMode = SERVICE_TYPE_HTTP_MODE[svc.type as ServiceType];
+
+    switch (httpMode) {
+      case "proxy":
+        envVars[`${prefix}_ENDPOINT_URL`] =
+          `http://host.docker.internal:${consolePort}/api/proxy/${svc.id}/query`;
+        envVars[`${prefix}_API_TOKEN`] = generateProxyToken(svc.id);
+        break;
+      case "fixed": {
+        const fixedUrl = FIXED_ENDPOINT_URLS[svc.type as ServiceType];
+        if (fixedUrl) envVars[`${prefix}_ENDPOINT_URL`] = fixedUrl;
+        break;
+      }
+      case "user-provided":
+        if (svc.endpointUrl) envVars[`${prefix}_ENDPOINT_URL`] = svc.endpointUrl;
+        break;
+      case "sdk":
+        break;
+    }
+
+    for (const [key, value] of Object.entries(config)) {
+      if (value) {
+        envVars[`${prefix}_${toScreamingSnake(key)}`] = String(value);
+      }
+    }
+  }
+
+  return envVars;
+}
+
+/**
+ * Regenerate only the docker-compose.yml for an app,
+ * picking up the latest service bindings without wiping app code.
+ */
+export async function regenerateCompose(appId: string, slug: string, template: string, port: number): Promise<void> {
+  const tmpl = getTemplate(template);
+  if (!tmpl) throw new Error(`Template "${template}" not found`);
+
+  const composeSrc = path.join(tmpl.directory, "docker-compose.yml.hbs");
+  if (!fs.existsSync(composeSrc)) return;
+
+  const envVars = await resolveServiceEnvVars(appId);
+  const context = { slug, port, envVars };
+
+  const content = await fsp.readFile(composeSrc, "utf-8");
+  const compiled = Handlebars.compile(content);
+  const rendered = compiled(context);
+
+  const appDir = path.join(APPS_ROOT, slug);
+  await fsp.writeFile(path.join(appDir, "docker-compose.yml"), rendered, "utf-8");
 }
 
 /**

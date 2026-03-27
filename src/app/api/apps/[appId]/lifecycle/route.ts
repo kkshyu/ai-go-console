@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { startDevServer, stopDevServer, getDevServerLogs } from "@/lib/dev-server";
-import { startApp, stopApp, restartApp, buildApp, getAppLogs, getAppDockerStatus } from "@/lib/docker";
-import { generateApp } from "@/lib/generator";
+import { startApp, stopApp, restartApp, getAppLogs, getAppDockerStatus } from "@/lib/docker";
+import { regenerateCompose } from "@/lib/generator";
 import { syncCaddyRoutes } from "@/lib/proxy";
 
 export async function POST(
@@ -52,9 +52,11 @@ export async function POST(
         // Stop dev server if running
         await stopDevServer(app.slug);
 
-        // Build and start Docker container
-        const buildOutput = await buildApp(app.slug);
-        const startOutput = await startApp(app.slug);
+        // Regenerate docker-compose.yml to pick up latest service bindings
+        await regenerateCompose(app.id, app.slug, app.template, app.port!);
+
+        // Build and start Docker container (startApp uses --build)
+        const output = await startApp(app.slug);
 
         await prisma.app.update({
           where: { id: appId },
@@ -64,10 +66,7 @@ export async function POST(
         // Sync Caddy routes
         syncCaddyRoutes().catch(() => {});
 
-        return NextResponse.json({
-          success: true,
-          output: buildOutput + startOutput,
-        });
+        return NextResponse.json({ success: true, output });
       }
 
       case "start": {
