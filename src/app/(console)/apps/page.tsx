@@ -51,7 +51,10 @@ export default function AppsPage() {
 
   useEffect(() => {
     fetch("/api/apps")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch");
+        return res.json();
+      })
       .then((data) => {
         setApps(data);
         setLoading(false);
@@ -149,7 +152,7 @@ export default function AppsPage() {
           {t("noResults")}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {filteredApps.map((app) => (
             <Link key={app.id} href={`/apps/${app.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer">
