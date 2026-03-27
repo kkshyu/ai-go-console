@@ -634,45 +634,6 @@ export default function AppDetailPage() {
 
         {/* Spacer */}
         <div className="flex-1" />
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-1.5">
-          {/* Dev server controls */}
-          {devRunning ? (
-            <Button size="sm" variant="outline" onClick={() => doAction("dev-stop")} disabled={loading}>
-              <Square className="h-3.5 w-3.5" />
-              {t("previewStop")}
-            </Button>
-          ) : (
-            <Button size="sm" variant="outline" onClick={() => doAction("dev-start")} disabled={loading}>
-              <Play className="h-3.5 w-3.5" />
-              {t("previewStart")}
-            </Button>
-          )}
-
-          {/* Production controls */}
-          {isProdRunning ? (
-            <>
-              <Button size="sm" variant="outline" onClick={() => doAction("stop")} disabled={loading}>
-                <Square className="h-3.5 w-3.5" />
-                {t("stop")}
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => doAction("restart")} disabled={loading}>
-                <RotateCw className="h-3.5 w-3.5" />
-                {t("restart")}
-              </Button>
-            </>
-          ) : null}
-
-          <Button size="sm" variant="outline" onClick={() => doAction("publish")} disabled={loading}>
-            <Upload className="h-3.5 w-3.5" />
-            {t("publish")}
-          </Button>
-
-          <Button size="sm" variant="destructive" onClick={handleDelete} disabled={loading}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
       </div>
 
       {/* Main Content: Chat + Preview + Deployments */}
@@ -751,11 +712,29 @@ export default function AppDetailPage() {
               <FolderOpen className="h-3 w-3" />
               {t("fileManager")}
             </button>
+            <div className="flex-1" />
+            <Button size="sm" variant="ghost" className="h-7 w-7 mr-1 text-muted-foreground hover:text-destructive" onClick={handleDelete} disabled={loading}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
           </div>
 
           {/* Preview Panel */}
           {rightPanel === "preview" && (
             <div className="flex flex-1 flex-col rounded-b-lg border border-t-0 overflow-hidden bg-background min-h-0">
+              {/* Dev server action bar */}
+              <div className="flex items-center gap-1.5 px-3 py-1.5 border-b bg-muted/30">
+                {devRunning ? (
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => doAction("dev-stop")} disabled={loading}>
+                    <Square className="h-3 w-3" />
+                    {t("previewStop")}
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => doAction("dev-start")} disabled={loading}>
+                    <Play className="h-3 w-3" />
+                    {t("previewStart")}
+                  </Button>
+                )}
+              </div>
               {hasPreview ? (
                 <>
                   {/* Browser toolbar */}
@@ -846,6 +825,25 @@ export default function AppDetailPage() {
           {/* Deployments Panel */}
           {rightPanel === "deploy" && (
             <div className="flex flex-1 flex-col rounded-b-lg border border-t-0 overflow-hidden bg-background min-h-0">
+              {/* Deploy action bar */}
+              <div className="flex items-center gap-1.5 px-3 py-1.5 border-b bg-muted/30">
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => doAction("publish")} disabled={loading}>
+                  <Upload className="h-3 w-3" />
+                  {t("publish")}
+                </Button>
+                {isProdRunning && (
+                  <>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => doAction("restart")} disabled={loading}>
+                      <RotateCw className="h-3 w-3" />
+                      {t("restart")}
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => doAction("stop")} disabled={loading}>
+                      <Square className="h-3 w-3" />
+                      {t("stop")}
+                    </Button>
+                  </>
+                )}
+              </div>
               {/* Deploy sub-tabs */}
               <div className="flex items-center border-b bg-muted/40">
                 <button
