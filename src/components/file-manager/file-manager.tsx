@@ -70,6 +70,14 @@ export function FileManager({ appId }: FileManagerProps) {
   const folderInputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
 
+  // Set webkitdirectory imperatively — React doesn't reliably pass it as a JSX prop
+  useEffect(() => {
+    if (folderInputRef.current) {
+      folderInputRef.current.setAttribute("webkitdirectory", "");
+      folderInputRef.current.setAttribute("directory", "");
+    }
+  }, []);
+
   const fetchFiles = useCallback(
     async (subpath = "") => {
       setFileLoading(true);
@@ -270,8 +278,6 @@ export function FileManager({ appId }: FileManagerProps) {
             <input
               ref={folderInputRef}
               type="file"
-              // @ts-expect-error webkitdirectory is not in the standard type
-              webkitdirectory=""
               className="hidden"
               onChange={handleFileInput}
             />
