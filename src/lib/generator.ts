@@ -18,10 +18,12 @@ const APPS_ROOT = path.join(process.cwd(), "apps");
 export interface GenerateAppOptions {
   appId: string;
   slug: string;
+  orgSlug: string;
   name: string;
   description?: string;
   template: string;
   port: number;
+  prodPort: number;
   files?: Array<{ path: string; content: string }>;
   npmPackages?: string[];
 }
@@ -30,7 +32,7 @@ export interface GenerateAppOptions {
  * Generates an app from a template into apps/<slug>/
  */
 export async function generateApp(options: GenerateAppOptions): Promise<string> {
-  const { appId, slug, name, description, template, port } = options;
+  const { appId, slug, orgSlug, name, description, template, port, prodPort } = options;
 
   const tmpl = getTemplate(template);
   if (!tmpl) {
@@ -54,8 +56,10 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
   const context = {
     name,
     slug,
+    orgSlug,
     description: description || "",
     port,
+    prodPort,
     envVars,
   };
 
@@ -186,7 +190,7 @@ async function resolveServiceEnvVars(appId: string): Promise<Record<string, stri
  * Regenerate only the docker-compose.yml for an app,
  * picking up the latest service bindings without wiping app code.
  */
-export async function regenerateCompose(appId: string, slug: string, template: string, port: number): Promise<void> {
+export async function regenerateCompose(appId: string, slug: string, orgSlug: string, template: string, prodPort: number): Promise<void> {
   const tmpl = getTemplate(template);
   if (!tmpl) throw new Error(`Template "${template}" not found`);
 
@@ -194,7 +198,7 @@ export async function regenerateCompose(appId: string, slug: string, template: s
   if (!fs.existsSync(composeSrc)) return;
 
   const envVars = await resolveServiceEnvVars(appId);
-  const context = { slug, port, envVars };
+  const context = { slug, orgSlug, prodPort, envVars };
 
   const content = await fsp.readFile(composeSrc, "utf-8");
   const compiled = Handlebars.compile(content);

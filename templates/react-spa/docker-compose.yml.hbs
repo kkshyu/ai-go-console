@@ -1,10 +1,10 @@
 services:
   app:
     build: .
-    container_name: aigo-app-{{slug}}
+    container_name: aigo-{{orgSlug}}-{{slug}}
     restart: unless-stopped
     ports:
-      - "{{port}}:80"
+      - "{{prodPort}}:80"
     {{#if envVars}}
     environment:
       {{#each envVars}}

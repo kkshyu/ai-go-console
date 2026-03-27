@@ -26,6 +26,9 @@ import {
   ChevronUp,
   ChevronDown,
   MessageSquare,
+  History,
+  Undo2,
+  Server,
 } from "lucide-react";
 import { AgentChatPanel, type AgentMessage } from "@/components/chat/agent-chat-panel";
 import type { AgentRole } from "@/lib/agents/types";
@@ -42,7 +45,17 @@ interface AppData {
   template: string;
   status: string;
   port: number | null;
+  prodPort: number | null;
   services: AppService[];
+}
+
+interface DeploymentData {
+  id: string;
+  version: number;
+  status: string;
+  buildLog: string | null;
+  imageTag: string | null;
+  createdAt: string;
 }
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
@@ -58,9 +71,8 @@ export default function AppDetailPage() {
   const router = useRouter();
   const t = useTranslations("apps");
   const [app, setApp] = useState<AppData | null>(null);
-  const [logs, setLogs] = useState("");
+  const [devLogs, setDevLogs] = useState("");
   const [loading, setLoading] = useState(false);
-  const [buildOutput, setBuildOutput] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<AgentMessage[]>([]);
   const [chatLoaded, setChatLoaded] = useState(false);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
@@ -69,7 +81,6 @@ export default function AppDetailPage() {
   const [iframeKey, setIframeKey] = useState(0);
   const [consoleLogs, setConsoleLogs] = useState<Array<{ level: string; message: string; timestamp: number }>>([]);
   const [bottomPanel, setBottomPanel] = useState<"logs" | "console" | null>(null);
-  const [lastActivePanel, setLastActivePanel] = useState<"logs" | "console">("logs");
   const [editingSlug, setEditingSlug] = useState(false);
   const [slugValue, setSlugValue] = useState("");
   const [slugError, setSlugError] = useState("");
@@ -78,14 +89,31 @@ export default function AppDetailPage() {
   const consoleEndRef = useRef<HTMLDivElement>(null);
   const logsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const isDevRunning = app?.status === "running" || app?.status === "developing";
-  const hasPreview = app?.port && isDevRunning;
+  // Deployment state
+  const [deployments, setDeployments] = useState<DeploymentData[]>([]);
+  const [deployPanel, setDeployPanel] = useState<"systemLog" | "buildLog" | "history" | null>(null);
+  const [buildOutput, setBuildOutput] = useState<string | null>(null);
+  const [prodLogs, setProdLogs] = useState("");
+  const [rollingBack, setRollingBack] = useState(false);
+  const prodLogsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prodLogsEndRef = useRef<HTMLDivElement>(null);
+
+  // Dev server is running if we have a port and it's in developing state
+  const [devRunning, setDevRunning] = useState(false);
+  const hasPreview = app?.port && devRunning;
   const previewUrl = hasPreview ? `http://localhost:${app.port}` : null;
+
+  // Production is running if app status is "running"
+  const isProdRunning = app?.status === "running";
 
   useEffect(() => {
     fetch(`/api/apps/${appId}`)
       .then((res) => res.json())
-      .then(setApp);
+      .then((data) => {
+        setApp(data);
+        // Check dev server status on load by trying to fetch dev logs
+        checkDevServerStatus(data.slug);
+      });
     fetch(`/api/apps/${appId}/chat`)
       .then((res) => res.json())
       .then((data) => {
@@ -102,9 +130,33 @@ export default function AppDetailPage() {
         setChatLoaded(true);
       })
       .catch(() => setChatLoaded(true));
+    fetchDeployments();
   }, [appId]);
 
-  // Auto-refresh logs while panel is open
+  async function checkDevServerStatus(slug: string) {
+    try {
+      const res = await fetch(`/api/apps/${appId}/lifecycle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "dev-logs" }),
+      });
+      const data = await res.json();
+      // If dev-logs returns non-empty, dev server is likely running
+      setDevRunning(data.logs && data.logs.trim().length > 0);
+    } catch {
+      setDevRunning(false);
+    }
+  }
+
+  async function fetchDeployments() {
+    try {
+      const res = await fetch(`/api/apps/${appId}/deployments`);
+      const data = await res.json();
+      setDeployments(data);
+    } catch {}
+  }
+
+  // Auto-refresh dev logs while panel is open
   useEffect(() => {
     if (bottomPanel !== "logs") {
       if (logsIntervalRef.current) {
@@ -118,10 +170,10 @@ export default function AppDetailPage() {
         const res = await fetch(`/api/apps/${appId}/lifecycle`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "logs" }),
+          body: JSON.stringify({ action: "dev-logs" }),
         });
         const data = await res.json();
-        setLogs(data.logs || "No logs");
+        setDevLogs(data.logs || "No logs");
       } catch {}
     };
     fetchLogs();
@@ -134,15 +186,48 @@ export default function AppDetailPage() {
     };
   }, [bottomPanel, appId]);
 
-  // Auto-scroll logs to bottom
+  // Auto-refresh prod logs while system log panel is open
+  useEffect(() => {
+    if (deployPanel !== "systemLog") {
+      if (prodLogsIntervalRef.current) {
+        clearInterval(prodLogsIntervalRef.current);
+        prodLogsIntervalRef.current = null;
+      }
+      return;
+    }
+    const fetchLogs = async () => {
+      try {
+        const res = await fetch(`/api/apps/${appId}/lifecycle`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "prod-logs" }),
+        });
+        const data = await res.json();
+        setProdLogs(data.logs || "No logs");
+      } catch {}
+    };
+    fetchLogs();
+    prodLogsIntervalRef.current = setInterval(fetchLogs, 3000);
+    return () => {
+      if (prodLogsIntervalRef.current) {
+        clearInterval(prodLogsIntervalRef.current);
+        prodLogsIntervalRef.current = null;
+      }
+    };
+  }, [deployPanel, appId]);
+
+  // Auto-scroll logs
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs]);
+  }, [devLogs]);
 
-  // Auto-scroll console to bottom
   useEffect(() => {
     consoleEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [consoleLogs]);
+
+  useEffect(() => {
+    prodLogsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [prodLogs]);
 
   // Listen for console bridge messages from iframe
   useEffect(() => {
@@ -150,7 +235,6 @@ export default function AppDetailPage() {
       if (e.data?.type === "__CONSOLE_BRIDGE__") {
         setConsoleLogs((prev) => {
           const next = [...prev, { level: e.data.level, message: e.data.message, timestamp: e.data.timestamp }];
-          // Keep last 500 entries
           return next.length > 500 ? next.slice(-500) : next;
         });
       }
@@ -163,9 +247,7 @@ export default function AppDetailPage() {
     setLoading(true);
     if (action === "publish") {
       setBuildOutput(null);
-      setBottomPanel("logs");
-    } else {
-      setBuildOutput(null);
+      setDeployPanel("buildLog");
     }
     try {
       const res = await fetch(`/api/apps/${appId}/lifecycle`, {
@@ -176,6 +258,13 @@ export default function AppDetailPage() {
       const data = await res.json();
       if (action === "publish") {
         setBuildOutput(data.output || (data.error ? `Error: ${data.error}` : "Build completed"));
+        fetchDeployments();
+      }
+      if (action === "dev-start") {
+        setDevRunning(true);
+      }
+      if (action === "dev-stop") {
+        setDevRunning(false);
       }
       const appRes = await fetch(`/api/apps/${appId}`);
       setApp(await appRes.json());
@@ -186,6 +275,28 @@ export default function AppDetailPage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleRollback(deploymentId: string) {
+    setRollingBack(true);
+    setDeployPanel("buildLog");
+    setBuildOutput(null);
+    try {
+      const res = await fetch(`/api/apps/${appId}/lifecycle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "rollback", deploymentId }),
+      });
+      const data = await res.json();
+      setBuildOutput(data.output || (data.error ? `Error: ${data.error}` : "Rollback completed"));
+      fetchDeployments();
+      const appRes = await fetch(`/api/apps/${appId}`);
+      setApp(await appRes.json());
+    } catch (err) {
+      setBuildOutput("Rollback failed: " + (err instanceof Error ? err.message : "Unknown error"));
+    } finally {
+      setRollingBack(false);
     }
   }
 
@@ -274,159 +385,9 @@ export default function AppDetailPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  const currentDeployment = deployments.find((d) => d.status === "running");
+
   if (!app) return <div className="p-8">Loading...</div>;
-
-  const consoleLevelConfig: Record<string, { icon: string; bg: string; border: string; iconColor: string; textColor: string }> = {
-    error: {
-      icon: "\u2715",
-      bg: "bg-red-50 dark:bg-red-950/30",
-      border: "border-l-2 border-l-red-500",
-      iconColor: "text-red-500",
-      textColor: "text-red-700 dark:text-red-400",
-    },
-    warn: {
-      icon: "\u26A0",
-      bg: "bg-yellow-50 dark:bg-yellow-950/30",
-      border: "border-l-2 border-l-yellow-500",
-      iconColor: "text-yellow-600",
-      textColor: "text-yellow-800 dark:text-yellow-300",
-    },
-    info: {
-      icon: "\u2139",
-      bg: "",
-      border: "border-l-2 border-l-blue-400",
-      iconColor: "text-blue-500",
-      textColor: "text-foreground",
-    },
-    log: {
-      icon: "",
-      bg: "",
-      border: "border-l-2 border-l-transparent",
-      iconColor: "",
-      textColor: "text-foreground",
-    },
-  };
-
-  function renderBottomToolbar() {
-    return (
-      <div className="flex items-center border-t bg-muted/40">
-        <button
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-            bottomPanel === "logs"
-              ? "text-foreground bg-background border-t-2 border-primary -mt-px"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => {
-            if (bottomPanel === "logs") {
-              setBottomPanel(null);
-            } else {
-              setBottomPanel("logs");
-              setLastActivePanel("logs");
-            }
-          }}
-        >
-          <Terminal className="h-3 w-3" />
-          {buildOutput !== null || (loading && app?.status === "building")
-            ? t("deployLogs")
-            : t("logs")}
-        </button>
-        <button
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-            bottomPanel === "console"
-              ? "text-foreground bg-background border-t-2 border-primary -mt-px"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-          onClick={() => {
-            if (bottomPanel === "console") {
-              setBottomPanel(null);
-            } else {
-              setBottomPanel("console");
-              setLastActivePanel("console");
-            }
-          }}
-        >
-          <Monitor className="h-3 w-3" />
-          {t("console")}
-        </button>
-        <div className="ml-auto flex items-center gap-0.5 pr-1">
-          {bottomPanel === "logs" && (
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setLogs(""); setBuildOutput(null); }}>
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          )}
-          {bottomPanel === "console" && (
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setConsoleLogs([])}>
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={() => {
-              if (bottomPanel) {
-                setLastActivePanel(bottomPanel);
-                setBottomPanel(null);
-              } else {
-                setBottomPanel(lastActivePanel);
-              }
-            }}
-          >
-            {bottomPanel ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  function renderBottomPanels() {
-    return (
-      <>
-        {bottomPanel === "logs" && (
-          <div className="h-40 overflow-auto border-t" style={{ backgroundColor: "#1a1b26" }}>
-            {loading && app?.status === "building" && buildOutput === null ? (
-              <div className="flex items-center gap-2 p-3 text-xs" style={{ color: "#7aa2f7" }}>
-                <RotateCw className="h-3 w-3 animate-spin" />
-                <span>{t("building")}...</span>
-              </div>
-            ) : (
-              <pre className="p-3 text-xs font-mono whitespace-pre-wrap leading-relaxed" style={{ color: "#a9b1d6" }}>
-                {buildOutput !== null ? buildOutput : (logs || "No logs available")}
-                <div ref={logsEndRef} />
-              </pre>
-            )}
-          </div>
-        )}
-        {bottomPanel === "console" && (
-          <div className="h-40 overflow-auto text-xs font-mono border-t bg-white dark:bg-[#242424]">
-            {consoleLogs.length === 0 ? (
-              <div className="p-3 text-muted-foreground italic">No console output</div>
-            ) : (
-              consoleLogs.map((entry, i) => {
-                const time = new Date(entry.timestamp).toLocaleTimeString("en-US", {
-                  hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit", fractionalSecondDigits: 3,
-                });
-                const config = consoleLevelConfig[entry.level] || consoleLevelConfig.log;
-                return (
-                  <div
-                    key={i}
-                    className={`flex items-start gap-2 px-3 py-1 border-b border-border/40 ${config.bg} ${config.border}`}
-                  >
-                    {config.icon && (
-                      <span className={`shrink-0 ${config.iconColor} w-4 text-center`}>{config.icon}</span>
-                    )}
-                    <span className={`flex-1 ${config.textColor} break-all`}>{entry.message}</span>
-                    <span className="shrink-0 text-muted-foreground/60 tabular-nums">{time}</span>
-                  </div>
-                );
-              })
-            )}
-            <div ref={consoleEndRef} />
-          </div>
-        )}
-      </>
-    );
-  }
 
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col">
@@ -478,12 +439,18 @@ export default function AppDetailPage() {
         {/* Separator */}
         <div className="h-5 w-px bg-border" />
 
-        {/* Template & Port */}
+        {/* Template & Ports */}
         <span className="text-xs text-muted-foreground font-mono">{app.template}</span>
         {app.port && (
           <>
-            <span className="text-xs text-muted-foreground">:</span>
-            <span className="text-xs text-muted-foreground font-mono">{app.port}</span>
+            <span className="text-xs text-muted-foreground">|</span>
+            <span className="text-xs text-muted-foreground font-mono">{t("devPort")}:{app.port}</span>
+          </>
+        )}
+        {app.prodPort && (
+          <>
+            <span className="text-xs text-muted-foreground">|</span>
+            <span className="text-xs text-muted-foreground font-mono">{t("prodPort")}:{app.prodPort}</span>
           </>
         )}
 
@@ -508,29 +475,21 @@ export default function AppDetailPage() {
 
         {/* Action Buttons */}
         <div className="flex items-center gap-1.5">
-          {(app.status === "developing" && !hasPreview) || app.status === "stopped" ? (
-            <>
-              <Button size="sm" variant="outline" onClick={() => doAction("dev-start")} disabled={loading}>
-                <Play className="h-3.5 w-3.5" />
-                Dev
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => doAction("publish")} disabled={loading}>
-                <Upload className="h-3.5 w-3.5" />
-                {t("publish")}
-              </Button>
-            </>
-          ) : app.status === "developing" && hasPreview ? (
-            <>
-              <Button size="sm" variant="outline" onClick={() => doAction("dev-stop")} disabled={loading}>
-                <Square className="h-3.5 w-3.5" />
-                {t("devStop")}
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => doAction("publish")} disabled={loading}>
-                <Upload className="h-3.5 w-3.5" />
-                {t("publish")}
-              </Button>
-            </>
-          ) : app.status === "running" ? (
+          {/* Dev server controls */}
+          {devRunning ? (
+            <Button size="sm" variant="outline" onClick={() => doAction("dev-stop")} disabled={loading}>
+              <Square className="h-3.5 w-3.5" />
+              {t("devStop")}
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => doAction("dev-start")} disabled={loading}>
+              <Play className="h-3.5 w-3.5" />
+              Dev
+            </Button>
+          )}
+
+          {/* Production controls */}
+          {isProdRunning ? (
             <>
               <Button size="sm" variant="outline" onClick={() => doAction("stop")} disabled={loading}>
                 <Square className="h-3.5 w-3.5" />
@@ -543,13 +502,18 @@ export default function AppDetailPage() {
             </>
           ) : null}
 
+          <Button size="sm" variant="outline" onClick={() => doAction("publish")} disabled={loading}>
+            <Upload className="h-3.5 w-3.5" />
+            {t("publish")}
+          </Button>
+
           <Button size="sm" variant="destructive" onClick={handleDelete} disabled={loading}>
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>
       </div>
 
-      {/* Main Content: Chat + Preview */}
+      {/* Main Content: Chat + Preview + Deployments */}
       <div className="flex flex-1 gap-4 min-h-0 flex-col lg:flex-row">
         {/* Multi-Agent Chat Panel */}
         <div className={`flex flex-col min-h-0 transition-all duration-200 overflow-hidden ${chatCollapsed ? "shrink-0 basis-auto" : "shrink-0 basis-1/2 lg:basis-auto lg:shrink-1"} lg:flex-1`}>
@@ -582,9 +546,10 @@ export default function AppDetailPage() {
           </div>
         </div>
 
-        {/* Preview Panel — browser-like chrome */}
-        <div className="flex flex-1 lg:flex-none lg:w-[480px] flex-col min-h-0">
-          <div className="flex flex-1 flex-col rounded-lg border overflow-hidden bg-background">
+        {/* Right Column: Preview + Deployments stacked */}
+        <div className="flex flex-1 lg:flex-none lg:w-[480px] flex-col min-h-0 gap-3">
+          {/* Preview Panel — dev server only */}
+          <div className="flex flex-1 flex-col rounded-lg border overflow-hidden bg-background min-h-0">
             {hasPreview ? (
               <>
                 {/* Browser toolbar */}
@@ -663,8 +628,214 @@ export default function AppDetailPage() {
               </>
             )}
 
-            {renderBottomToolbar()}
-            {renderBottomPanels()}
+            {/* Bottom toolbar — Dev Logs / Console tabs */}
+            <div className="flex items-center border-t bg-muted/40">
+              <button
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                  bottomPanel === "logs"
+                    ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => setBottomPanel(bottomPanel === "logs" ? null : "logs")}
+              >
+                <Terminal className="h-3 w-3" />
+                {t("logs")}
+              </button>
+              <button
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                  bottomPanel === "console"
+                    ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => setBottomPanel(bottomPanel === "console" ? null : "console")}
+              >
+                <Monitor className="h-3 w-3" />
+                {t("console")}
+              </button>
+              {bottomPanel === "console" && (
+                <div className="ml-auto pr-1">
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setConsoleLogs([])}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom panel content — dev server only */}
+            {bottomPanel === "logs" && (
+              <div className="h-40 overflow-auto border-t bg-muted/20">
+                <pre className="p-3 text-xs font-mono whitespace-pre-wrap">
+                  {devLogs || "No logs available"}
+                  <div ref={logsEndRef} />
+                </pre>
+              </div>
+            )}
+            {bottomPanel === "console" && (
+              <div className="h-40 overflow-auto p-3 text-xs font-mono border-t bg-muted/20">
+                {consoleLogs.length === 0 ? (
+                  <span className="text-muted-foreground">No console output</span>
+                ) : (
+                  consoleLogs.map((entry, i) => (
+                    <div
+                      key={i}
+                      className={
+                        entry.level === "error"
+                          ? "text-red-500"
+                          : entry.level === "warn"
+                            ? "text-yellow-500"
+                            : entry.level === "info"
+                              ? "text-blue-500"
+                              : "text-foreground"
+                      }
+                    >
+                      <span className="text-muted-foreground mr-2">[{entry.level}]</span>
+                      {entry.message}
+                    </div>
+                  ))
+                )}
+                <div ref={consoleEndRef} />
+              </div>
+            )}
+          </div>
+
+          {/* Deployments Panel */}
+          <div className="flex flex-col rounded-lg border overflow-hidden bg-background shrink-0">
+            {/* Deploy panel tabs */}
+            <div className="flex items-center border-b bg-muted/40">
+              <div className="flex items-center gap-1.5 px-3 py-1.5">
+                <Server className="h-3 w-3 text-muted-foreground" />
+                <span className="text-xs font-medium text-muted-foreground">{t("deployments")}</span>
+                {currentDeployment && (
+                  <Badge variant="success" className="text-[10px] px-1.5 py-0">
+                    v{currentDeployment.version}
+                  </Badge>
+                )}
+              </div>
+              <div className="h-4 w-px bg-border" />
+              <button
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                  deployPanel === "systemLog"
+                    ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => setDeployPanel(deployPanel === "systemLog" ? null : "systemLog")}
+              >
+                <Terminal className="h-3 w-3" />
+                {t("systemLog")}
+              </button>
+              <button
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                  deployPanel === "buildLog"
+                    ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => setDeployPanel(deployPanel === "buildLog" ? null : "buildLog")}
+              >
+                <Terminal className="h-3 w-3" />
+                {t("buildLog")}
+              </button>
+              <button
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                  deployPanel === "history"
+                    ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => setDeployPanel(deployPanel === "history" ? null : "history")}
+              >
+                <History className="h-3 w-3" />
+                {t("deploymentHistory")}
+              </button>
+            </div>
+
+            {/* Deploy panel content */}
+            {deployPanel === "systemLog" && (
+              <div className="h-48 overflow-auto border-t bg-muted/20">
+                {isProdRunning ? (
+                  <pre className="p-3 text-xs font-mono whitespace-pre-wrap">
+                    {prodLogs || "No logs available"}
+                    <div ref={prodLogsEndRef} />
+                  </pre>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
+                    {t("noDeployments")}
+                  </div>
+                )}
+              </div>
+            )}
+            {deployPanel === "buildLog" && (
+              <div className="h-48 overflow-auto border-t bg-muted/20">
+                {loading && (app?.status === "building" || rollingBack) && buildOutput === null ? (
+                  <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
+                    <RotateCw className="h-3 w-3 animate-spin" />
+                    <span>{rollingBack ? t("rollingBack") : `${t("building")}...`}</span>
+                  </div>
+                ) : buildOutput ? (
+                  <pre className="p-3 text-xs font-mono whitespace-pre-wrap">{buildOutput}</pre>
+                ) : currentDeployment?.buildLog ? (
+                  <pre className="p-3 text-xs font-mono whitespace-pre-wrap">{currentDeployment.buildLog}</pre>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
+                    {t("noDeployments")}
+                  </div>
+                )}
+              </div>
+            )}
+            {deployPanel === "history" && (
+              <div className="h-48 overflow-auto border-t bg-muted/20">
+                {deployments.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
+                    {t("noDeployments")}
+                  </div>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b bg-muted/30">
+                        <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">{t("version")}</th>
+                        <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">{t("status")}</th>
+                        <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">{t("deployedAt")}</th>
+                        <th className="text-right px-3 py-1.5 font-medium text-muted-foreground">{t("actions")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deployments.map((d) => (
+                        <tr key={d.id} className="border-b last:border-0 hover:bg-muted/20">
+                          <td className="px-3 py-1.5 font-mono">
+                            v{d.version}
+                            {d.status === "running" && (
+                              <Badge variant="success" className="ml-2 text-[10px] px-1 py-0">
+                                {t("currentVersion")}
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <Badge variant={statusVariant[d.status] || "secondary"} className="text-[10px]">
+                              {d.status}
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-1.5 text-muted-foreground">
+                            {new Date(d.createdAt).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-1.5 text-right">
+                            {d.status !== "running" && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 px-2 text-xs"
+                                onClick={() => handleRollback(d.id)}
+                                disabled={loading || rollingBack}
+                              >
+                                <Undo2 className="h-3 w-3 mr-1" />
+                                {t("rollback")}
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -689,8 +860,6 @@ export default function AppDetailPage() {
               className="flex-1 w-full border-0"
               title="App Preview Fullscreen"
             />
-            {renderBottomToolbar()}
-            {renderBottomPanels()}
           </div>
         </div>
       )}

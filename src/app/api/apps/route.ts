@@ -105,6 +105,13 @@ export async function POST(request: NextRequest) {
   });
   const port = (lastApp?.port ?? 3099) + 1;
 
+  // Allocate separate production port (starts from 4100 range)
+  const lastProdApp = await prisma.app.findFirst({
+    where: { prodPort: { not: null } },
+    orderBy: { prodPort: "desc" },
+  });
+  const prodPort = (lastProdApp?.prodPort ?? 4099) + 1;
+
   const app = await prisma.app.create({
     data: {
       name,
@@ -112,6 +119,7 @@ export async function POST(request: NextRequest) {
       description,
       template,
       port,
+      prodPort,
       config: config || {},
       userId: resolvedUserId,
       services: serviceIds
@@ -127,15 +135,24 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  // Fetch org slug for container naming
+  const user = await prisma.user.findUnique({
+    where: { id: resolvedUserId },
+    include: { organization: { select: { slug: true } } },
+  });
+  const orgSlug = user?.organization?.slug || "default";
+
   try {
     const overlay = presetId && !files ? getPresetOverlay(presetId) : null;
     await generateApp({
       appId: app.id,
       slug,
+      orgSlug,
       name,
       description,
       template,
       port,
+      prodPort,
       files: files || overlay?.files,
       npmPackages: npmPackages || overlay?.npmPackages,
     });

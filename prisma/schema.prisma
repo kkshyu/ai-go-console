@@ -117,6 +117,7 @@ model App {
   template    String
   status      AppStatus @default(developing)
   port        Int?
+  prodPort    Int?      @map("prod_port")
   config      Json?
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
@@ -127,6 +128,7 @@ model App {
   services     AppService[]
   chatMessages ChatMessage[]
   pipelines    AgentPipeline[]
+  deployments  Deployment[]
 
   @@map("apps")
 }
@@ -239,4 +241,19 @@ model AgentArtifact {
 
   @@index([pipelineId, agentRole])
   @@map("agent_artifacts")
+}
+
+model Deployment {
+  id        String   @id @default(cuid())
+  appId     String   @map("app_id")
+  status    String   // "building" | "running" | "failed" | "stopped" | "rolledBack"
+  buildLog  String?  @map("build_log")
+  imageTag  String?  @map("image_tag")
+  version   Int
+  createdAt DateTime @default(now()) @map("created_at")
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@index([appId, version])
+  @@map("deployments")
 }
