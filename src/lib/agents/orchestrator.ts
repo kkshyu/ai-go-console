@@ -20,7 +20,10 @@ import {
   buildReviewerPrompt,
   buildDevOpsPrompt,
   buildAppDevPMPrompt,
+  buildAppDevArchitectPrompt,
   buildAppDevDeveloperPrompt,
+  buildAppDevReviewerPrompt,
+  buildAppDevDevOpsPrompt,
 } from "./prompts";
 
 export interface ServiceInstance {
@@ -233,13 +236,22 @@ function buildSpecialistDispatch(
 ): AgentDispatch {
   const promptBuilders: Record<AgentRole, () => string> = {
     pm: () => buildPMPrompt(context.allowedServices),
-    architect: () => buildArchitectPrompt(context.allowedServices, context.serviceInstances),
+    architect: () =>
+      context.appContext
+        ? buildAppDevArchitectPrompt(context.appContext, context.allowedServices, context.serviceInstances)
+        : buildArchitectPrompt(context.allowedServices, context.serviceInstances),
     developer: () =>
       context.appContext
         ? buildAppDevDeveloperPrompt(context.appContext)
         : buildDeveloperPrompt(context.allowedServices),
-    reviewer: () => buildReviewerPrompt(),
-    devops: () => buildDevOpsPrompt(),
+    reviewer: () =>
+      context.appContext
+        ? buildAppDevReviewerPrompt(context.appContext)
+        : buildReviewerPrompt(),
+    devops: () =>
+      context.appContext
+        ? buildAppDevDevOpsPrompt(context.appContext)
+        : buildDevOpsPrompt(),
   };
 
   // Prepend PM's task description to the system prompt
