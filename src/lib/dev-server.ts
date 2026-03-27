@@ -1,7 +1,9 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
+import fsp from "node:fs/promises";
 import { getTemplate } from "@/lib/templates";
 import { getAppPath } from "@/lib/generator";
+import { CONSOLE_BRIDGE_SCRIPT } from "@/lib/console-bridge";
 
 interface DevServerProcess {
   process: ChildProcess;
@@ -29,6 +31,15 @@ export async function startDevServer(
 
   const appDir = getAppPath(slug);
   const logs: string[] = [];
+
+  // Inject console bridge script into public/
+  const publicDir = path.join(appDir, "public");
+  await fsp.mkdir(publicDir, { recursive: true });
+  await fsp.writeFile(
+    path.join(publicDir, "__console-bridge.js"),
+    CONSOLE_BRIDGE_SCRIPT,
+    "utf-8"
+  );
 
   // Install dependencies first
   await new Promise<void>((resolve, reject) => {

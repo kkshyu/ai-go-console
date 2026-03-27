@@ -68,7 +68,10 @@
     "serverNotRunning": "Server is not running",
     "startDevServer": "Start the dev server to see a live preview",
     "fullscreen": "Fullscreen",
-    "closePreview": "Close"
+    "closePreview": "Close",
+    "logs": "Logs",
+    "console": "Console",
+    "clearConsole": "Clear"
   },
   "create": {
     "title": "Create App",
