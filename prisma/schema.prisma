@@ -29,6 +29,7 @@ enum ServiceType {
   s3
   gcs
   azure_blob
+  google_drive
   // payment
   stripe
   paypal

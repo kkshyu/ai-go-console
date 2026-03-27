@@ -21,6 +21,7 @@ export const ALL_SERVICE_TYPES: ServiceType[] = [
   "s3",
   "gcs",
   "azure_blob",
+  "google_drive",
   // payment
   "stripe",
   "paypal",
@@ -62,6 +63,7 @@ export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
   s3: ServiceCategory.storage,
   gcs: ServiceCategory.storage,
   azure_blob: ServiceCategory.storage,
+  google_drive: ServiceCategory.storage,
   stripe: ServiceCategory.payment,
   paypal: ServiceCategory.payment,
   ecpay: ServiceCategory.payment,
@@ -91,7 +93,7 @@ export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
 
 export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
   [ServiceCategory.database]: ["postgresql", "mysql", "mongodb", "built_in_pg"],
-  [ServiceCategory.storage]: ["s3", "gcs", "azure_blob", "built_in_disk"],
+  [ServiceCategory.storage]: ["s3", "gcs", "azure_blob", "google_drive", "built_in_disk"],
   [ServiceCategory.payment]: ["stripe", "paypal", "ecpay"],
   [ServiceCategory.email]: ["sendgrid", "ses", "mailgun"],
   [ServiceCategory.sms]: ["twilio", "vonage", "aws_sns"],
@@ -157,6 +159,12 @@ export const SERVICE_TYPE_CONFIG_FIELDS: Record<ServiceType, ConfigFieldDef[]> =
     { key: "accountName", type: "text", placeholder: "mystorageaccount" },
     { key: "accountKey", type: "password", placeholder: "base64-encoded-key" },
     { key: "containerName", type: "text", placeholder: "my-container" },
+  ],
+  google_drive: [
+    { key: "clientId", type: "text", placeholder: "your-client-id.apps.googleusercontent.com" },
+    { key: "clientSecret", type: "password", placeholder: "your-client-secret" },
+    { key: "refreshToken", type: "password", placeholder: "your-refresh-token" },
+    { key: "folderId", type: "text", placeholder: "folder-id (optional)" },
   ],
   // --- payment ---
   stripe: [
@@ -276,6 +284,7 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   s3: "S3 Storage",
   gcs: "Google Cloud Storage",
   azure_blob: "Azure Blob Storage",
+  google_drive: "Google Drive",
   stripe: "Stripe",
   paypal: "PayPal",
   ecpay: "ECPay",
@@ -332,6 +341,7 @@ export const SERVICE_TYPE_HTTP_MODE: Record<ServiceType, HttpMode> = {
   s3: "sdk",
   gcs: "sdk",
   azure_blob: "sdk",
+  google_drive: "sdk",
   // payment — fixed well-known API URLs
   stripe: "fixed",
   paypal: "fixed",

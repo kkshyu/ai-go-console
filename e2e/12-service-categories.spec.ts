@@ -83,6 +83,17 @@ const serviceTestCases: ServiceTestCase[] = [
       containerName: "test-container",
     },
   },
+  {
+    type: "google_drive",
+    category: "storage",
+    name: "E2E Google Drive",
+    config: {
+      clientId: "fake-client-id.apps.googleusercontent.com",
+      clientSecret: "fake-client-secret",
+      refreshToken: "fake-refresh-token",
+      folderId: "fake-folder-id",
+    },
+  },
   // --- payment ---
   {
     type: "stripe",
@@ -409,7 +420,7 @@ test.describe("Service Categories - Allowed Services API", () => {
       // database
       "postgresql", "mysql", "mongodb",
       // storage
-      "s3", "gcs", "azure_blob",
+      "s3", "gcs", "azure_blob", "google_drive",
       // payment
       "stripe", "paypal", "ecpay",
       // email

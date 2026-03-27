@@ -38,7 +38,7 @@ function encrypt(plaintext: string) {
 
 const ALL_SERVICE_TYPES: ServiceType[] = [
   "postgresql", "mysql", "mongodb",
-  "s3", "gcs", "azure_blob",
+  "s3", "gcs", "azure_blob", "google_drive",
   "stripe", "paypal", "ecpay",
   "sendgrid", "ses", "mailgun",
   "twilio", "vonage", "aws_sns",
