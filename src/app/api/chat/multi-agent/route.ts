@@ -191,16 +191,32 @@ export async function POST(request: NextRequest) {
     });
     allowedServices = orgAllowed.map((s) => s.serviceType);
 
-    // Load actual service instances the org has configured
-    const services = await prisma.service.findMany({
-      where: { organizationId: session.user.organizationId },
-      select: { id: true, name: true, type: true },
-    });
-    serviceInstances = services.map((s) => ({
-      id: s.id,
-      name: s.name,
-      type: s.type,
-    }));
+    // Load service instances scoped to user role:
+    // - Admin: all org service instances
+    // - Regular user: only instances authorized via UserAllowedServiceInstance
+    if (session.user.role === "admin") {
+      const services = await prisma.service.findMany({
+        where: { organizationId: session.user.organizationId },
+        select: { id: true, name: true, type: true },
+      });
+      serviceInstances = services.map((s) => ({
+        id: s.id,
+        name: s.name,
+        type: s.type,
+      }));
+    } else {
+      const allowed = await prisma.userAllowedServiceInstance.findMany({
+        where: { userId: session.user.id },
+        include: {
+          service: { select: { id: true, name: true, type: true } },
+        },
+      });
+      serviceInstances = allowed.map((a) => ({
+        id: a.service.id,
+        name: a.service.name,
+        type: a.service.type,
+      }));
+    }
   }
 
   // Build app context if working on existing app

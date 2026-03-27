@@ -87,9 +87,10 @@ model User {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  apps         App[]
-  chatMessages ChatMessage[]
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  apps            App[]
+  chatMessages    ChatMessage[]
+  allowedServices UserAllowedServiceInstance[]
 
   @@map("users")
 }
@@ -141,10 +142,23 @@ model Service {
   createdAt      DateTime    @default(now()) @map("created_at")
   updatedAt      DateTime    @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  apps         AppService[]
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  apps          AppService[]
+  allowedUsers  UserAllowedServiceInstance[]
 
   @@map("services")
+}
+
+model UserAllowedServiceInstance {
+  id        String @id @default(cuid())
+  userId    String @map("user_id")
+  serviceId String @map("service_id")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, serviceId])
+  @@map("user_allowed_service_instances")
 }
 
 model AppService {

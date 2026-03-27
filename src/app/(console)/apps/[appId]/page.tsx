@@ -19,9 +19,14 @@ import {
   Copy,
   Check,
   ExternalLink,
+  ServerCog,
 } from "lucide-react";
 import { AgentChatPanel, type AgentMessage } from "@/components/chat/agent-chat-panel";
 import type { AgentRole } from "@/lib/agents/types";
+
+interface AppService {
+  service: { id: string; name: string; type: string };
+}
 
 interface AppData {
   id: string;
@@ -31,6 +36,7 @@ interface AppData {
   template: string;
   status: string;
   port: number | null;
+  services: AppService[];
 }
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
@@ -191,6 +197,21 @@ export default function AppDetailPage() {
           </>
         )}
 
+        {/* Bound Services */}
+        {app.services && app.services.length > 0 && (
+          <>
+            <div className="h-5 w-px bg-border" />
+            <ServerCog className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {app.services.map((as) => (
+                <Badge key={as.service.id} variant="outline" className="text-xs font-normal">
+                  {as.service.name}
+                  <span className="ml-1 text-muted-foreground">{as.service.type}</span>
+                </Badge>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Spacer */}
         <div className="flex-1" />
