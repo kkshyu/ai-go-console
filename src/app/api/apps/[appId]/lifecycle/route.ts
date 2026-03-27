@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { startDevServer, stopDevServer, getDevServerLogs } from "@/lib/dev-server";
 import { startApp, stopApp, restartApp, getAppLogs, getAppDockerStatus } from "@/lib/docker";
 import { regenerateCompose } from "@/lib/generator";
-import { syncCaddyRoutes } from "@/lib/proxy";
+import { syncRoutes } from "@/lib/proxy";
 
 export async function POST(
   request: NextRequest,
@@ -64,7 +64,7 @@ export async function POST(
         });
 
         // Sync Caddy routes
-        syncCaddyRoutes().catch(() => {});
+        syncRoutes().catch(() => {});
 
         return NextResponse.json({ success: true, output });
       }
@@ -75,7 +75,7 @@ export async function POST(
           where: { id: appId },
           data: { status: "running" },
         });
-        syncCaddyRoutes().catch(() => {});
+        syncRoutes().catch(() => {});
         return NextResponse.json({ success: true, output });
       }
 

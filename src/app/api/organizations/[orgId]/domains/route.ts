@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { syncCaddyRoutes } from "@/lib/proxy";
+import { syncRoutes } from "@/lib/proxy";
 
 export async function GET(
   _request: NextRequest,
@@ -61,7 +61,7 @@ export async function POST(
   });
 
   // Sync Caddy routes (non-blocking)
-  syncCaddyRoutes().catch(() => {});
+  syncRoutes().catch(() => {});
 
   return NextResponse.json(orgDomain, { status: 201 });
 }
@@ -95,7 +95,7 @@ export async function DELETE(
   await prisma.orgDomain.delete({ where: { id: domainId } });
 
   // Sync Caddy routes (non-blocking)
-  syncCaddyRoutes().catch(() => {});
+  syncRoutes().catch(() => {});
 
   return NextResponse.json({ success: true });
 }
