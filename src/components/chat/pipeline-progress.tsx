@@ -110,29 +110,11 @@ export function PipelineProgress({
         })}
       </div>
 
-      {/* Active agent status text */}
-      {showActiveStatus && (
-        <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground animate-pulse">
+      {/* Minimal active indicator — detailed status shown as PM chat bubble */}
+      {isLoading && currentAgent && (
+        <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-          <span>
-            {agentPhase === "progress" && statusMessage
-              ? statusMessage
-              : `${AGENT_DEFINITIONS[activeNonPmAgent]?.label}${
-                  agentPhase === "translating" ? " ..." : ` ${generatingText}`
-                }`}
-          </span>
-        </div>
-      )}
-
-      {/* PM thinking status */}
-      {isLoading && currentAgent === "pm" && (
-        <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground animate-pulse">
-          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-          <span>
-            {agentPhase === "progress" && statusMessage
-              ? statusMessage
-              : `PM ${generatingText}`}
-          </span>
+          <span>{AGENT_DEFINITIONS[currentAgent]?.label} ...</span>
         </div>
       )}
     </div>

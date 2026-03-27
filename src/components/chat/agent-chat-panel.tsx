@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Send, User, Loader2, ChevronDown, Zap } from "lucide-react";
+import { Send, User, Loader2, ChevronDown, Zap, MessageCircle } from "lucide-react";
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/ai";
 import { AGENT_DEFINITIONS, createInitialOrchestrationState } from "@/lib/agents/types";
 import type { AgentRole, OrchestrationState } from "@/lib/agents/types";
@@ -78,6 +78,7 @@ export function AgentChatPanel({
   const [currentAgent, setCurrentAgent] = useState<AgentRole | null>(null);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
   const [statusMessage, setStatusMessage] = useState<string>("");
+  const [needsUserInput, setNeedsUserInput] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
 
@@ -122,6 +123,7 @@ export function AgentChatPanel({
       setMessages(newMessages);
       setInput("");
       setIsLoading(true);
+      setNeedsUserInput(false);
 
       onUserMessage?.(userMessage.content);
 
@@ -148,7 +150,10 @@ export function AgentChatPanel({
           }),
         });
 
-        if (!res.ok) throw new Error("Chat API error");
+        if (!res.ok) {
+          const errorBody = await res.json().catch(() => null);
+          throw new Error(errorBody?.error || `Chat API error (${res.status})`);
+        }
 
         const reader = res.body?.getReader();
         if (!reader) throw new Error("No response body");
@@ -178,13 +183,14 @@ export function AgentChatPanel({
               // Agent is thinking
               if (parsed.thinking) {
                 setAgentPhase("thinking");
+                setStatusMessage((prev) => prev || "正在思考中...");
                 continue;
               }
 
               // Agent output is being translated
               if (parsed.translating) {
                 setAgentPhase("translating");
-                setStatusMessage("");
+                setStatusMessage("正在整理回覆內容...");
                 continue;
               }
 
@@ -201,6 +207,11 @@ export function AgentChatPanel({
                 setAgentPhase(null);
                 onAssistantResponse?.(rawContent, resolvedAgent || undefined);
                 onAssistantComplete?.(displayContent, resolvedAgent || undefined);
+
+                // PM needs user input — show prompt
+                if (parsed.needsUserInput) {
+                  setNeedsUserInput(true);
+                }
 
                 // Update orchestration state if provided
                 if (parsed.orchestrationState) {
@@ -294,15 +305,14 @@ export function AgentChatPanel({
         setMessages((prev) =>
           prev.filter((m) => m.role !== "assistant" || m.content)
         );
-      } catch {
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error";
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
               ? {
                   ...m,
-                  content:
-                    m.content ||
-                    "Sorry, I encountered an error. Please check your OpenRouter API key is configured.",
+                  content: m.content || errorMessage,
                 }
               : m
           )
@@ -344,20 +354,6 @@ export function AgentChatPanel({
   return (
     <Card className="flex flex-1 flex-col min-h-0">
       <CardContent className="flex flex-1 flex-col p-4 min-h-0">
-        {/* Agent Progress */}
-        {showProgress && (
-          <div className="mb-3">
-            <PipelineProgress
-              state={orchState}
-              currentAgent={currentAgent}
-              isLoading={isLoading || externalLoading}
-              agentPhase={agentPhase}
-              statusMessage={statusMessage}
-              generatingText={generatingText}
-            />
-          </div>
-        )}
-
         {/* Messages — only user + PM agent shown as chat bubbles */}
         <div className="flex-1 overflow-y-auto space-y-4 mb-4">
           {messages.length === 0 && (
@@ -376,7 +372,7 @@ export function AgentChatPanel({
             .filter(
               (m) =>
                 m.role === "user" ||
-                ((m.content || m.agentRole) && (!m.agentRole || m.agentRole === "pm"))
+                (m.content && (!m.agentRole || m.agentRole === "pm"))
             )
             .map((message) => (
             <div
@@ -417,6 +413,17 @@ export function AgentChatPanel({
               )}
             </div>
           ))}
+          {/* PM status update as regular chat message */}
+          {(isLoading || externalLoading) && statusMessage && (
+            <div className="flex gap-3 justify-start">
+              <AgentAvatar agentRole="pm" />
+              <div className="max-w-[80%] flex flex-col gap-1">
+                <div className="rounded-lg px-4 py-2 text-sm bg-muted">
+                  {statusMessage}
+                </div>
+              </div>
+            </div>
+          )}
           {externalLoading && (
             <div className="flex gap-3">
               <AgentAvatar agentRole="pm" />
@@ -428,6 +435,28 @@ export function AgentChatPanel({
           )}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Agent Progress — below messages */}
+        {/* Prompt: PM needs user input */}
+        {needsUserInput && !isLoading && !externalLoading && (
+          <div className="mb-3 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-primary">
+            <MessageCircle className="h-4 w-4 shrink-0" />
+            <span>PM 正在等待您的回覆，請在下方輸入訊息</span>
+          </div>
+        )}
+
+        {showProgress && (
+          <div className="mb-3">
+            <PipelineProgress
+              state={orchState}
+              currentAgent={currentAgent}
+              isLoading={isLoading || externalLoading}
+              agentPhase={agentPhase}
+              statusMessage={statusMessage}
+              generatingText={generatingText}
+            />
+          </div>
+        )}
 
         {/* Token Usage Status Bar */}
         {totalTokens > 0 && (
