@@ -107,6 +107,7 @@
     "quickCreate": "選擇情境範本",
     "searchPlaceholder": "搜尋範本...",
     "creating": "建立中...",
+    "createFailed": "應用程式建立失敗，請稍後再試",
     "allCategories": "全部",
     "presets": {
       "finance-expense-report": {

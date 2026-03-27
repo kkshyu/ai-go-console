@@ -107,6 +107,7 @@
     "quickCreate": "Choose a template",
     "searchPlaceholder": "Search templates...",
     "creating": "Creating...",
+    "createFailed": "Failed to create application. Please try again later.",
     "allCategories": "All",
     "presets": {
       "finance-expense-report": {
