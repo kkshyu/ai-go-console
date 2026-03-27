@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import {
   Play,
@@ -85,6 +86,9 @@ export default function AppDetailPage() {
   const [iframeKey, setIframeKey] = useState(0);
   const [consoleLogs, setConsoleLogs] = useState<Array<{ level: string; message: string; timestamp: number }>>([]);
   const [bottomPanel, setBottomPanel] = useState<"logs" | "console" | null>(null);
+  const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(false);
+  const [fullscreenBottomPanel, setFullscreenBottomPanel] = useState<"logs" | "console" | null>(null);
+  const [fullscreenPanelCollapsed, setFullscreenPanelCollapsed] = useState(false);
   const [editingSlug, setEditingSlug] = useState(false);
   const [slugValue, setSlugValue] = useState("");
   const [slugError, setSlugError] = useState("");
@@ -436,6 +440,142 @@ export default function AppDetailPage() {
 
   const currentDeployment = deployments.find((d) => d.status === "running");
 
+  // Helper: color for log lines (ghostty terminal theme)
+  function getLogLineColor(line: string): string {
+    const lower = line.toLowerCase();
+    if (lower.includes("error") || lower.includes("err!") || lower.includes("failed")) return "#f87171";
+    if (lower.includes("warn")) return "#fbbf24";
+    if (lower.includes("ready") || lower.includes("compiled") || lower.includes("success")) return "#4ade80";
+    return "#d4d4d4";
+  }
+
+  // Shared render: bottom toolbar
+  function renderBottomToolbar(
+    panel: "logs" | "console" | null,
+    setPanel: (v: "logs" | "console" | null) => void,
+    collapsed: boolean,
+    setCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void,
+  ) {
+    return (
+      <div className="flex items-center border-t bg-muted/40">
+        <button
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+            panel === "logs"
+              ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          onClick={() => setPanel(panel === "logs" ? null : "logs")}
+        >
+          <Terminal className="h-3 w-3" />
+          {t("logs")}
+        </button>
+        <button
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+            panel === "console"
+              ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          onClick={() => setPanel(panel === "console" ? null : "console")}
+        >
+          <Monitor className="h-3 w-3" />
+          {t("console")}
+        </button>
+        <div className="ml-auto flex items-center gap-1 pr-1">
+          {(panel === "console" || panel === "logs") && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => {
+                if (panel === "console") setConsoleLogs([]);
+                if (panel === "logs") setDevLogs("");
+              }}
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
+          {panel && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => setCollapsed((prev: boolean) => !prev)}
+            >
+              {collapsed ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Shared render: Ghostty-themed log panel
+  function renderLogPanel(height: string = "h-40") {
+    return (
+      <div
+        className={`${height} overflow-auto font-mono text-xs`}
+        style={{ backgroundColor: "#1c1c1c", color: "#d4d4d4" }}
+      >
+        {!devLogs ? (
+          <div className="flex items-center justify-center h-full" style={{ color: "#6b7280" }}>
+            No logs available
+          </div>
+        ) : (
+          devLogs.split("\n").map((line, i) => (
+            <div
+              key={i}
+              className="px-3 py-0.5 leading-5"
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+            >
+              <span
+                className="inline-block w-8 text-right mr-3"
+                style={{ color: "#6b7280", userSelect: "none" }}
+              >
+                {i + 1}
+              </span>
+              <span style={{ color: getLogLineColor(line) }}>{line}</span>
+            </div>
+          ))
+        )}
+        <div ref={logsEndRef} />
+      </div>
+    );
+  }
+
+  // Shared render: Chrome DevTools-styled console panel
+  function renderConsolePanel(height: string = "h-40") {
+    return (
+      <div className={`${height} overflow-auto text-xs font-mono border-t bg-white`}>
+        {consoleLogs.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            No console output
+          </div>
+        ) : (
+          consoleLogs.map((entry, i) => (
+            <div
+              key={i}
+              className={cn(
+                "flex items-start px-3 py-1 border-b gap-2",
+                entry.level === "error" && "bg-red-50 text-red-800 border-red-200/60",
+                entry.level === "warn" && "bg-yellow-50 text-yellow-800 border-yellow-200/60",
+                entry.level !== "error" && entry.level !== "warn" && "border-border/50 text-foreground",
+              )}
+            >
+              <span className="shrink-0 mt-0.5 w-4 text-center select-none">
+                {entry.level === "error" ? "✕" : entry.level === "warn" ? "⚠" : entry.level === "info" ? "ⓘ" : ""}
+              </span>
+              <span className="flex-1 whitespace-pre-wrap break-all">{entry.message}</span>
+              <span className="shrink-0 text-muted-foreground/60 text-[10px] tabular-nums">
+                {new Date(entry.timestamp).toLocaleTimeString()}
+              </span>
+            </div>
+          ))
+        )}
+        <div ref={consoleEndRef} />
+      </div>
+    );
+  }
+
   if (!app) return <div className="p-8">Loading...</div>;
 
   return (
@@ -721,73 +861,11 @@ export default function AppDetailPage() {
               )}
 
               {/* Bottom toolbar — Dev Logs / Console tabs */}
-              <div className="flex items-center border-t bg-muted/40">
-                <button
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                    bottomPanel === "logs"
-                      ? "text-foreground bg-background border-t-2 border-primary -mt-px"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                  onClick={() => setBottomPanel(bottomPanel === "logs" ? null : "logs")}
-                >
-                  <Terminal className="h-3 w-3" />
-                  {t("logs")}
-                </button>
-                <button
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                    bottomPanel === "console"
-                      ? "text-foreground bg-background border-t-2 border-primary -mt-px"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                  onClick={() => setBottomPanel(bottomPanel === "console" ? null : "console")}
-                >
-                  <Monitor className="h-3 w-3" />
-                  {t("console")}
-                </button>
-                {bottomPanel === "console" && (
-                  <div className="ml-auto pr-1">
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setConsoleLogs([])}>
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
-              </div>
+              {renderBottomToolbar(bottomPanel, setBottomPanel, bottomPanelCollapsed, setBottomPanelCollapsed)}
 
-              {/* Bottom panel content — dev server only */}
-              {bottomPanel === "logs" && (
-                <div className="h-40 overflow-auto border-t bg-muted/20">
-                  <pre className="p-3 text-xs font-mono whitespace-pre-wrap">
-                    {devLogs || "No logs available"}
-                    <div ref={logsEndRef} />
-                  </pre>
-                </div>
-              )}
-              {bottomPanel === "console" && (
-                <div className="h-40 overflow-auto p-3 text-xs font-mono border-t bg-muted/20">
-                  {consoleLogs.length === 0 ? (
-                    <span className="text-muted-foreground">No console output</span>
-                  ) : (
-                    consoleLogs.map((entry, i) => (
-                      <div
-                        key={i}
-                        className={
-                          entry.level === "error"
-                            ? "text-red-500"
-                            : entry.level === "warn"
-                              ? "text-yellow-500"
-                              : entry.level === "info"
-                                ? "text-blue-500"
-                                : "text-foreground"
-                        }
-                      >
-                        <span className="text-muted-foreground mr-2">[{entry.level}]</span>
-                        {entry.message}
-                      </div>
-                    ))
-                  )}
-                  <div ref={consoleEndRef} />
-                </div>
-              )}
+              {/* Bottom panel content */}
+              {!bottomPanelCollapsed && bottomPanel === "logs" && renderLogPanel()}
+              {!bottomPanelCollapsed && bottomPanel === "console" && renderConsolePanel()}
             </div>
           )}
 
@@ -1009,6 +1087,10 @@ export default function AppDetailPage() {
               className="flex-1 w-full border-0"
               title="App Preview Fullscreen"
             />
+            {/* Bottom toolbar in fullscreen */}
+            {renderBottomToolbar(fullscreenBottomPanel, setFullscreenBottomPanel, fullscreenPanelCollapsed, setFullscreenPanelCollapsed)}
+            {!fullscreenPanelCollapsed && fullscreenBottomPanel === "logs" && renderLogPanel("h-48")}
+            {!fullscreenPanelCollapsed && fullscreenBottomPanel === "console" && renderConsolePanel("h-48")}
           </div>
         </div>
       )}
