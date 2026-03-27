@@ -347,23 +347,18 @@ export function AgentChatPanel({
         {/* Agent Progress */}
         {showProgress && (
           <div className="mb-3">
-            <PipelineProgress state={orchState} />
-            {(isLoading || externalLoading) && currentAgent && (
-              <div className="flex items-center gap-2 mt-1.5 px-3 py-1 text-xs text-muted-foreground animate-pulse">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>
-                  {agentPhase === "progress" && statusMessage
-                    ? statusMessage
-                    : `${AGENT_DEFINITIONS[currentAgent]?.label}${
-                        agentPhase === "translating" ? " ..." : ` ${generatingText}`
-                      }`}
-                </span>
-              </div>
-            )}
+            <PipelineProgress
+              state={orchState}
+              currentAgent={currentAgent}
+              isLoading={isLoading || externalLoading}
+              agentPhase={agentPhase}
+              statusMessage={statusMessage}
+              generatingText={generatingText}
+            />
           </div>
         )}
 
-        {/* Messages */}
+        {/* Messages — only user + PM agent shown as chat bubbles */}
         <div className="flex-1 overflow-y-auto space-y-4 mb-4">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
@@ -381,8 +376,7 @@ export function AgentChatPanel({
             .filter(
               (m) =>
                 m.role === "user" ||
-                m.content ||
-                m.agentRole
+                ((m.content || m.agentRole) && (!m.agentRole || m.agentRole === "pm"))
             )
             .map((message) => (
             <div
@@ -391,21 +385,10 @@ export function AgentChatPanel({
                 message.role === "user" ? "justify-end" : "justify-start"
               }`}
             >
-              {message.role === "assistant" && message.agentRole && (
-                <AgentAvatar agentRole={message.agentRole} />
+              {message.role === "assistant" && (
+                <AgentAvatar agentRole="pm" />
               )}
               <div className="max-w-[80%] flex flex-col gap-1">
-                {message.role === "assistant" && message.agentRole && (
-                  <div className="flex items-center gap-1.5">
-                    <span
-                      className={`text-xs font-medium ${
-                        AGENT_DEFINITIONS[message.agentRole]?.color || ""
-                      }`}
-                    >
-                      {AGENT_DEFINITIONS[message.agentRole]?.label}
-                    </span>
-                  </div>
-                )}
                 <div
                   className={`rounded-lg px-4 py-2 text-sm ${
                     message.role === "user"
@@ -422,9 +405,7 @@ export function AgentChatPanel({
                   ) : (
                     <span className="flex items-center gap-2 animate-pulse">
                       <Loader2 className="h-3 w-3 animate-spin" />
-                      {currentAgent
-                        ? `${AGENT_DEFINITIONS[currentAgent]?.label} ${generatingText}`
-                        : generatingText}
+                      {generatingText}
                     </span>
                   )}
                 </div>
@@ -438,7 +419,7 @@ export function AgentChatPanel({
           ))}
           {externalLoading && (
             <div className="flex gap-3">
-              <AgentAvatar agentRole={currentAgent} />
+              <AgentAvatar agentRole="pm" />
               <div className="bg-muted rounded-lg px-4 py-2 text-sm flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 {generatingText}
