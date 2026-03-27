@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { slugify } from "@/lib/utils";
 import { generateApp } from "@/lib/generator";
+import { getPresetOverlay } from "@/lib/presets";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
   const organizationId = session?.user?.organizationId;
 
   const body = await request.json();
-  const { name, description, template, config, serviceIds, userId, files, npmPackages } = body;
+  const { name, description, template, config, serviceIds, userId, files, npmPackages, presetId } = body;
 
   if (!name || !template) {
     return NextResponse.json(
@@ -127,6 +128,7 @@ export async function POST(request: NextRequest) {
   });
 
   try {
+    const overlay = presetId && !files ? getPresetOverlay(presetId) : null;
     await generateApp({
       appId: app.id,
       slug,
@@ -134,8 +136,8 @@ export async function POST(request: NextRequest) {
       description,
       template,
       port,
-      files,
-      npmPackages,
+      files: files || overlay?.files,
+      npmPackages: npmPackages || overlay?.npmPackages,
     });
   } catch (error) {
     await prisma.app.delete({ where: { id: app.id } });
