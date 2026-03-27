@@ -68,7 +68,10 @@
     "serverNotRunning": "伺服器未啟動",
     "startDevServer": "啟動開發伺服器以查看即時預覽",
     "fullscreen": "全螢幕",
-    "closePreview": "關閉"
+    "closePreview": "關閉",
+    "logs": "日誌",
+    "console": "Console",
+    "clearConsole": "清除"
   },
   "create": {
     "title": "建立應用",

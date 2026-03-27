@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   Globe,
   ArrowLeft,
   Terminal,
+  Monitor,
   Maximize2,
   X,
   Copy,
@@ -56,16 +57,20 @@ export default function AppDetailPage() {
   const [app, setApp] = useState<AppData | null>(null);
   const [logs, setLogs] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showLogs, setShowLogs] = useState(false);
   const [chatMessages, setChatMessages] = useState<AgentMessage[]>([]);
   const [chatLoaded, setChatLoaded] = useState(false);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
+  const [consoleLogs, setConsoleLogs] = useState<Array<{ level: string; message: string; timestamp: number }>>([]);
+  const [bottomPanel, setBottomPanel] = useState<"logs" | "console" | null>(null);
   const [editingSlug, setEditingSlug] = useState(false);
   const [slugValue, setSlugValue] = useState("");
   const [slugError, setSlugError] = useState("");
   const [savingSlug, setSavingSlug] = useState(false);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+  const consoleEndRef = useRef<HTMLDivElement>(null);
+  const logsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isDevRunning = app?.status === "running" || app?.status === "developing";
   const hasPreview = app?.port && isDevRunning;
@@ -93,6 +98,61 @@ export default function AppDetailPage() {
       .catch(() => setChatLoaded(true));
   }, [appId]);
 
+  // Auto-refresh logs while panel is open
+  useEffect(() => {
+    if (bottomPanel !== "logs") {
+      if (logsIntervalRef.current) {
+        clearInterval(logsIntervalRef.current);
+        logsIntervalRef.current = null;
+      }
+      return;
+    }
+    const fetchLogs = async () => {
+      try {
+        const res = await fetch(`/api/apps/${appId}/lifecycle`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "logs" }),
+        });
+        const data = await res.json();
+        setLogs(data.logs || "No logs");
+      } catch {}
+    };
+    fetchLogs();
+    logsIntervalRef.current = setInterval(fetchLogs, 3000);
+    return () => {
+      if (logsIntervalRef.current) {
+        clearInterval(logsIntervalRef.current);
+        logsIntervalRef.current = null;
+      }
+    };
+  }, [bottomPanel, appId]);
+
+  // Auto-scroll logs to bottom
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs]);
+
+  // Auto-scroll console to bottom
+  useEffect(() => {
+    consoleEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [consoleLogs]);
+
+  // Listen for console bridge messages from iframe
+  useEffect(() => {
+    function handleMessage(e: MessageEvent) {
+      if (e.data?.type === "__CONSOLE_BRIDGE__") {
+        setConsoleLogs((prev) => {
+          const next = [...prev, { level: e.data.level, message: e.data.message, timestamp: e.data.timestamp }];
+          // Keep last 500 entries
+          return next.length > 500 ? next.slice(-500) : next;
+        });
+      }
+    }
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
   async function doAction(action: string) {
     setLoading(true);
     try {
@@ -101,11 +161,7 @@ export default function AppDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      const data = await res.json();
-      if (action === "logs") {
-        setLogs(data.logs || "No logs");
-        setShowLogs(true);
-      }
+      await res.json();
       const appRes = await fetch(`/api/apps/${appId}`);
       setApp(await appRes.json());
     } catch (err) {
@@ -317,32 +373,11 @@ export default function AppDetailPage() {
             </>
           ) : null}
 
-          <Button size="sm" variant="outline" onClick={() => doAction("logs")} disabled={loading}>
-            <Terminal className="h-3.5 w-3.5" />
-          </Button>
-
           <Button size="sm" variant="destructive" onClick={handleDelete} disabled={loading}>
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>
       </div>
-
-      {/* Logs overlay */}
-      {showLogs && (
-        <div className="mb-3 relative">
-          <div className="rounded-lg border bg-muted">
-            <div className="flex items-center justify-between px-3 py-1.5 border-b">
-              <span className="text-xs font-medium">Logs</span>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowLogs(false)}>
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-            <pre className="max-h-48 overflow-auto p-3 text-xs font-mono whitespace-pre-wrap">
-              {logs || "No logs available"}
-            </pre>
-          </div>
-        </div>
-      )}
 
       {/* Main Content: Chat + Preview */}
       <div className="flex flex-1 gap-4 min-h-0">
@@ -366,83 +401,152 @@ export default function AppDetailPage() {
 
         {/* Preview Panel — browser-like chrome */}
         <div className="hidden lg:flex lg:w-[480px] flex-col min-h-0">
-          {hasPreview ? (
-            <div className="flex flex-1 flex-col rounded-lg border overflow-hidden bg-background">
-              {/* Browser toolbar */}
-              <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
-                {/* Traffic lights */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="h-3 w-3 rounded-full bg-[#FF5F57]" />
-                  <span className="h-3 w-3 rounded-full bg-[#FEBC2E]" />
-                  <span className="h-3 w-3 rounded-full bg-[#28C840]" />
-                </div>
-                {/* Address bar */}
-                <div className="flex flex-1 items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 min-w-0">
-                  <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <span className="flex-1 text-xs font-mono text-muted-foreground truncate">
-                    {previewUrl}
-                  </span>
+          <div className="flex flex-1 flex-col rounded-lg border overflow-hidden bg-background">
+            {hasPreview ? (
+              <>
+                {/* Browser toolbar */}
+                <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
+                  {/* Traffic lights */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="h-3 w-3 rounded-full bg-[#FF5F57]" />
+                    <span className="h-3 w-3 rounded-full bg-[#FEBC2E]" />
+                    <span className="h-3 w-3 rounded-full bg-[#28C840]" />
+                  </div>
+                  {/* Address bar */}
+                  <div className="flex flex-1 items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 min-w-0">
+                    <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="flex-1 text-xs font-mono text-muted-foreground truncate">
+                      {previewUrl}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 shrink-0"
+                      onClick={() => setIframeKey((k) => k + 1)}
+                      title="Refresh"
+                    >
+                      <RotateCw className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={copyUrl}>
+                      {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                    </Button>
+                  </div>
+                  {/* Actions */}
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-5 w-5 shrink-0"
-                    onClick={() => setIframeKey((k) => k + 1)}
-                    title="Refresh"
+                    className="h-6 w-6 shrink-0"
+                    onClick={() => window.open(previewUrl!, "_blank")}
+                    title="Open in browser"
                   >
-                    <RotateCw className="h-3 w-3" />
+                    <ExternalLink className="h-3 w-3" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={copyUrl}>
-                    {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 shrink-0"
+                    onClick={() => setPreviewFullscreen(true)}
+                    title={t("fullscreen")}
+                  >
+                    <Maximize2 className="h-3 w-3" />
                   </Button>
                 </div>
-                {/* Actions */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0"
-                  onClick={() => window.open(previewUrl!, "_blank")}
-                  title="Open in browser"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 shrink-0"
-                  onClick={() => setPreviewFullscreen(true)}
-                  title={t("fullscreen")}
-                >
-                  <Maximize2 className="h-3 w-3" />
-                </Button>
-              </div>
-              <iframe
-                key={iframeKey}
-                src={`http://localhost:${app.port}`}
-                className="flex-1 w-full border-0"
-                title="App Preview"
-              />
-            </div>
-          ) : (
-            <div className="flex flex-1 flex-col rounded-lg border overflow-hidden bg-background">
-              {/* Browser toolbar — disabled state */}
-              <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
-                  <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
-                  <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
+                <iframe
+                  key={iframeKey}
+                  src={`http://localhost:${app.port}`}
+                  className="flex-1 w-full border-0"
+                  title="App Preview"
+                />
+              </>
+            ) : (
+              <>
+                {/* Browser toolbar — disabled state */}
+                <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
+                    <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
+                    <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
+                  </div>
+                  <div className="flex flex-1 items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 min-w-0 opacity-50">
+                    <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="flex-1 text-xs font-mono text-muted-foreground">—</span>
+                  </div>
                 </div>
-                <div className="flex flex-1 items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 min-w-0 opacity-50">
-                  <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
-                  <span className="flex-1 text-xs font-mono text-muted-foreground">—</span>
+                <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
+                  <Globe className="h-10 w-10 mb-3 opacity-20" />
+                  <p className="text-sm font-medium">{t("serverNotRunning")}</p>
+                  <p className="text-xs mt-1">{t("startDevServer")}</p>
                 </div>
-              </div>
-              <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
-                <Globe className="h-10 w-10 mb-3 opacity-20" />
-                <p className="text-sm font-medium">{t("serverNotRunning")}</p>
-                <p className="text-xs mt-1">{t("startDevServer")}</p>
-              </div>
+              </>
+            )}
+
+            {/* Bottom toolbar — Logs / Console tabs */}
+            <div className="flex items-center border-t bg-muted/40">
+              <button
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                  bottomPanel === "logs"
+                    ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => setBottomPanel(bottomPanel === "logs" ? null : "logs")}
+              >
+                <Terminal className="h-3 w-3" />
+                {t("logs")}
+              </button>
+              <button
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                  bottomPanel === "console"
+                    ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => setBottomPanel(bottomPanel === "console" ? null : "console")}
+              >
+                <Monitor className="h-3 w-3" />
+                {t("console")}
+              </button>
+              {bottomPanel === "console" && (
+                <div className="ml-auto pr-1">
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setConsoleLogs([])}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Bottom panel content */}
+            {bottomPanel === "logs" && (
+              <pre className="h-40 overflow-auto p-3 text-xs font-mono whitespace-pre-wrap border-t bg-muted/20">
+                {logs || "No logs available"}
+                <div ref={logsEndRef} />
+              </pre>
+            )}
+            {bottomPanel === "console" && (
+              <div className="h-40 overflow-auto p-3 text-xs font-mono border-t bg-muted/20">
+                {consoleLogs.length === 0 ? (
+                  <span className="text-muted-foreground">No console output</span>
+                ) : (
+                  consoleLogs.map((entry, i) => (
+                    <div
+                      key={i}
+                      className={
+                        entry.level === "error"
+                          ? "text-red-500"
+                          : entry.level === "warn"
+                            ? "text-yellow-500"
+                            : entry.level === "info"
+                              ? "text-blue-500"
+                              : "text-foreground"
+                      }
+                    >
+                      <span className="text-muted-foreground mr-2">[{entry.level}]</span>
+                      {entry.message}
+                    </div>
+                  ))
+                )}
+                <div ref={consoleEndRef} />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
