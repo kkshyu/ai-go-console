@@ -24,52 +24,46 @@ import type { AgentMessage, AgentRole, OrchestrationState } from "@/lib/agents/t
 /** Maximum number of auto-chained agent calls per request */
 const MAX_CHAIN_DEPTH = 10;
 
-/** Interval for sending progress updates to the user (ms) */
-const PROGRESS_INTERVAL_MS = 2500;
+/** Interval for sending progress updates to the user (ms) — at most every 3 seconds */
+const PROGRESS_INTERVAL_MS = 3000;
 
 /**
  * Progress messages shown to the user while waiting for each agent.
- * PM sends these on behalf of specialist agents to keep the user informed.
+ * PM sends these as meaningful, conversational updates to keep the user informed.
  */
 const PROGRESS_MESSAGES: Record<string, string[]> = {
   architect: [
-    "正在分析您的需求...",
-    "正在評估最佳技術方案...",
-    "正在選擇合適的框架和服務...",
-    "正在規劃系統架構...",
-    "正在確認技術細節...",
-    "架構設計即將完成...",
+    "我正在請架構師分析您的需求，評估最合適的技術方案",
+    "架構師正在比較不同的框架選項，為您的應用找到最佳組合",
+    "架構師正在規劃資料庫結構和 API 設計",
+    "架構師正在確認技術選型與服務整合方案",
+    "架構設計即將完成，馬上為您整理結果",
   ],
   developer: [
-    "正在準備開發環境...",
-    "正在規劃應用程式結構...",
-    "正在設計資料模型...",
-    "正在實作核心功能...",
-    "正在整合所需服務...",
-    "應用程式即將建立完成...",
+    "開發團隊開始建立您的應用程式了",
+    "開發者正在搭建專案結構，設定所需的套件和相依性",
+    "正在實作核心功能模組和頁面元件",
+    "開發者正在串接資料庫和外部服務",
+    "程式碼撰寫接近完成，正在做最後調整",
   ],
   reviewer: [
-    "正在檢查程式碼品質...",
-    "正在進行安全性審查...",
-    "正在評估效能表現...",
-    "正在整理審查結果...",
+    "程式碼審查員正在檢查程式碼品質和安全性",
+    "審查員正在確認是否有潛在的安全漏洞或效能問題",
+    "正在驗證程式碼是否符合最佳實踐",
+    "審查即將完成，正在整理改善建議",
   ],
   devops: [
-    "正在配置部署環境...",
-    "正在設定服務連接...",
-    "正在準備啟動應用程式...",
-    "正在進行最終檢查...",
-    "部署設定即將完成...",
+    "DevOps 工程師正在配置應用程式的部署環境",
+    "正在設定服務連接和環境變數",
+    "正在確認部署設定，準備啟動應用程式",
+    "部署配置即將完成",
   ],
   pm: [
-    "正在分析進度...",
-    "正在規劃下一步...",
-    "正在整理結果...",
-    "正在準備派發下一個任務...",
-    "正在確認工作流程...",
-    "正在彙整各方資訊...",
-    "仍在處理中，請稍候...",
-    "即將完成分析...",
+    "我正在分析各專家的回饋，規劃下一步行動",
+    "正在彙整目前的進度，看看還需要什麼",
+    "讓我確認一下所有環節都沒問題",
+    "正在協調團隊，確保每個階段都順利進行",
+    "我正在整理最終結果，馬上就好",
   ],
 };
 
@@ -509,6 +503,7 @@ export async function POST(request: NextRequest) {
               agentComplete: true,
               agentRole: "pm",
               rawContent: result.content,
+              needsUserInput: true,
             });
             currentState = dispatch.orchestrationState;
             break;

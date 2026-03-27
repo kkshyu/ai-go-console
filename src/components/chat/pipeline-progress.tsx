@@ -1,6 +1,5 @@
 "use client";
 
-import { useTranslations } from "next-intl";
 import {
   ClipboardList,
   Blocks,
@@ -45,8 +44,6 @@ export function PipelineProgress({
   statusMessage,
   generatingText,
 }: AgentProgressProps) {
-  const t = useTranslations("chat");
-  const resolvedGeneratingText = generatingText ?? t("generating");
   if (state.tasks.length === 0 && !state.currentAgent) {
     return null;
   }
@@ -67,10 +64,6 @@ export function PipelineProgress({
       summary: task.description || task.summary,
     });
   }
-
-  // Determine the active status text for currently running non-PM agent
-  const activeNonPmAgent = currentAgent && currentAgent !== "pm" ? currentAgent : null;
-  const showActiveStatus = isLoading && activeNonPmAgent;
 
   return (
     <div className="flex flex-col gap-1.5 px-3 py-2 rounded-lg bg-muted/50">
@@ -113,29 +106,11 @@ export function PipelineProgress({
         })}
       </div>
 
-      {/* Active agent status text */}
-      {showActiveStatus && (
-        <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground animate-pulse">
+      {/* Minimal active indicator — detailed status shown as PM chat bubble */}
+      {isLoading && currentAgent && (
+        <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-          <span>
-            {agentPhase === "progress" && statusMessage
-              ? statusMessage
-              : `${AGENT_DEFINITIONS[activeNonPmAgent]?.label}${
-                  agentPhase === "translating" ? " ..." : ` ${resolvedGeneratingText}`
-                }`}
-          </span>
-        </div>
-      )}
-
-      {/* PM thinking status */}
-      {isLoading && currentAgent === "pm" && (
-        <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground animate-pulse">
-          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-          <span>
-            {agentPhase === "progress" && statusMessage
-              ? statusMessage
-              : `PM ${resolvedGeneratingText}`}
-          </span>
+          <span>{AGENT_DEFINITIONS[currentAgent]?.label} ...</span>
         </div>
       )}
     </div>
