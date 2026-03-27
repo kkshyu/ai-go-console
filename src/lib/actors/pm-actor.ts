@@ -35,6 +35,7 @@ import {
   stateForComplete,
 } from "../agents/orchestrator";
 import { createSpecialistActor, type SpecialistConfig } from "./specialist-actors";
+import { writeFiles } from "../docker-sandbox";
 
 /** Maximum number of agent interactions per request. */
 const MAX_INTERACTIONS = 20;
@@ -75,6 +76,7 @@ export interface PMActorConfig {
   saveArtifact: (agentRole: AgentRole, content: string, actorId?: string, taskId?: string) => Promise<void>;
   system: ActorSystem;
   pmPrompt: string;
+  appSlug?: string;
 }
 
 export class PMActor extends Actor {
@@ -88,6 +90,9 @@ export class PMActor extends Actor {
   private expectedParallelCount = 0;
   private currentGroupId: string | null = null;
 
+  // Timer tracking for GC
+  private activeTimers: Set<ReturnType<typeof setInterval>> = new Set();
+
   constructor(config: PMActorConfig, initialState?: OrchestrationState) {
     super("pm-0", "pm");
     this.config = config;
@@ -99,7 +104,10 @@ export class PMActor extends Actor {
   }
 
   onStop(): void {
-    // Cleanup
+    for (const timer of this.activeTimers) {
+      clearInterval(timer);
+    }
+    this.activeTimers.clear();
   }
 
   async onRestart(error: Error): Promise<void> {
@@ -148,6 +156,9 @@ export class PMActor extends Actor {
 
     // Save artifact
     await saveArtifact(payload.agentRole, payload.content);
+
+    // Directly write files to Docker container if applicable
+    await this.executeFileOperations(payload.content);
 
     // Update state
     this.orchState = stateForAgentComplete(
@@ -262,6 +273,7 @@ export class PMActor extends Actor {
           await sendEvent({ statusUpdate: msg, agentRole: "pm" });
         } catch { /* stream may have closed */ }
       }, PROGRESS_INTERVAL_MS);
+      this.activeTimers.add(progressTimer);
 
       let result;
       try {
@@ -275,6 +287,7 @@ export class PMActor extends Actor {
         );
       } catch (err) {
         clearInterval(progressTimer);
+        this.activeTimers.delete(progressTimer);
         const errMsg = err instanceof Error ? err.message : "Unknown error";
         await sendEvent({ error: `PM agent failed: ${errMsg}` });
         this.orchState = { ...this.orchState, status: "error" };
@@ -283,6 +296,7 @@ export class PMActor extends Actor {
       }
 
       clearInterval(progressTimer);
+      this.activeTimers.delete(progressTimer);
 
       // Send usage
       if (result.usage) {
@@ -529,12 +543,14 @@ export class PMActor extends Actor {
         const actor = this.config.system.getActor(specialistId);
         if (!actor) {
           clearInterval(check);
+          this.activeTimers.delete(check);
           resolve();
           return;
         }
         const state = actor.getState();
         if (state.status === "idle" || state.status === "dead") {
           clearInterval(check);
+          this.activeTimers.delete(check);
 
           // Process pending response
           const response = actor.takePendingResponse();
@@ -547,6 +563,7 @@ export class PMActor extends Actor {
           resolve();
         }
       }, 100);
+      this.activeTimers.add(check);
     });
   }
 
@@ -591,6 +608,9 @@ export class PMActor extends Actor {
 
     // Save merged artifact
     await saveArtifact("developer", mergedContent);
+
+    // Directly write merged files to Docker container
+    await this.executeFileOperations(mergedContent);
 
     // Reset parallel tracking
     this.pendingParallelResults.clear();
@@ -663,6 +683,42 @@ export class PMActor extends Actor {
     };
 
     return `\`\`\`json\n${JSON.stringify(merged, null, 2)}\n\`\`\``;
+  }
+
+  // ---- Docker File Operations ----
+
+  /**
+   * Parse agent output and write files directly to the Docker container.
+   */
+  private async executeFileOperations(content: string): Promise<void> {
+    if (!this.config.appSlug) return;
+
+    try {
+      const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
+      if (!jsonMatch) return;
+
+      const parsed = JSON.parse(jsonMatch[1]);
+      if (
+        parsed.files &&
+        Array.isArray(parsed.files) &&
+        parsed.files.length > 0 &&
+        (parsed.action === "modify_files" ||
+          parsed.action === "create_app" ||
+          parsed.action === "update_app")
+      ) {
+        await writeFiles(this.config.appSlug, parsed.files);
+        await this.config.sendEvent({
+          filesWritten: {
+            count: parsed.files.length,
+            paths: parsed.files.map((f: { path: string }) => f.path),
+          },
+        });
+      }
+    } catch (err) {
+      console.warn(
+        `[PMActor] Failed to write files to container: ${err instanceof Error ? err.message : "Unknown error"}`
+      );
+    }
   }
 
   // ---- Translation Helper ----

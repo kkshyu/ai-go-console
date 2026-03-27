@@ -64,6 +64,7 @@ const PROGRESS_INTERVAL_MS = 2500;
 
 abstract class BaseSpecialistActor extends Actor {
   protected config: SpecialistConfig;
+  private activeTimers: Set<ReturnType<typeof setInterval>> = new Set();
 
   constructor(id: string, role: AgentRole, config: SpecialistConfig) {
     super(id, role);
@@ -75,11 +76,23 @@ abstract class BaseSpecialistActor extends Actor {
   }
 
   onStop(): void {
-    // No cleanup needed
+    for (const timer of this.activeTimers) {
+      clearInterval(timer);
+    }
+    this.activeTimers.clear();
   }
 
   async onRestart(error: Error): Promise<void> {
     console.warn(`[${this.role}Actor] Restarting after error: ${error.message}`);
+  }
+
+  protected trackTimer(timer: ReturnType<typeof setInterval>): void {
+    this.activeTimers.add(timer);
+  }
+
+  protected clearTrackedTimer(timer: ReturnType<typeof setInterval>): void {
+    clearInterval(timer);
+    this.activeTimers.delete(timer);
   }
 
   /** Build the system prompt for this specialist. */
@@ -109,6 +122,7 @@ abstract class BaseSpecialistActor extends Actor {
         } catch { /* stream may have closed */ }
       }
     }, PROGRESS_INTERVAL_MS);
+    this.trackTimer(progressTimer);
 
     try {
       // Build chat messages, annotating other agents' outputs
@@ -135,7 +149,7 @@ abstract class BaseSpecialistActor extends Actor {
 
       return result;
     } finally {
-      clearInterval(progressTimer);
+      this.clearTrackedTimer(progressTimer);
     }
   }
 

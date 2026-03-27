@@ -87,11 +87,12 @@ export class ActorSystem {
 
   /** Stop all actors and cleanup. */
   stopAll(): void {
+    // Stop heartbeat first to prevent restart attempts during cleanup
+    this.heartbeat.stop();
     for (const actor of this.actors.values()) {
       actor.onStop();
     }
     this.actors.clear();
-    this.heartbeat.stop();
   }
 
   // ---- Message Routing ----

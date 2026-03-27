@@ -106,6 +106,7 @@ export default function AppDetailPage() {
 
   // Right panel tab state
   const [rightPanel, setRightPanel] = useState<"preview" | "deploy" | "files">("preview");
+  const [fileManagerKey, setFileManagerKey] = useState(0);
 
   // Dev server is running if we have a port and it's in developing state
   const [devRunning, setDevRunning] = useState(false);
@@ -344,6 +345,8 @@ export default function AppDetailPage() {
 
   const handleAssistantResponse = useCallback(
     (content: string, agentRole?: AgentRole) => {
+      // Backend now handles file writes directly to Docker container.
+      // Only handle update_app for metadata changes.
       const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
       if (!jsonMatch) return;
       try {
@@ -358,30 +361,23 @@ export default function AppDetailPage() {
             .then((res) => res.json())
             .then(setApp)
             .catch(() => {});
-        } else if (parsed.action === "modify_files" && parsed.files) {
-          // Write files to the app's working directory
-          fetch(`/api/apps/${appId}/files`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ files: parsed.files }),
-          })
-            .then((res) => res.json())
-            .then(() => {
-              // Refresh app data
-              fetch(`/api/apps/${appId}`)
-                .then((res) => res.json())
-                .then(setApp)
-                .catch(() => {});
-              // Refresh file manager if open
-              if (rightPanel === "files") {
-                fetchFiles(filePath);
-              }
-            })
-            .catch(() => {});
         }
       } catch {}
     },
-    [appId, rightPanel, filePath]
+    [appId]
+  );
+
+  const handleFilesWritten = useCallback(
+    (paths: string[]) => {
+      // Refresh app data
+      fetch(`/api/apps/${appId}`)
+        .then((res) => res.json())
+        .then(setApp)
+        .catch(() => {});
+      // Refresh file manager by forcing re-mount
+      setFileManagerKey((k) => k + 1);
+    },
+    [appId]
   );
 
   async function handleSaveSlug() {
@@ -705,6 +701,7 @@ export default function AppDetailPage() {
                 onUserMessage={handleUserMessage}
                 onAssistantComplete={handleAssistantComplete}
                 onAssistantResponse={handleAssistantResponse}
+                onFilesWritten={handleFilesWritten}
                 showProgress={true}
               />
             )}
@@ -981,7 +978,7 @@ export default function AppDetailPage() {
 
           {/* Files Panel */}
           {rightPanel === "files" && (
-            <FileManager appId={app.id} />
+            <FileManager key={fileManagerKey} appId={app.id} />
           )}
         </div>
       </div>

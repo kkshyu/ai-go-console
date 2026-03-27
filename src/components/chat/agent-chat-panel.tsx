@@ -43,6 +43,7 @@ export interface AgentChatPanelProps {
   onUserMessage?: (content: string) => void;
   onAssistantComplete?: (content: string, agentRole?: AgentRole) => void;
   onOrchestrationUpdate?: (state: OrchestrationState) => void;
+  onFilesWritten?: (paths: string[]) => void;
   extraRequestBody?: Record<string, unknown>;
   placeholder?: string;
   emptyStateText?: string;
@@ -61,6 +62,7 @@ export function AgentChatPanel({
   onUserMessage,
   onAssistantComplete,
   onOrchestrationUpdate,
+  onFilesWritten,
   extraRequestBody,
   placeholder,
   emptyStateText,
@@ -367,6 +369,12 @@ export function AgentChatPanel({
                 continue;
               }
 
+              // Files written to Docker container by backend
+              if (parsed.filesWritten) {
+                onFilesWritten?.(parsed.filesWritten.paths || []);
+                continue;
+              }
+
               // Error
               if (parsed.error) {
                 setAgentPhase(null);
@@ -448,6 +456,7 @@ export function AgentChatPanel({
       onAssistantResponse,
       onAssistantComplete,
       onOrchestrationUpdate,
+      onFilesWritten,
       t,
     ]
   );

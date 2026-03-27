@@ -144,6 +144,7 @@ export async function POST(request: NextRequest) {
 
   // Build app context if working on existing app
   let appContext: string | undefined;
+  let appSlug: string | undefined;
   if (appId) {
     const app = await prisma.app.findUnique({
       where: { id: appId },
@@ -156,6 +157,7 @@ export async function POST(request: NextRequest) {
       },
     });
     if (app) {
+      appSlug = app.slug;
       const fileContext = await buildFileTreeContext(app.slug);
       appContext = buildAppContextPrompt(
         {
@@ -279,6 +281,7 @@ export async function POST(request: NextRequest) {
         saveArtifact,
         system,
         pmPrompt,
+        appSlug,
       };
 
       const pmActor = new PMActor(pmConfig, orchState);
