@@ -20,6 +20,8 @@ interface CreateAppAction {
   description?: string;
   config?: Record<string, unknown>;
   requiredServices?: (string | ServiceRef)[];
+  files?: Array<{ path: string; content: string }>;
+  npmPackages?: string[];
 }
 
 export default function CreateAppPage() {
@@ -89,6 +91,8 @@ export default function CreateAppPage() {
             template: action.template,
             description: action.description || "",
             config: action.config || {},
+            files: action.files,
+            npmPackages: action.npmPackages,
           }),
         });
 

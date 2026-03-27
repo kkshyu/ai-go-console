@@ -22,6 +22,8 @@ export interface GenerateAppOptions {
   template: string;
   port: number;
   serviceIds?: string[];
+  files?: Array<{ path: string; content: string }>;
+  npmPackages?: string[];
 }
 
 /**
@@ -109,6 +111,28 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
 
   // Copy and render template files
   await copyDirectory(tmpl.directory, appDir, context);
+
+  // Write custom files from developer agent (overwrite template files if same path)
+  if (options.files && options.files.length > 0) {
+    for (const file of options.files) {
+      const filePath = path.join(appDir, file.path);
+      await fsp.mkdir(path.dirname(filePath), { recursive: true });
+      await fsp.writeFile(filePath, file.content, "utf-8");
+    }
+  }
+
+  // Add extra npm packages to package.json
+  if (options.npmPackages && options.npmPackages.length > 0) {
+    const pkgPath = path.join(appDir, "package.json");
+    const pkg = JSON.parse(await fsp.readFile(pkgPath, "utf-8"));
+    if (!pkg.dependencies) pkg.dependencies = {};
+    for (const pkgName of options.npmPackages) {
+      if (!pkg.dependencies[pkgName]) {
+        pkg.dependencies[pkgName] = "latest";
+      }
+    }
+    await fsp.writeFile(pkgPath, JSON.stringify(pkg, null, 2), "utf-8");
+  }
 
   return appDir;
 }
