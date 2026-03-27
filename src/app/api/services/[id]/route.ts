@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { encrypt } from "@/lib/crypto";
+import { isBuiltInServiceType } from "@/lib/service-types";
 
 export async function GET(
   _request: NextRequest,
@@ -55,6 +56,21 @@ export async function PATCH(
   const body = await request.json();
   const { name, type, endpointUrl, ...configFields } = body;
 
+  // Built-in services: only allow name changes
+  if (isBuiltInServiceType(existing.type)) {
+    const data: Record<string, unknown> = {};
+    if (name) data.name = name;
+    const service = await prisma.service.update({
+      where: { id },
+      data,
+      select: {
+        id: true, name: true, type: true, endpointUrl: true,
+        createdAt: true, updatedAt: true,
+      },
+    });
+    return NextResponse.json(service);
+  }
+
   const data: Record<string, unknown> = {};
   if (name) data.name = name;
   if (type) data.type = type;
@@ -100,6 +116,13 @@ export async function DELETE(
   }
   if (organizationId && existing.organizationId !== organizationId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (isBuiltInServiceType(existing.type)) {
+    return NextResponse.json(
+      { error: "Built-in services cannot be deleted" },
+      { status: 403 }
+    );
   }
 
   await prisma.service.delete({ where: { id } });

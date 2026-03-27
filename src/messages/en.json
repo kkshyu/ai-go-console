@@ -269,6 +269,8 @@
     "statusConnected": "Connected",
     "statusFailed": "Failed",
     "statusUntested": "Untested",
+    "builtIn": "Built-in",
+    "builtInHint": "This service is managed by the platform and cannot be deleted.",
     "category": "Category",
     "types": {
       "postgresql": "PostgreSQL",
@@ -290,7 +292,9 @@
       "firebase_auth": "Firebase Auth",
       "line_login": "LINE Login",
       "supabase": "Supabase",
-      "hasura": "Hasura"
+      "hasura": "Hasura",
+      "built_in_pg": "Built-in PostgreSQL",
+      "built_in_disk": "Built-in Disk Storage"
     },
     "categories": {
       "database": "Database",

@@ -192,6 +192,14 @@ const testers: Record<ServiceType, ServiceTester> = {
   firebase_auth: configOnlyTester("Firebase Auth", ["projectId", "apiKey"]),
   line_login: configOnlyTester("LINE Login", ["channelId", "channelSecret"]),
 
+  // --- built-in ---
+  built_in_pg: async (config) => {
+    const driver = getDbDriver("built_in_pg");
+    await driver.testConnection(config);
+    return { success: true, message: "Built-in PostgreSQL connection OK" };
+  },
+  built_in_disk: configOnlyTester("Built-in Disk Storage", ["basePath"]),
+
   // --- platform ---
   supabase: async (config, endpointUrl) => {
     const url = endpointUrl || config.projectUrl;

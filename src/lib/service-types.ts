@@ -38,6 +38,9 @@ export const ALL_SERVICE_TYPES: ServiceType[] = [
   // platform
   "supabase",
   "hasura",
+  // built-in
+  "built_in_pg",
+  "built_in_disk",
 ];
 
 export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
@@ -61,17 +64,29 @@ export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
   line_login: ServiceCategory.auth,
   supabase: ServiceCategory.platform,
   hasura: ServiceCategory.platform,
+  // built-in
+  built_in_pg: ServiceCategory.database,
+  built_in_disk: ServiceCategory.storage,
 };
 
 export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
-  [ServiceCategory.database]: ["postgresql", "mysql", "mongodb"],
-  [ServiceCategory.storage]: ["s3", "gcs", "azure_blob"],
+  [ServiceCategory.database]: ["postgresql", "mysql", "mongodb", "built_in_pg"],
+  [ServiceCategory.storage]: ["s3", "gcs", "azure_blob", "built_in_disk"],
   [ServiceCategory.payment]: ["stripe", "paypal", "ecpay"],
   [ServiceCategory.email]: ["sendgrid", "ses", "mailgun"],
   [ServiceCategory.sms]: ["twilio", "vonage", "aws_sns"],
   [ServiceCategory.auth]: ["auth0", "firebase_auth", "line_login"],
   [ServiceCategory.platform]: ["supabase", "hasura"],
 };
+
+export const BUILT_IN_SERVICE_TYPES: ReadonlySet<ServiceType> = new Set([
+  "built_in_pg",
+  "built_in_disk",
+]);
+
+export function isBuiltInServiceType(type: ServiceType): boolean {
+  return BUILT_IN_SERVICE_TYPES.has(type);
+}
 
 export interface ConfigFieldDef {
   key: string;
@@ -192,6 +207,9 @@ export const SERVICE_TYPE_CONFIG_FIELDS: Record<ServiceType, ConfigFieldDef[]> =
   hasura: [
     { key: "adminSecret", type: "password", placeholder: "your-admin-secret" },
   ],
+  // built-in (auto-configured by platform)
+  built_in_pg: [],
+  built_in_disk: [],
 };
 
 export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
@@ -215,6 +233,8 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   line_login: "LINE Login",
   supabase: "Supabase",
   hasura: "Hasura",
+  built_in_pg: "Built-in PostgreSQL",
+  built_in_disk: "Built-in Disk Storage",
 };
 
 export const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
@@ -264,6 +284,9 @@ export const SERVICE_TYPE_HTTP_MODE: Record<ServiceType, HttpMode> = {
   // platform — user provides project URL / endpoint
   supabase: "user-provided",
   hasura: "user-provided",
+  // built-in
+  built_in_pg: "proxy",
+  built_in_disk: "sdk",
 };
 
 export const FIXED_ENDPOINT_URLS: Partial<Record<ServiceType, string>> = {

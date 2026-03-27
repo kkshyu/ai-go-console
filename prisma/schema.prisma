@@ -48,6 +48,9 @@ enum ServiceType {
   // platform
   supabase
   hasura
+  // built-in (platform-managed)
+  built_in_pg
+  built_in_disk
 }
 
 model Organization {

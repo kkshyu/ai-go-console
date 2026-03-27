@@ -269,6 +269,8 @@
     "statusConnected": "已連線",
     "statusFailed": "連線失敗",
     "statusUntested": "未測試",
+    "builtIn": "內建",
+    "builtInHint": "此服務由平台管理，無法刪除。",
     "category": "類別",
     "types": {
       "postgresql": "PostgreSQL",
@@ -290,7 +292,9 @@
       "firebase_auth": "Firebase Auth",
       "line_login": "LINE 登入",
       "supabase": "Supabase",
-      "hasura": "Hasura"
+      "hasura": "Hasura",
+      "built_in_pg": "內建 PostgreSQL",
+      "built_in_disk": "內建磁碟儲存"
     },
     "categories": {
       "database": "資料庫",
