@@ -79,7 +79,11 @@
     "serviceNotAuthorized": "所需的服務尚未授權給您的組織",
     "contactAdmin": "請聯繫組織管理員以啟用這些服務。",
     "totalTokens": "Token 用量",
-    "quickCreate": "或選擇情境範本，一鍵建立",
+    "modeQuick": "快速建立",
+    "modeChat": "對話式建立",
+    "modeQuickDescription": "選擇適合職務的情境範本，一鍵建立應用",
+    "modeChatDescription": "描述需求，由 AI Agent 團隊協助建立",
+    "quickCreate": "選擇情境範本",
     "creating": "建立中...",
     "presets": {
       "finance-expense-report": {

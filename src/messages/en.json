@@ -79,7 +79,11 @@
     "serviceNotAuthorized": "Required service not authorized for your organization",
     "contactAdmin": "Please contact your organization admin to enable these services.",
     "totalTokens": "Tokens",
-    "quickCreate": "Or choose a role template to create instantly",
+    "modeQuick": "Quick Create",
+    "modeChat": "Chat to Build",
+    "modeQuickDescription": "Pick a role template and create instantly",
+    "modeChatDescription": "Describe your needs, let AI agents build it",
+    "quickCreate": "Choose a template",
     "creating": "Creating...",
     "presets": {
       "finance-expense-report": {
