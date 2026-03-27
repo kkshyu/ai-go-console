@@ -16,7 +16,6 @@ import { Server, Plus, Trash2, TestTube, Pencil, Loader2, CheckCircle2, XCircle,
 import {
   CATEGORY_SERVICE_TYPES,
   SERVICE_TYPE_CONFIG_FIELDS,
-  SERVICE_TYPE_CATEGORY,
   SERVICE_TYPE_HTTP_MODE,
   isBuiltInServiceType,
   type ConfigFieldDef,

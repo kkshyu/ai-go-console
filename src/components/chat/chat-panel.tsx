@@ -211,7 +211,7 @@ export function ChatPanel({
 
         onAssistantResponse?.(fullContent);
         onAssistantComplete?.(fullContent);
-      } catch (error) {
+      } catch {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId

@@ -141,9 +141,10 @@ export default function AppDetailPage() {
       })
       .catch(() => setChatLoaded(true));
     fetchDeployments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appId]);
 
-  async function checkDevServerStatus(slug: string) {
+  async function checkDevServerStatus(_slug: string) {
     try {
       const res = await fetch(`/api/apps/${appId}/lifecycle`, {
         method: "POST",
@@ -344,7 +345,7 @@ export default function AppDetailPage() {
   );
 
   const handleAssistantResponse = useCallback(
-    (content: string, agentRole?: AgentRole) => {
+    (content: string, _agentRole?: AgentRole) => {
       // Backend now handles file writes directly to Docker container.
       // Only handle update_app for metadata changes.
       const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
@@ -368,7 +369,7 @@ export default function AppDetailPage() {
   );
 
   const handleFilesWritten = useCallback(
-    (paths: string[]) => {
+    (_paths: string[]) => {
       // Refresh app data
       fetch(`/api/apps/${appId}`)
         .then((res) => res.json())

@@ -203,7 +203,7 @@ export default function CreateAppPage() {
   );
 
   const handleAssistantResponse = useCallback(
-    (content: string, agentRole?: AgentRole) => {
+    (content: string, _agentRole?: AgentRole) => {
       const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
       if (!jsonMatch) return;
       try {

@@ -205,7 +205,7 @@ Guidelines:
 - Respond in the same language as the user`;
 }
 
-export function buildDeveloperPrompt(allowedServices: string[]): string {
+export function buildDeveloperPrompt(_allowedServices: string[]): string {
   return `You are the Developer Agent in a multi-agent app creation system called AI Go.
 
 You receive a task from the PM Agent and WRITE ACTUAL SOURCE CODE for the app.

@@ -311,6 +311,8 @@ Rules:
         },
       ],
       OUTPUT_MODEL,
+      undefined,
+      systemPrompt,
     );
 
     return result;

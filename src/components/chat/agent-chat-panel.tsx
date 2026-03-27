@@ -5,11 +5,9 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Send, User, Loader2, ChevronDown, Zap, MessageCircle } from "lucide-react";
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/ai";
 import {
-  AGENT_DEFINITIONS,
   createInitialOrchestrationState,
 } from "@/lib/agents/types";
 import type { AgentRole, OrchestrationState } from "@/lib/agents/types";

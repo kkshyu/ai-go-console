@@ -17,28 +17,6 @@ type ServiceTester = (
 ) => Promise<TestResult>;
 
 /**
- * Test by hitting a generic HTTP endpoint.
- */
-function httpEndpointTester(label: string, authHeader?: (config: Record<string, string>) => Record<string, string>): ServiceTester {
-  return async (config, endpointUrl) => {
-    const url = endpointUrl || config.endpointUrl;
-    if (!url) throw new Error(`${label} endpoint URL not configured`);
-
-    const headers = authHeader ? authHeader(config) : {};
-    const res = await fetch(url, {
-      method: "GET",
-      headers,
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (res.ok || res.status < 500) {
-      return { success: true, message: `${label} endpoint reachable (${res.status})` };
-    }
-    throw new Error(`${label} endpoint returned ${res.status}`);
-  };
-}
-
-/**
  * Config-only validation (no network call).
  */
 function configOnlyTester(label: string, requiredFields: string[]): ServiceTester {

@@ -22,7 +22,6 @@ import {
   translateForUser,
   stripJsonBlocks,
   type ChatMessage,
-  type TokenUsage,
   DEFAULT_MODEL,
   OUTPUT_MODEL,
 } from "../ai";
@@ -596,7 +595,7 @@ export class PMActor extends Actor {
     const mergedContent = this.mergeParallelResults();
 
     // Update state for each completed developer
-    for (const [taskId, result] of this.pendingParallelResults) {
+    for (const [, result] of this.pendingParallelResults) {
       this.orchState = stateForAgentComplete(
         this.orchState,
         "developer",
@@ -774,7 +773,6 @@ export class PMActor extends Actor {
       if (serviceIds.length === 0) return;
 
       // Validate services exist and are authorized for this user
-      const isAdmin = this.config.serviceInstances.length > 0; // rough check
       let authorizedServiceIds: Set<string>;
 
       if (this.config.userId) {
