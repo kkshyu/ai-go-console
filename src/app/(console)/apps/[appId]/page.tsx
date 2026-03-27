@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Play,
   Square,
@@ -20,6 +21,7 @@ import {
   Check,
   ExternalLink,
   ServerCog,
+  Pencil,
 } from "lucide-react";
 import { AgentChatPanel, type AgentMessage } from "@/components/chat/agent-chat-panel";
 import type { AgentRole } from "@/lib/agents/types";
@@ -60,6 +62,10 @@ export default function AppDetailPage() {
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
+  const [editingSlug, setEditingSlug] = useState(false);
+  const [slugValue, setSlugValue] = useState("");
+  const [slugError, setSlugError] = useState("");
+  const [savingSlug, setSavingSlug] = useState(false);
 
   const isDevRunning = app?.status === "running" || app?.status === "developing";
   const hasPreview = app?.port && isDevRunning;
@@ -164,6 +170,29 @@ export default function AppDetailPage() {
     [appId]
   );
 
+  async function handleSaveSlug() {
+    if (!app || !slugValue.trim() || slugValue === app.slug) {
+      setEditingSlug(false);
+      return;
+    }
+    setSavingSlug(true);
+    setSlugError("");
+    const res = await fetch(`/api/apps/${appId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: slugValue.trim() }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setApp(updated);
+      setEditingSlug(false);
+    } else {
+      const data = await res.json();
+      setSlugError(data.error || "Failed to update slug");
+    }
+    setSavingSlug(false);
+  }
+
   function copyUrl() {
     if (!previewUrl) return;
     navigator.clipboard.writeText(previewUrl);
@@ -184,6 +213,41 @@ export default function AppDetailPage() {
         <Badge variant={statusVariant[app.status] || "secondary"}>
           {t(app.status as "developing" | "running" | "stopped" | "building" | "error")}
         </Badge>
+
+        {/* Separator */}
+        <div className="h-5 w-px bg-border" />
+
+        {/* Slug */}
+        {editingSlug ? (
+          <div className="flex items-center gap-1.5">
+            <Input
+              value={slugValue}
+              onChange={(e) => { setSlugValue(e.target.value); setSlugError(""); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSaveSlug();
+                if (e.key === "Escape") setEditingSlug(false);
+              }}
+              className="h-7 w-40 text-xs font-mono"
+              autoFocus
+              disabled={savingSlug}
+            />
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleSaveSlug} disabled={savingSlug}>
+              <Check className="h-3 w-3" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingSlug(false)}>
+              <X className="h-3 w-3" />
+            </Button>
+            {slugError && <span className="text-xs text-destructive">{slugError}</span>}
+          </div>
+        ) : (
+          <button
+            className="flex items-center gap-1 text-xs text-muted-foreground font-mono hover:text-foreground transition-colors"
+            onClick={() => { setSlugValue(app.slug); setEditingSlug(true); setSlugError(""); }}
+          >
+            {app.slug}
+            <Pencil className="h-3 w-3" />
+          </button>
+        )}
 
         {/* Separator */}
         <div className="h-5 w-px bg-border" />

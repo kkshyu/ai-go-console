@@ -176,6 +176,8 @@
     "title": "組織設定",
     "orgName": "組織名稱",
     "orgNameDescription": "變更組織的顯示名稱",
+    "orgSlug": "組織代稱",
+    "orgSlugDescription": "組織的 URL 友善識別碼，用於網址和 API 路徑中。",
     "save": "儲存",
     "customDomains": "自訂網域",
     "customDomainsDescription": "為組織新增自訂網域，應用程式可透過 '{domain}/{app-slug}' 存取",
