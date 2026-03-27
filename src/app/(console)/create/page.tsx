@@ -114,6 +114,7 @@ export default function CreateAppPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [creatingPreset, setCreatingPreset] = useState<string | null>(null);
+  const [presetError, setPresetError] = useState<string | null>(null);
 
   // Chat mode state
   const [previewPort, setPreviewPort] = useState<number | null>(null);
@@ -219,6 +220,7 @@ export default function CreateAppPage() {
     async (preset: AppPreset) => {
       if (creatingPreset) return;
       setCreatingPreset(preset.id);
+      setPresetError(null);
       try {
         const name = t(`presets.${preset.id}.name`);
         const description = t(`presets.${preset.id}.description`);
@@ -227,10 +229,20 @@ export default function CreateAppPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name, description, template: preset.template, presetId: preset.id }),
         });
-        if (!res.ok) throw new Error("Failed to create app");
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || t("createFailed"));
+        }
         const app = await res.json();
+        // Start the dev server inside the container
+        await fetch(`/api/apps/${app.id}/lifecycle`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "dev-start" }),
+        });
         router.push(`/apps/${app.id}`);
-      } catch {
+      } catch (err) {
+        setPresetError(err instanceof Error ? err.message : t("createFailed"));
         setCreatingPreset(null);
       }
     },
@@ -295,6 +307,12 @@ export default function CreateAppPage() {
       {/* Quick Create Mode */}
       {mode === "quick" && (
         <div className="flex-1 overflow-y-auto space-y-4 pb-4">
+          {presetError && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-700 dark:bg-red-950 dark:text-red-200">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {presetError}
+            </div>
+          )}
           <p className="text-sm text-muted-foreground">{t("quickCreate")}</p>
 
           {/* Search */}
