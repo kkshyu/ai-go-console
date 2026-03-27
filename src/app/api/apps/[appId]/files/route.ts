@@ -57,3 +57,59 @@ export async function GET(
     return NextResponse.json({ error: "Failed to read directory" }, { status: 500 });
   }
 }
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ appId: string }> }
+) {
+  const { appId } = await params;
+
+  const app = await prisma.app.findUnique({ where: { id: appId } });
+  if (!app) {
+    return NextResponse.json({ error: "App not found" }, { status: 404 });
+  }
+
+  const appDir = getAppPath(app.slug);
+  if (!fs.existsSync(appDir)) {
+    return NextResponse.json({ error: "App directory not found" }, { status: 404 });
+  }
+
+  try {
+    const formData = await request.formData();
+    const basePath = (formData.get("basePath") as string) || "";
+    const files = formData.getAll("files") as File[];
+    const relativePaths = formData.getAll("relativePaths") as string[];
+
+    let uploaded = 0;
+    const uploadedFiles: string[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const relativePath = relativePaths[i] || file.name;
+
+      // Build target path
+      const targetPath = basePath
+        ? path.join(appDir, basePath, relativePath)
+        : path.join(appDir, relativePath);
+
+      // Prevent path traversal
+      const resolved = path.resolve(targetPath);
+      if (!resolved.startsWith(appDir)) {
+        continue;
+      }
+
+      // Ensure parent directory exists
+      await fsp.mkdir(path.dirname(resolved), { recursive: true });
+
+      // Write file
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await fsp.writeFile(resolved, buffer);
+      uploaded++;
+      uploadedFiles.push(relativePath);
+    }
+
+    return NextResponse.json({ uploaded, files: uploadedFiles });
+  } catch {
+    return NextResponse.json({ error: "Failed to upload files" }, { status: 500 });
+  }
+}
