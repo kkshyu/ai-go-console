@@ -1,6 +1,7 @@
 services:
   app:
     build: .
+    image: aigo-{{orgSlug}}-{{slug}}-prod
     container_name: aigo-{{orgSlug}}-{{slug}}-prod
     restart: unless-stopped
     ports:

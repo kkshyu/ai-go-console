@@ -92,6 +92,14 @@ export async function POST(
           } catch {
             // ignore if not running
           }
+          // Also force-remove legacy container name (without -prod suffix) and new name
+          // to handle migration from old naming convention
+          const { execFile: ef } = await import("node:child_process");
+          const { promisify: pf } = await import("node:util");
+          const efAsync = pf(ef);
+          for (const name of [`aigo-${orgSlug}-${app.slug}`, `aigo-${orgSlug}-${app.slug}-prod`]) {
+            try { await efAsync("docker", ["rm", "-f", name], { timeout: 10_000 }); } catch { /* ignore */ }
+          }
 
           // Build and start production container from the temp directory
           const { execFile } = await import("node:child_process");

@@ -20,6 +20,33 @@ export function devContainerName(orgSlug: string, slug: string): string {
   return `aigo-${orgSlug}-${slug}-dev`;
 }
 
+/** Legacy naming: aigo-dev-{slug} (before orgSlug was introduced) */
+function legacyDevContainerName(slug: string): string {
+  return `aigo-dev-${slug}`;
+}
+
+/**
+ * Resolve the actual dev container name by checking if the new-style name exists,
+ * falling back to the legacy name for containers created before the naming change.
+ */
+async function resolveDevContainerName(orgSlug: string, slug: string): Promise<string> {
+  const newName = devContainerName(orgSlug, slug);
+  try {
+    await execFileAsync("docker", ["inspect", "--format", "{{.Name}}", newName], { timeout: 5_000 });
+    return newName;
+  } catch {
+    // New-style container not found — check legacy name
+    const oldName = legacyDevContainerName(slug);
+    try {
+      await execFileAsync("docker", ["inspect", "--format", "{{.Name}}", oldName], { timeout: 5_000 });
+      return oldName;
+    } catch {
+      // Neither found — return new name (will be used for creation)
+      return newName;
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Container lifecycle
 // ---------------------------------------------------------------------------
@@ -66,7 +93,8 @@ export async function createDevContainer(
  * Start an existing dev container.
  */
 export async function startDevContainer(orgSlug: string, slug: string): Promise<void> {
-  await execFileAsync("docker", ["start", devContainerName(orgSlug, slug)], {
+  const name = await resolveDevContainerName(orgSlug, slug);
+  await execFileAsync("docker", ["start", name], {
     timeout: TIMEOUT,
   });
 }
@@ -75,8 +103,9 @@ export async function startDevContainer(orgSlug: string, slug: string): Promise<
  * Stop a running dev container.
  */
 export async function stopDevContainer(orgSlug: string, slug: string): Promise<void> {
+  const name = await resolveDevContainerName(orgSlug, slug);
   try {
-    await execFileAsync("docker", ["stop", devContainerName(orgSlug, slug)], {
+    await execFileAsync("docker", ["stop", name], {
       timeout: TIMEOUT,
     });
   } catch {
@@ -88,12 +117,15 @@ export async function stopDevContainer(orgSlug: string, slug: string): Promise<v
  * Remove a dev container (force).
  */
 export async function removeDevContainer(orgSlug: string, slug: string): Promise<void> {
-  try {
-    await execFileAsync("docker", ["rm", "-f", devContainerName(orgSlug, slug)], {
-      timeout: TIMEOUT,
-    });
-  } catch {
-    // Container may not exist — ignore
+  // Remove both new-style and legacy containers to ensure cleanup
+  for (const name of [devContainerName(orgSlug, slug), legacyDevContainerName(slug)]) {
+    try {
+      await execFileAsync("docker", ["rm", "-f", name], {
+        timeout: TIMEOUT,
+      });
+    } catch {
+      // Container may not exist — ignore
+    }
   }
 }
 
@@ -104,17 +136,21 @@ export async function getDevContainerStatus(
   orgSlug: string,
   slug: string
 ): Promise<"running" | "stopped" | "not_found"> {
-  try {
-    const { stdout } = await execFileAsync(
-      "docker",
-      ["inspect", "--format", "{{.State.Status}}", devContainerName(orgSlug, slug)],
-      { timeout: 10_000 }
-    );
-    const status = stdout.trim();
-    return status === "running" ? "running" : "stopped";
-  } catch {
-    return "not_found";
+  // Check new-style name first, then legacy
+  for (const name of [devContainerName(orgSlug, slug), legacyDevContainerName(slug)]) {
+    try {
+      const { stdout } = await execFileAsync(
+        "docker",
+        ["inspect", "--format", "{{.State.Status}}", name],
+        { timeout: 10_000 }
+      );
+      const status = stdout.trim();
+      return status === "running" ? "running" : "stopped";
+    } catch {
+      // Try next name
+    }
   }
+  return "not_found";
 }
 
 /**
@@ -125,10 +161,11 @@ export async function getDevContainerLogs(
   slug: string,
   lines = 100
 ): Promise<string> {
+  const name = await resolveDevContainerName(orgSlug, slug);
   try {
     const { stdout, stderr } = await execFileAsync(
       "docker",
-      ["logs", "--tail", String(lines), devContainerName(orgSlug, slug)],
+      ["logs", "--tail", String(lines), name],
       { timeout: 10_000 }
     );
     return stdout + stderr;
@@ -186,6 +223,7 @@ export async function writeFiles(
 ): Promise<void> {
   if (files.length === 0) return;
 
+  const name = await resolveDevContainerName(orgSlug, slug);
   const tmpDir = path.join(os.tmpdir(), `aigo-cp-${crypto.randomUUID()}`);
   try {
     // Write files to temp directory
@@ -198,7 +236,7 @@ export async function writeFiles(
     // docker cp into container
     await execFileAsync(
       "docker",
-      ["cp", `${tmpDir}/.`, `${devContainerName(orgSlug, slug)}:/app/`],
+      ["cp", `${tmpDir}/.`, `${name}:/app/`],
       { timeout: TIMEOUT }
     );
   } finally {
@@ -215,6 +253,7 @@ export async function writeFileBuffer(
   targetPath: string,
   buffer: Buffer
 ): Promise<void> {
+  const name = await resolveDevContainerName(orgSlug, slug);
   const tmpDir = path.join(os.tmpdir(), `aigo-cp-${crypto.randomUUID()}`);
   try {
     const filePath = path.join(tmpDir, targetPath);
@@ -223,7 +262,7 @@ export async function writeFileBuffer(
 
     await execFileAsync(
       "docker",
-      ["cp", `${tmpDir}/.`, `${devContainerName(orgSlug, slug)}:/app/`],
+      ["cp", `${tmpDir}/.`, `${name}:/app/`],
       { timeout: TIMEOUT }
     );
   } finally {
@@ -235,10 +274,11 @@ export async function writeFileBuffer(
  * Read a single file from the dev container.
  */
 export async function readFile(orgSlug: string, slug: string, filePath: string): Promise<string> {
+  const name = await resolveDevContainerName(orgSlug, slug);
   const safePath = filePath.replace(/\.\./g, "");
   const { stdout } = await execFileAsync(
     "docker",
-    ["exec", devContainerName(orgSlug, slug), "cat", `/app/${safePath}`],
+    ["exec", name, "cat", `/app/${safePath}`],
     { timeout: 10_000 }
   );
   return stdout;
@@ -256,11 +296,13 @@ export async function readDirectory(
   const safePath = (dirPath || "").replace(/\.\./g, "");
   const targetDir = safePath ? `/app/${safePath}` : "/app";
 
+  const name = await resolveDevContainerName(orgSlug, slug);
+
   // Use a script that outputs JSON-like data
   const { stdout } = await execFileAsync(
     "docker",
     [
-      "exec", devContainerName(orgSlug, slug),
+      "exec", name,
       "sh", "-c",
       `cd "${targetDir}" && ls -1pa | grep -v '^\\./$' | while IFS= read -r name; do
         if [ -d "$name" ]; then
@@ -309,10 +351,11 @@ export async function listFileTree(
   orgSlug: string,
   slug: string
 ): Promise<Array<{ relativePath: string; isDirectory: boolean }>> {
+  const name = await resolveDevContainerName(orgSlug, slug);
   const { stdout } = await execFileAsync(
     "docker",
     [
-      "exec", devContainerName(orgSlug, slug),
+      "exec", name,
       "find", "/app",
       "-not", "-path", "*/node_modules/*",
       "-not", "-path", "*/.git/*",
@@ -343,7 +386,7 @@ export async function listFileTree(
     const { stdout: dirOutput } = await execFileAsync(
       "docker",
       [
-        "exec", devContainerName(orgSlug, slug),
+        "exec", name,
         "find", "/app", "-type", "d",
         "-not", "-path", "*/node_modules/*",
         "-not", "-path", "*/.git/*",
@@ -387,9 +430,10 @@ export async function installPackages(
 ): Promise<string> {
   if (packages.length === 0) return "";
 
+  const name = await resolveDevContainerName(orgSlug, slug);
   const { stdout, stderr } = await execFileAsync(
     "docker",
-    ["exec", devContainerName(orgSlug, slug), "npm", "install", ...packages],
+    ["exec", name, "npm", "install", ...packages],
     { timeout: BUILD_TIMEOUT }
   );
   return stdout + stderr;
@@ -404,12 +448,13 @@ export async function installPackages(
  * Excludes node_modules.
  */
 export async function exportSource(orgSlug: string, slug: string, destDir: string): Promise<void> {
+  const name = await resolveDevContainerName(orgSlug, slug);
   await fsp.mkdir(destDir, { recursive: true });
 
   // Copy from container to host
   await execFileAsync(
     "docker",
-    ["cp", `${devContainerName(orgSlug, slug)}:/app/.`, destDir],
+    ["cp", `${name}:/app/.`, destDir],
     { timeout: TIMEOUT }
   );
 
@@ -495,11 +540,14 @@ export async function tagBaseImage(orgSlug: string, slug: string, template: stri
  * Remove the app-specific dev image.
  */
 export async function removeDevImage(orgSlug: string, slug: string): Promise<void> {
-  try {
-    await execFileAsync("docker", ["rmi", `aigo-${orgSlug}-${slug}-dev`], {
-      timeout: TIMEOUT,
-    });
-  } catch {
-    // Image may not exist
+  // Remove both new-style and legacy images to ensure cleanup
+  for (const img of [`aigo-${orgSlug}-${slug}-dev`, `aigo-dev-${slug}`]) {
+    try {
+      await execFileAsync("docker", ["rmi", img], {
+        timeout: TIMEOUT,
+      });
+    } catch {
+      // Image may not exist
+    }
   }
 }
