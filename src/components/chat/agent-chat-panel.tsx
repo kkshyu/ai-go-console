@@ -13,7 +13,7 @@ import {
   createInitialOrchestrationState,
 } from "@/lib/agents/types";
 import type { AgentRole, OrchestrationState } from "@/lib/agents/types";
-import { PipelineProgress } from "./pipeline-progress";
+import { PipelineProgress, type ActorStatusInfo } from "./pipeline-progress";
 import { MarkdownContent } from "@/components/chat/markdown-content";
 import { AgentAvatar } from "./agent-avatar";
 
@@ -88,6 +88,8 @@ export function AgentChatPanel({
   const [currentAgent, setCurrentAgent] = useState<AgentRole | null>(null);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
   const [statusMessage, setStatusMessage] = useState<string>("");
+  const [actorStatuses, setActorStatuses] = useState<ActorStatusInfo[]>([]);
+  const [restartEvent, setRestartEvent] = useState<{ actorId: string; role: string; restartCount: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
 
@@ -218,6 +220,17 @@ export function AgentChatPanel({
                   onOrchestrationUpdate?.(parsed.orchestrationState);
                 }
 
+                // Update actor status to idle
+                if (parsed.agentRole && parsed.agentRole !== "pm") {
+                  setActorStatuses((prev) =>
+                    prev.map((a) =>
+                      a.role === parsed.agentRole
+                        ? { ...a, status: "idle" as const }
+                        : a
+                    )
+                  );
+                }
+
                 // Reset for next agent's message
                 displayContent = "";
                 rawContent = "";
@@ -243,6 +256,24 @@ export function AgentChatPanel({
                       : m
                   )
                 );
+                // Track active actor status
+                if (parsed.agentRole !== "pm") {
+                  setActorStatuses((prev) => {
+                    const actorId = `${parsed.agentRole}-0`;
+                    const existing = prev.findIndex((a) => a.actorId === actorId);
+                    const updated: ActorStatusInfo = {
+                      actorId,
+                      role: parsed.agentRole,
+                      status: "processing",
+                    };
+                    if (existing >= 0) {
+                      const next = [...prev];
+                      next[existing] = updated;
+                      return next;
+                    }
+                    return [...prev, updated];
+                  });
+                }
               }
 
               // Translated content for display
@@ -255,6 +286,74 @@ export function AgentChatPanel({
                     m.id === currentMsgId ? { ...m, content: displayContent } : m
                   )
                 );
+              }
+
+              // Parallel group status
+              if (parsed.parallelGroup) {
+                setOrchState((prev) => ({
+                  ...prev,
+                  parallelGroups: [
+                    ...(prev.parallelGroups || []).filter(
+                      (g) => g.groupId !== parsed.parallelGroup.groupId
+                    ),
+                    {
+                      groupId: parsed.parallelGroup.groupId,
+                      tasks: parsed.parallelGroup.tasks,
+                      status: "running" as const,
+                    },
+                  ],
+                }));
+                continue;
+              }
+
+              // Individual parallel actor status update
+              if (parsed.parallelActorStatus) {
+                setOrchState((prev) => ({
+                  ...prev,
+                  parallelGroups: (prev.parallelGroups || []).map((g) => {
+                    if (g.groupId !== parsed.parallelActorStatus.groupId) return g;
+                    const updatedTasks = g.tasks.map((t) =>
+                      t.actorId === parsed.parallelActorStatus.actorId
+                        ? { ...t, status: parsed.parallelActorStatus.status }
+                        : t
+                    );
+                    const allDone = updatedTasks.every(
+                      (t) => t.status === "completed"
+                    );
+                    return { ...g, tasks: updatedTasks, status: allDone ? "completed" as const : g.status };
+                  }),
+                }));
+                continue;
+              }
+
+              // Actor restarted by supervisor
+              if (parsed.actorRestarted) {
+                setRestartEvent({
+                  actorId: parsed.actorRestarted.actorId,
+                  role: parsed.actorRestarted.role,
+                  restartCount: parsed.actorRestarted.restartCount,
+                });
+                // Update actor statuses
+                setActorStatuses((prev) => {
+                  const existing = prev.findIndex(
+                    (a) => a.actorId === parsed.actorRestarted.actorId
+                  );
+                  const updated: ActorStatusInfo = {
+                    actorId: parsed.actorRestarted.actorId,
+                    role: parsed.actorRestarted.role as AgentRole,
+                    status: "restarting",
+                    restartCount: parsed.actorRestarted.restartCount,
+                  };
+                  if (existing >= 0) {
+                    const next = [...prev];
+                    next[existing] = updated;
+                    return next;
+                  }
+                  return [...prev, updated];
+                });
+                // Clear restart event after 3 seconds
+                setTimeout(() => setRestartEvent(null), 3000);
+                continue;
               }
 
               // Error
@@ -322,6 +421,7 @@ export function AgentChatPanel({
         setCurrentAgent(null);
         setAgentPhase(null);
         setStatusMessage("");
+        setRestartEvent(null);
       }
     },
     [
@@ -365,6 +465,8 @@ export function AgentChatPanel({
               agentPhase={agentPhase}
               statusMessage={statusMessage}
               generatingText={resolvedGeneratingText}
+              actorStatuses={actorStatuses}
+              restartEvent={restartEvent}
             />
           </div>
         )}

@@ -106,6 +106,18 @@ export function parsePMAction(content: string): PMAction | null {
       };
     }
 
+    if (action === "dispatch_parallel" && parsed.target === "developer" && Array.isArray(parsed.tasks)) {
+      return {
+        action: "dispatch_parallel",
+        target: "developer",
+        tasks: parsed.tasks.map((t: { taskId?: string; task?: string; files?: string[] }, i: number) => ({
+          taskId: t.taskId || `dev-task-${i}`,
+          task: t.task || "",
+          files: t.files || [],
+        })),
+      };
+    }
+
     return null;
   } catch {
     return null;
@@ -155,6 +167,7 @@ export function stateForDispatch(
   description?: string
 ): OrchestrationState {
   return {
+    ...state,
     status: "running",
     currentAgent: agentRole,
     tasks: [
@@ -191,6 +204,7 @@ export function stateForComplete(
   summary?: string
 ): OrchestrationState {
   return {
+    ...state,
     status: "completed",
     currentAgent: null,
     tasks: state.tasks.map((t) =>
@@ -271,6 +285,88 @@ export function buildAgentContext(messages: AgentMessage[]): string {
   return contextParts.length > 0
     ? `\n\nAgent outputs:\n${contextParts.join("\n")}`
     : "";
+}
+
+/**
+ * Update orchestration state when dispatching parallel tasks.
+ */
+export function stateForParallelDispatch(
+  state: OrchestrationState,
+  groupId: string,
+  tasks: Array<{ taskId: string; description: string }>
+): OrchestrationState {
+  const parallelTasks = tasks.map((t, i) => ({
+    agentRole: "developer" as AgentRole,
+    actorId: `developer-${i}`,
+    status: "running" as const,
+    description: t.description,
+  }));
+
+  return {
+    ...state,
+    status: "running",
+    currentAgent: "developer",
+    parallelGroups: [
+      ...(state.parallelGroups || []),
+      {
+        groupId,
+        tasks: parallelTasks,
+        status: "running",
+      },
+    ],
+  };
+}
+
+/**
+ * Update orchestration state when one parallel task completes.
+ */
+export function stateForParallelTaskComplete(
+  state: OrchestrationState,
+  groupId: string,
+  taskId: string,
+  summary: string
+): OrchestrationState {
+  return {
+    ...state,
+    parallelGroups: (state.parallelGroups || []).map((g) => {
+      if (g.groupId !== groupId) return g;
+      const updatedTasks = g.tasks.map((t) =>
+        t.actorId?.includes(taskId) || t.description?.includes(taskId)
+          ? { ...t, status: "completed" as const, summary }
+          : t
+      );
+      const allDone = updatedTasks.every((t) => t.status === "completed");
+      return {
+        ...g,
+        tasks: updatedTasks,
+        status: allDone ? ("completed" as const) : g.status,
+      };
+    }),
+  };
+}
+
+/**
+ * Update orchestration state when all parallel tasks in a group complete.
+ */
+export function stateForParallelGroupComplete(
+  state: OrchestrationState,
+  groupId: string,
+  mergedResult: string
+): OrchestrationState {
+  return {
+    ...state,
+    currentAgent: "pm",
+    parallelGroups: (state.parallelGroups || []).map((g) =>
+      g.groupId === groupId
+        ? {
+            ...g,
+            status: "completed" as const,
+            mergedResult,
+            tasks: g.tasks.map((t) => ({ ...t, status: "completed" as const })),
+          }
+        : g
+    ),
+  };
 }
 
 export { createInitialOrchestrationState };

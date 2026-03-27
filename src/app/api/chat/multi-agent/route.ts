@@ -3,97 +3,22 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
-  streamChat,
-  translateForUser,
-  stripJsonBlocks,
   buildAppContextPrompt,
   DEFAULT_MODEL,
-  OUTPUT_MODEL,
   type ChatMessage,
 } from "@/lib/ai";
 import {
-  routeMessage,
-  parsePMAction,
-  parseAgentResult,
-  stateForAgentComplete,
-  stateForComplete,
   createInitialOrchestrationState,
 } from "@/lib/agents/orchestrator";
-import type { AgentMessage, AgentRole, OrchestrationState } from "@/lib/agents/types";
-
-/** Maximum number of auto-chained agent calls per request */
-const MAX_CHAIN_DEPTH = 10;
-
-/** Interval for sending progress updates to the user (ms) */
-const PROGRESS_INTERVAL_MS = 2500;
-
-/**
- * Progress messages shown to the user while waiting for each agent.
- * PM sends these on behalf of specialist agents to keep the user informed.
- */
-const PROGRESS_MESSAGES: Record<string, string[]> = {
-  architect: [
-    "正在分析您的需求...",
-    "正在評估最佳技術方案...",
-    "正在選擇合適的框架和服務...",
-    "正在規劃系統架構...",
-    "正在確認技術細節...",
-    "架構設計即將完成...",
-  ],
-  developer: [
-    "正在準備開發環境...",
-    "正在規劃應用程式結構...",
-    "正在設計資料模型...",
-    "正在實作核心功能...",
-    "正在整合所需服務...",
-    "應用程式即將建立完成...",
-  ],
-  reviewer: [
-    "正在檢查程式碼品質...",
-    "正在進行安全性審查...",
-    "正在評估效能表現...",
-    "正在整理審查結果...",
-  ],
-  devops: [
-    "正在配置部署環境...",
-    "正在設定服務連接...",
-    "正在準備啟動應用程式...",
-    "正在進行最終檢查...",
-    "部署設定即將完成...",
-  ],
-  pm: [
-    "正在分析進度...",
-    "正在規劃下一步...",
-    "正在整理結果...",
-    "正在準備派發下一個任務...",
-    "正在確認工作流程...",
-    "正在彙整各方資訊...",
-    "仍在處理中，請稍候...",
-    "即將完成分析...",
-  ],
-};
-
-/**
- * Fallback messages when translation returns empty content.
- * Ensures the user always sees something instead of a permanent spinner.
- */
-const FALLBACK_MESSAGES: Record<string, Record<string, string>> = {
-  pm: {
-    dispatch: "正在安排專家處理您的需求...",
-    respond: "正在回覆您的問題...",
-    complete: "所有工作已完成！",
-    default: "正在處理中...",
-  },
-  architect: { default: "架構設計已完成。" },
-  developer: { default: "開發工作已完成。" },
-  reviewer: { default: "程式碼審查已完成。" },
-  devops: { default: "部署設定已完成。" },
-};
-
-function getFallbackMessage(agentRole: string, action?: string): string {
-  const agentMessages = FALLBACK_MESSAGES[agentRole] || FALLBACK_MESSAGES.pm;
-  return (action && agentMessages[action]) || agentMessages.default || "處理完成。";
-}
+import {
+  buildPMPrompt,
+  buildAppDevPMPrompt,
+} from "@/lib/agents/prompts";
+import type { AgentRole, OrchestrationState } from "@/lib/agents/types";
+import { ActorSystem } from "@/lib/actors/actor-system";
+import { PMActor, type PMActorConfig } from "@/lib/actors/pm-actor";
+import { createSpecialistActor } from "@/lib/actors/specialist-actors";
+import type { AgentMessage } from "@/lib/agents/types";
 
 /**
  * Map agent action types to artifact types for persistence.
@@ -112,6 +37,7 @@ function getArtifactType(content: string): string | null {
       review_result: "review",
       deploy_ready: "deployment",
       dispatch: "task",
+      dispatch_parallel: "task",
       respond: null as unknown as string,
       complete: null as unknown as string,
     };
@@ -136,8 +62,6 @@ function extractJsonContent(content: string): unknown | null {
 
 /**
  * Load persisted artifacts for a pipeline and format as minimal context.
- * This replaces replaying full conversation history — agents get only
- * the structured JSON outputs they need.
  */
 async function loadArtifactContext(pipelineId: string): Promise<string> {
   const artifacts = await prisma.agentArtifact.findMany({
@@ -191,9 +115,6 @@ export async function POST(request: NextRequest) {
     });
     allowedServices = orgAllowed.map((s) => s.serviceType);
 
-    // Load service instances scoped to user role:
-    // - Admin: all org service instances
-    // - Regular user: only instances authorized via UserAllowedServiceInstance
     if (session.user.role === "admin") {
       const services = await prisma.service.findMany({
         where: { organizationId: session.user.organizationId },
@@ -259,7 +180,7 @@ export async function POST(request: NextRequest) {
       | undefined,
   }));
 
-  // Use client state, or load from DB, or create new
+  // Load orchestration state
   let orchState: OrchestrationState | undefined = clientState;
   if (!orchState && pipelineId) {
     const pipeline = await prisma.agentPipeline.findUnique({
@@ -270,27 +191,44 @@ export async function POST(request: NextRequest) {
         status: pipeline.status as OrchestrationState["status"],
         currentAgent: (pipeline.currentAgent as OrchestrationState["currentAgent"]) || null,
         tasks: (pipeline.tasks as unknown as OrchestrationState["tasks"]) || [],
+        parallelGroups: (pipeline.parallelGroups as unknown as OrchestrationState["parallelGroups"]) || [],
+        activeActors: [],
       };
     }
   }
 
-  // Load persisted artifacts for context (instead of replaying messages)
+  // Load persisted artifacts for context
   const artifactContext = pipelineId
     ? await loadArtifactContext(pipelineId)
     : "";
 
-  // Create a TransformStream for SSE
+  // Build PM prompt
+  const pmPrompt = appContext
+    ? buildAppDevPMPrompt(appContext)
+    : buildPMPrompt(allowedServices);
+
+  // Create SSE stream
   const encoder = new TextEncoder();
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
 
-  const sendEvent = (data: unknown) =>
-    writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+  const sendEvent = async (data: unknown) => {
+    try {
+      await writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+    } catch {
+      // Stream may have closed
+    }
+  };
 
   /**
-   * Save an agent's structured output as an artifact for future reference.
+   * Save an agent's structured output as an artifact.
    */
-  const saveArtifact = async (agentRole: AgentRole, content: string) => {
+  const saveArtifact = async (
+    agentRole: AgentRole,
+    content: string,
+    actorId?: string,
+    taskId?: string
+  ) => {
     if (!pipelineId) return;
     const type = getArtifactType(content);
     if (!type) return;
@@ -303,338 +241,87 @@ export async function POST(request: NextRequest) {
         agentRole,
         type,
         content: jsonContent as object,
+        ...(actorId && { actorId }),
+        ...(taskId && { taskId }),
       },
     });
   };
 
-  // Start streaming in background with PM-controlled chaining
+  // Start actor system in background
   (async () => {
-    /**
-     * Translate agent output with a progress timer so the user sees updates
-     * during the translation phase (which can take 3-8 seconds).
-     */
-    const translateWithProgress = async (
-      content: string,
-      agentRole: AgentRole
-    ) => {
-      const TRANSLATE_MESSAGES = [
-        "正在整理回覆內容...",
-        "正在準備顯示結果...",
-      ];
-      let idx = 0;
-      const timer = setInterval(async () => {
-        const msg = TRANSLATE_MESSAGES[Math.min(idx, TRANSLATE_MESSAGES.length - 1)];
-        idx++;
-        try {
-          await sendEvent({ statusUpdate: msg, agentRole });
-        } catch { /* stream may have closed */ }
-      }, PROGRESS_INTERVAL_MS);
-
-      try {
-        return await translateForUser(content, agentRole);
-      } finally {
-        clearInterval(timer);
-      }
-    };
-
     try {
-      let currentMessages = [...agentMessages];
-      let currentState = orchState || createInitialOrchestrationState();
-      let chainDepth = 0;
+      // 1. Create actor system with supervisor strategy
+      const system = new ActorSystem(sendEvent);
 
-      // Always start with PM Agent
-      let dispatchedAgent: string | undefined;
-      let dispatchedTask: string | undefined;
-
-      while (chainDepth < MAX_CHAIN_DEPTH) {
-        chainDepth++;
-
-        // Route to the appropriate agent
-        const dispatch = routeMessage(currentMessages, {
+      // 2. Set actor factory for restarts
+      system.setActorFactory((role, index) =>
+        createSpecialistActor(role, index, {
+          model: model || DEFAULT_MODEL,
           allowedServices,
           serviceInstances,
           appContext,
-          orchestrationState: currentState,
-          dispatchedAgent: dispatchedAgent as AgentMessage["agentRole"],
-          dispatchedTask,
-        });
+          sendEvent,
+        })
+      );
 
-        // Use artifacts for context instead of replaying full conversation
-        const systemPrompt = dispatch.systemPrompt + artifactContext;
+      // 3. Create and spawn PM actor
+      const pmConfig: PMActorConfig = {
+        model: model || DEFAULT_MODEL,
+        allowedServices,
+        serviceInstances,
+        appContext,
+        artifactContext,
+        sendEvent,
+        saveArtifact,
+        system,
+        pmPrompt,
+      };
 
-        // 1. Send agent metadata + state
-        await sendEvent({
-          agentRole: dispatch.agentRole,
-          orchestrationState: dispatch.orchestrationState,
-        });
+      const pmActor = new PMActor(pmConfig, orchState);
+      await system.spawn(pmActor);
 
-        // 2. Signal thinking
-        await sendEvent({
-          thinking: true,
-          agentRole: dispatch.agentRole,
-        });
+      // 4. Start heartbeat monitoring
+      system.startHeartbeat();
 
-        // 3. Generate agent response silently
-        // Annotate messages so the current agent understands who said what.
-        // Specialist agent outputs are prefixed with their role so PM can
-        // distinguish its own messages from specialist responses.
-        const chatMessages: ChatMessage[] = currentMessages.map((m) => {
-          if (
-            m.role === "assistant" &&
-            m.agentRole &&
-            m.agentRole !== dispatch.agentRole
-          ) {
-            return {
-              role: m.role,
-              content: `[${m.agentRole.toUpperCase()} AGENT OUTPUT]:\n${m.content}`,
-            };
-          }
-          return { role: m.role, content: m.content };
-        });
+      // 5. Send initial user message to PM
+      const { createMessage } = await import("@/lib/actors/types");
+      const initialMsg = createMessage("task", "user", pmActor.id, {
+        task: "Process user request",
+        context: artifactContext,
+        messages: agentMessages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          agentRole: m.agentRole,
+        })),
+      });
+      system.send(initialMsg);
 
-        // Send periodic progress updates while the agent generates
-        let progressIdx = 0;
-        const agentMsgs = PROGRESS_MESSAGES[dispatch.agentRole] || PROGRESS_MESSAGES.pm;
-        const progressTimer = setInterval(async () => {
-          const msg = agentMsgs[Math.min(progressIdx, agentMsgs.length - 1)];
-          progressIdx++;
-          try {
-            await sendEvent({
-              statusUpdate: msg,
-              agentRole: dispatch.agentRole,
-            });
-          } catch {
-            // Stream may have closed
-          }
-        }, PROGRESS_INTERVAL_MS);
+      // 6. Wait for completion
+      await system.waitForCompletion();
 
-        let result;
-        try {
-          result = await streamChat(
-            chatMessages,
-            () => {},
-            model || DEFAULT_MODEL,
-            allowedServices,
-            systemPrompt
-          );
-        } catch (err) {
-          clearInterval(progressTimer);
-          const errMsg = err instanceof Error ? err.message : "Unknown error";
-          await sendEvent({ error: `${dispatch.agentRole} agent failed: ${errMsg}` });
-          // If specialist fails, skip to next iteration so PM can handle it
-          if (dispatch.agentRole !== "pm") {
-            currentMessages = [
-              ...currentMessages,
-              {
-                role: "assistant" as const,
-                content: `\`\`\`json\n{"status": "blocked", "blockedReason": "${errMsg}"}\n\`\`\``,
-                agentRole: dispatch.agentRole,
-              },
-            ];
-            const agentResult = parseAgentResult(`\`\`\`json\n{"status": "blocked", "blockedReason": "${errMsg}"}\n\`\`\``);
-            currentState = stateForAgentComplete(
-              dispatch.orchestrationState,
-              dispatch.agentRole,
-              agentResult.summary
-            );
-            await sendEvent({
-              agentComplete: true,
-              agentRole: dispatch.agentRole,
-              orchestrationState: currentState,
-            });
-            dispatchedAgent = undefined;
-            dispatchedTask = undefined;
-            continue;
-          }
-          break;
-        }
+      // 7. Cleanup
+      system.stopHeartbeat();
 
-        clearInterval(progressTimer);
-
-        // 4. Send usage
-        if (result.usage) {
-          await sendEvent({
-            usage: result.usage,
-            model: model || DEFAULT_MODEL,
-          });
-        }
-
-        // Add agent response to message history
-        currentMessages = [
-          ...currentMessages,
-          {
-            role: "assistant" as const,
-            content: result.content,
-            agentRole: dispatch.agentRole,
-          },
-        ];
-
-        // 5. Persist agent output as artifact
-        await saveArtifact(dispatch.agentRole, result.content);
-
-        // 6. Decide what happens next based on which agent just responded
-        if (dispatch.agentRole === "pm") {
-          const pmAction = parsePMAction(result.content);
-
-          if (pmAction?.action === "dispatch") {
-            await sendEvent({ translating: true, agentRole: "pm" });
-            const translated = await translateWithProgress(result.content, "pm");
-            const dispatchContent = translated.content || getFallbackMessage("pm", "dispatch");
-            await sendEvent({ content: dispatchContent, agentRole: "pm" });
-            if (translated.usage) {
-              await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
-            }
-            await sendEvent({
-              agentComplete: true,
-              agentRole: "pm",
-              rawContent: result.content,
-              orchestrationState: dispatch.orchestrationState,
-            });
-
-            dispatchedAgent = pmAction.target;
-            dispatchedTask = pmAction.task;
-            currentState = dispatch.orchestrationState;
-            continue;
-          }
-
-          if (pmAction?.action === "respond") {
-            await sendEvent({ translating: true, agentRole: "pm" });
-            const translated = await translateWithProgress(result.content, "pm");
-            const displayContent = translated.content || pmAction.message || getFallbackMessage("pm", "respond");
-            await sendEvent({ content: displayContent, agentRole: "pm" });
-            if (translated.usage) {
-              await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
-            }
-            await sendEvent({
-              agentComplete: true,
-              agentRole: "pm",
-              rawContent: result.content,
-            });
-            currentState = dispatch.orchestrationState;
-            break;
-          }
-
-          if (pmAction?.action === "complete") {
-            await sendEvent({ translating: true, agentRole: "pm" });
-            const translated = await translateWithProgress(result.content, "pm");
-            const displayContent = translated.content || pmAction.summary || getFallbackMessage("pm", "complete");
-            await sendEvent({ content: displayContent, agentRole: "pm" });
-            if (translated.usage) {
-              await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
-            }
-            currentState = stateForComplete(
-              dispatch.orchestrationState,
-              pmAction.summary
-            );
-            await sendEvent({
-              agentComplete: true,
-              agentRole: "pm",
-              rawContent: result.content,
-              orchestrationState: currentState,
-            });
-            break;
-          }
-
-          // PM didn't output a valid action.
-          // If all dispatched tasks are completed, auto-complete the workflow.
-          const allTasksDone = dispatch.orchestrationState.tasks.length > 0 &&
-            dispatch.orchestrationState.tasks.every((t) => t.status === "completed");
-
-          if (allTasksDone) {
-            const summary = `Completed ${dispatch.orchestrationState.tasks.length} tasks: ${dispatch.orchestrationState.tasks.map((t) => t.agentRole).join(", ")}`;
-            await sendEvent({ translating: true, agentRole: "pm" });
-            const translated = await translateWithProgress(result.content || summary, "pm");
-            if (translated.content || summary) {
-              await sendEvent({
-                content: translated.content || summary,
-                agentRole: "pm",
-              });
-            }
-            if (translated.usage) {
-              await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
-            }
-            currentState = stateForComplete(dispatch.orchestrationState, summary);
-            await sendEvent({
-              agentComplete: true,
-              agentRole: "pm",
-              rawContent: result.content,
-              orchestrationState: currentState,
-            });
-            break;
-          }
-
-          // Otherwise treat as a respond and stop
-          await sendEvent({ translating: true, agentRole: "pm" });
-          const translated = await translateWithProgress(result.content, "pm");
-          const fallbackContent = translated.content || stripJsonBlocks(result.content) || getFallbackMessage("pm", "default");
-          await sendEvent({
-            content: fallbackContent,
-            agentRole: "pm",
-          });
-          if (translated.usage) {
-            await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
-          }
-          await sendEvent({
-            agentComplete: true,
-            agentRole: "pm",
-            rawContent: result.content,
-          });
-          currentState = dispatch.orchestrationState;
-          break;
-        } else {
-          // Specialist agent completed — translate, then loop back to PM
-          await sendEvent({
-            translating: true,
-            agentRole: dispatch.agentRole,
-          });
-
-          const translated = await translateWithProgress(
-            result.content,
-            dispatch.agentRole
-          );
-          const agentContent = translated.content || stripJsonBlocks(result.content) || getFallbackMessage(dispatch.agentRole);
-          await sendEvent({
-            content: agentContent,
-            agentRole: dispatch.agentRole,
-          });
-          if (translated.usage) {
-            await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
-          }
-
-          const agentResult = parseAgentResult(result.content);
-          currentState = stateForAgentComplete(
-            dispatch.orchestrationState,
-            dispatch.agentRole,
-            agentResult.summary
-          );
-
-          await sendEvent({
-            agentComplete: true,
-            agentRole: dispatch.agentRole,
-            rawContent: result.content,
-            orchestrationState: currentState,
-          });
-
-          // Loop back to PM for next decision
-          dispatchedAgent = undefined;
-          dispatchedTask = undefined;
-        }
-      }
-
-      // Persist orchestration state
-      if (pipelineId && currentState) {
+      // 8. Persist final state
+      const finalState = system.getFinalState();
+      if (pipelineId && finalState) {
         await prisma.agentPipeline.update({
           where: { id: pipelineId },
           data: {
-            status: currentState.status,
-            currentAgent: currentState.currentAgent || "pm",
-            completedAgents: currentState.tasks
+            status: finalState.status,
+            currentAgent: finalState.currentAgent || "pm",
+            completedAgents: finalState.tasks
               .filter((t) => t.status === "completed")
               .map((t) => t.agentRole),
-            tasks: JSON.parse(JSON.stringify(currentState.tasks)),
+            tasks: JSON.parse(JSON.stringify(finalState.tasks)),
+            parallelGroups: finalState.parallelGroups
+              ? JSON.parse(JSON.stringify(finalState.parallelGroups))
+              : undefined,
           },
         });
       }
+
+      system.stopAll();
 
       await sendEvent("[DONE]");
       await writer.write(encoder.encode("data: [DONE]\n\n"));

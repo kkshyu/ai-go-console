@@ -12,16 +12,27 @@ export type TaskStatus = "idle" | "running" | "completed" | "error";
 /** A single task dispatched by PM to an agent */
 export interface AgentTask {
   agentRole: AgentRole;
+  actorId?: string; // unique actor instance ID (e.g. "developer-0")
   status: TaskStatus;
   description?: string; // what PM asked this agent to do
   summary?: string; // result summary after completion
+}
+
+/** A group of parallel developer tasks running simultaneously */
+export interface ParallelTaskGroup {
+  groupId: string;
+  tasks: AgentTask[];
+  status: TaskStatus;
+  mergedResult?: string;
 }
 
 /** Overall orchestration state managed by PM Agent */
 export interface OrchestrationState {
   status: TaskStatus;
   tasks: AgentTask[]; // dispatched tasks (history, in order)
+  parallelGroups: ParallelTaskGroup[]; // parallel developer groups
   currentAgent: AgentRole | null; // currently executing agent
+  activeActors: string[]; // list of active actor IDs
 }
 
 export interface AgentMeta {
@@ -80,7 +91,9 @@ export function createInitialOrchestrationState(): OrchestrationState {
   return {
     status: "idle",
     tasks: [],
+    parallelGroups: [],
     currentAgent: null,
+    activeActors: [],
   };
 }
 
@@ -102,4 +115,14 @@ export interface PMCompleteAction {
   summary: string;
 }
 
-export type PMAction = PMDispatchAction | PMRespondAction | PMCompleteAction;
+export interface PMDispatchParallelAction {
+  action: "dispatch_parallel";
+  target: "developer";
+  tasks: Array<{
+    taskId: string;
+    task: string;
+    files: string[];
+  }>;
+}
+
+export type PMAction = PMDispatchAction | PMRespondAction | PMCompleteAction | PMDispatchParallelAction;
