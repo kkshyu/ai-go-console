@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
-  LayoutDashboard,
   AppWindow,
   PlusCircle,
   Server,
@@ -22,9 +21,8 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/", labelKey: "dashboard", icon: LayoutDashboard },
-  { href: "/apps", labelKey: "apps", icon: AppWindow },
   { href: "/create", labelKey: "createApp", icon: PlusCircle },
+  { href: "/apps", labelKey: "apps", icon: AppWindow },
   { href: "/services", labelKey: "services", icon: Server, adminOnly: true },
   { href: "/users", labelKey: "users", icon: Users, adminOnly: true },
   { href: "/settings/organization", labelKey: "organization", icon: Building2, adminOnly: true },
