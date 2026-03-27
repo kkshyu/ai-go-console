@@ -48,6 +48,11 @@ enum ServiceType {
   // platform
   supabase
   hasura
+  // ai_model
+  openai
+  gemini
+  claude
+  openrouter
 }
 
 model Organization {

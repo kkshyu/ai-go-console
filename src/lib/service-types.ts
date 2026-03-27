@@ -8,6 +8,7 @@ export enum ServiceCategory {
   sms = "sms",
   auth = "auth",
   platform = "platform",
+  ai_model = "ai_model",
 }
 
 export const ALL_SERVICE_TYPES: ServiceType[] = [
@@ -38,6 +39,11 @@ export const ALL_SERVICE_TYPES: ServiceType[] = [
   // platform
   "supabase",
   "hasura",
+  // ai_model
+  "openai",
+  "gemini",
+  "claude",
+  "openrouter",
 ];
 
 export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
@@ -61,6 +67,10 @@ export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
   line_login: ServiceCategory.auth,
   supabase: ServiceCategory.platform,
   hasura: ServiceCategory.platform,
+  openai: ServiceCategory.ai_model,
+  gemini: ServiceCategory.ai_model,
+  claude: ServiceCategory.ai_model,
+  openrouter: ServiceCategory.ai_model,
 };
 
 export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
@@ -71,6 +81,7 @@ export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
   [ServiceCategory.sms]: ["twilio", "vonage", "aws_sns"],
   [ServiceCategory.auth]: ["auth0", "firebase_auth", "line_login"],
   [ServiceCategory.platform]: ["supabase", "hasura"],
+  [ServiceCategory.ai_model]: ["openai", "gemini", "claude", "openrouter"],
 };
 
 export interface ConfigFieldDef {
@@ -192,6 +203,24 @@ export const SERVICE_TYPE_CONFIG_FIELDS: Record<ServiceType, ConfigFieldDef[]> =
   hasura: [
     { key: "adminSecret", type: "password", placeholder: "your-admin-secret" },
   ],
+  // --- ai_model ---
+  openai: [
+    { key: "apiKey", type: "password", placeholder: "sk-..." },
+    { key: "organizationId", type: "text", placeholder: "org-..." },
+    { key: "model", type: "text", placeholder: "gpt-4o" },
+  ],
+  gemini: [
+    { key: "apiKey", type: "password", placeholder: "AIzaSy..." },
+    { key: "model", type: "text", placeholder: "gemini-2.0-flash" },
+  ],
+  claude: [
+    { key: "apiKey", type: "password", placeholder: "sk-ant-..." },
+    { key: "model", type: "text", placeholder: "claude-sonnet-4-20250514" },
+  ],
+  openrouter: [
+    { key: "apiKey", type: "password", placeholder: "sk-or-..." },
+    { key: "model", type: "text", placeholder: "openai/gpt-4o" },
+  ],
 };
 
 export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
@@ -215,6 +244,10 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   line_login: "LINE Login",
   supabase: "Supabase",
   hasura: "Hasura",
+  openai: "OpenAI",
+  gemini: "Google Gemini",
+  claude: "Claude (Anthropic)",
+  openrouter: "OpenRouter",
 };
 
 export const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
@@ -225,6 +258,7 @@ export const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
   [ServiceCategory.sms]: "SMS",
   [ServiceCategory.auth]: "Authentication",
   [ServiceCategory.platform]: "Platform",
+  [ServiceCategory.ai_model]: "AI Model",
 };
 
 /**
@@ -264,6 +298,11 @@ export const SERVICE_TYPE_HTTP_MODE: Record<ServiceType, HttpMode> = {
   // platform — user provides project URL / endpoint
   supabase: "user-provided",
   hasura: "user-provided",
+  // ai_model — fixed well-known API URLs
+  openai: "fixed",
+  gemini: "fixed",
+  claude: "fixed",
+  openrouter: "fixed",
 };
 
 export const FIXED_ENDPOINT_URLS: Partial<Record<ServiceType, string>> = {
@@ -273,6 +312,10 @@ export const FIXED_ENDPOINT_URLS: Partial<Record<ServiceType, string>> = {
   mailgun: "https://api.mailgun.net",
   twilio: "https://api.twilio.com",
   vonage: "https://rest.nexmo.com",
+  openai: "https://api.openai.com",
+  gemini: "https://generativelanguage.googleapis.com",
+  claude: "https://api.anthropic.com",
+  openrouter: "https://openrouter.ai/api",
 };
 
 /**

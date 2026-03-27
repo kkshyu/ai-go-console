@@ -290,7 +290,11 @@
       "firebase_auth": "Firebase Auth",
       "line_login": "LINE 登入",
       "supabase": "Supabase",
-      "hasura": "Hasura"
+      "hasura": "Hasura",
+      "openai": "OpenAI",
+      "gemini": "Google Gemini",
+      "claude": "Claude (Anthropic)",
+      "openrouter": "OpenRouter"
     },
     "categories": {
       "database": "資料庫",
@@ -299,8 +303,11 @@
       "email": "電子郵件",
       "sms": "簡訊",
       "auth": "第三方登入",
-      "platform": "平台"
-    }
+      "platform": "平台",
+      "ai_model": "AI 模型"
+    },
+    "model": "模型",
+    "organizationId": "組織 ID"
   },
   "organization": {
     "title": "組織設定",

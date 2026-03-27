@@ -44,6 +44,7 @@ const ALL_SERVICE_TYPES: ServiceType[] = [
   "twilio", "vonage", "aws_sns",
   "auth0", "firebase_auth", "line_login",
   "supabase", "hasura",
+  "openai", "gemini", "claude", "openrouter",
 ];
 
 // ── Main seed ───────────────────────────────────────────────────────────────
@@ -222,7 +223,26 @@ async function main() {
     },
   });
 
-  console.log(`  ✓ Services: ${pgService.name}, ${stripeService.name}, ${sendgridService.name}, ${s3Service.name}`);
+  const openaiConfig = encrypt(JSON.stringify({
+    apiKey: "sk-fake-openai-key-for-dev",
+    model: "gpt-4o",
+  }));
+
+  const openaiService = await prisma.service.upsert({
+    where: { id: "seed-svc-openai" },
+    update: {},
+    create: {
+      id: "seed-svc-openai",
+      name: "OpenAI GPT",
+      type: ServiceType.openai,
+      configEncrypted: openaiConfig.ciphertext,
+      iv: openaiConfig.iv,
+      authTag: openaiConfig.authTag,
+      organizationId: acme.id,
+    },
+  });
+
+  console.log(`  ✓ Services: ${pgService.name}, ${stripeService.name}, ${sendgridService.name}, ${s3Service.name}, ${openaiService.name}`);
 
   // ── 5. Apps ─────────────────────────────────────────────────────────────
 
