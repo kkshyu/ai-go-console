@@ -57,6 +57,7 @@ export default function AppDetailPage() {
   const [logs, setLogs] = useState("");
   const [loading, setLoading] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [buildOutput, setBuildOutput] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<AgentMessage[]>([]);
   const [chatLoaded, setChatLoaded] = useState(false);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
@@ -95,6 +96,12 @@ export default function AppDetailPage() {
 
   async function doAction(action: string) {
     setLoading(true);
+    if (action === "publish") {
+      setBuildOutput(null);
+      setShowLogs(true);
+    } else {
+      setBuildOutput(null);
+    }
     try {
       const res = await fetch(`/api/apps/${appId}/lifecycle`, {
         method: "POST",
@@ -105,10 +112,15 @@ export default function AppDetailPage() {
       if (action === "logs") {
         setLogs(data.logs || "No logs");
         setShowLogs(true);
+      } else if (action === "publish") {
+        setBuildOutput(data.output || (data.error ? `Error: ${data.error}` : "Build completed"));
       }
       const appRes = await fetch(`/api/apps/${appId}`);
       setApp(await appRes.json());
     } catch (err) {
+      if (action === "publish") {
+        setBuildOutput("Build failed: " + (err instanceof Error ? err.message : "Unknown error"));
+      }
       console.error(err);
     } finally {
       setLoading(false);
@@ -332,14 +344,25 @@ export default function AppDetailPage() {
         <div className="mb-3 relative">
           <div className="rounded-lg border bg-muted">
             <div className="flex items-center justify-between px-3 py-1.5 border-b">
-              <span className="text-xs font-medium">Logs</span>
+              <span className="text-xs font-medium">
+                {buildOutput !== null || (loading && app?.status === "building")
+                  ? t("deployLogs")
+                  : "Logs"}
+              </span>
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowLogs(false)}>
                 <X className="h-3 w-3" />
               </Button>
             </div>
-            <pre className="max-h-48 overflow-auto p-3 text-xs font-mono whitespace-pre-wrap">
-              {logs || "No logs available"}
-            </pre>
+            {loading && app?.status === "building" && buildOutput === null ? (
+              <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
+                <RotateCw className="h-3 w-3 animate-spin" />
+                <span>{t("building")}...</span>
+              </div>
+            ) : (
+              <pre className="max-h-48 overflow-auto p-3 text-xs font-mono whitespace-pre-wrap">
+                {buildOutput !== null ? buildOutput : (logs || "No logs available")}
+              </pre>
+            )}
           </div>
         </div>
       )}
