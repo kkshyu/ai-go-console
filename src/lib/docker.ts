@@ -16,19 +16,6 @@ function containerName(orgSlug: string, slug: string): string {
 }
 
 /**
- * Build Docker image for an app
- */
-export async function buildApp(orgSlug: string, slug: string): Promise<string> {
-  const appDir = getAppPath(slug);
-  const { stdout, stderr } = await execFileAsync(
-    "docker",
-    ["build", "-t", containerName(orgSlug, slug), "."],
-    { cwd: appDir, timeout: 300_000 }
-  );
-  return stdout + stderr;
-}
-
-/**
  * Tag a docker image with a version for rollback
  */
 export async function tagImage(orgSlug: string, slug: string, version: number): Promise<void> {

@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getAppPath } from "@/lib/generator";
-import fs from "node:fs";
-import fsp from "node:fs/promises";
-import path from "node:path";
+import * as sandbox from "@/lib/docker-sandbox";
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+
+function validatePath(filePath: string): boolean {
+  if (!filePath) return false;
+  if (filePath.includes("..")) return false;
+  if (filePath.startsWith("/")) return false;
+  return true;
+}
 
 export async function GET(
   request: NextRequest,
@@ -18,32 +22,22 @@ export async function GET(
     return NextResponse.json({ error: "App not found" }, { status: 404 });
   }
 
-  const appDir = getAppPath(app.slug);
-  if (!fs.existsSync(appDir)) {
-    return NextResponse.json({ error: "App directory not found" }, { status: 404 });
+  const status = await sandbox.getDevContainerStatus(app.slug);
+  if (status === "not_found") {
+    return NextResponse.json({ error: "App container not found" }, { status: 404 });
   }
 
   const filePath = request.nextUrl.searchParams.get("path") || "";
-  if (!filePath) {
+  if (!validatePath(filePath)) {
     return NextResponse.json({ error: "Path is required" }, { status: 400 });
   }
 
-  // Prevent path traversal
-  const resolved = path.resolve(appDir, filePath);
-  if (!resolved.startsWith(appDir)) {
-    return NextResponse.json({ error: "Invalid path" }, { status: 400 });
-  }
-
   try {
-    const stat = await fsp.stat(resolved);
-    if (stat.isDirectory()) {
-      return NextResponse.json({ error: "Path is a directory" }, { status: 400 });
+    const content = await sandbox.readFile(app.slug, filePath);
+    const size = Buffer.byteLength(content, "utf-8");
+    if (size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: "File too large", size }, { status: 413 });
     }
-    if (stat.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: "File too large", size: stat.size }, { status: 413 });
-    }
-
-    const content = await fsp.readFile(resolved, "utf-8");
     return NextResponse.json({ content, path: filePath });
   } catch {
     return NextResponse.json({ error: "Failed to read file" }, { status: 500 });
@@ -61,20 +55,14 @@ export async function PUT(
     return NextResponse.json({ error: "App not found" }, { status: 404 });
   }
 
-  const appDir = getAppPath(app.slug);
-  if (!fs.existsSync(appDir)) {
-    return NextResponse.json({ error: "App directory not found" }, { status: 404 });
+  const status = await sandbox.getDevContainerStatus(app.slug);
+  if (status === "not_found") {
+    return NextResponse.json({ error: "App container not found" }, { status: 404 });
   }
 
   const filePath = request.nextUrl.searchParams.get("path") || "";
-  if (!filePath) {
+  if (!validatePath(filePath)) {
     return NextResponse.json({ error: "Path is required" }, { status: 400 });
-  }
-
-  // Prevent path traversal
-  const resolved = path.resolve(appDir, filePath);
-  if (!resolved.startsWith(appDir)) {
-    return NextResponse.json({ error: "Invalid path" }, { status: 400 });
   }
 
   try {
@@ -84,7 +72,7 @@ export async function PUT(
       return NextResponse.json({ error: "Content must be a string" }, { status: 400 });
     }
 
-    await fsp.writeFile(resolved, content, "utf-8");
+    await sandbox.writeFiles(app.slug, [{ path: filePath, content }]);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Failed to write file" }, { status: 500 });

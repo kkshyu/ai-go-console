@@ -10,6 +10,10 @@ export interface TemplateDefinition {
   devArgs: string[];
   installCommand: string;
   installArgs: string[];
+  /** Port the dev server listens on inside the Docker container */
+  internalDevPort: number;
+  /** Docker base image name for dev containers */
+  devBaseImage: string;
 }
 
 const TEMPLATES_ROOT = path.join(process.cwd(), "templates");
@@ -25,6 +29,8 @@ export const templates: Record<string, TemplateDefinition> = {
     devArgs: ["vite", "--host", "0.0.0.0"],
     installCommand: "npm",
     installArgs: ["install"],
+    internalDevPort: 5173,
+    devBaseImage: "aigo-dev-base-react-spa",
   },
   "node-api": {
     id: "node-api",
@@ -36,6 +42,8 @@ export const templates: Record<string, TemplateDefinition> = {
     devArgs: ["tsx", "watch", "src/index.ts"],
     installCommand: "npm",
     installArgs: ["install"],
+    internalDevPort: 3000,
+    devBaseImage: "aigo-dev-base-node-api",
   },
   "nextjs-fullstack": {
     id: "nextjs-fullstack",
@@ -47,6 +55,8 @@ export const templates: Record<string, TemplateDefinition> = {
     devArgs: ["next", "dev", "--turbopack"],
     installCommand: "npm",
     installArgs: ["install"],
+    internalDevPort: 3000,
+    devBaseImage: "aigo-dev-base-nextjs-fullstack",
   },
   "line-bot": {
     id: "line-bot",
@@ -59,6 +69,8 @@ export const templates: Record<string, TemplateDefinition> = {
     devArgs: ["tsx", "watch", "src/index.ts"],
     installCommand: "npm",
     installArgs: ["install"],
+    internalDevPort: 3000,
+    devBaseImage: "aigo-dev-base-line-bot",
   },
 };
 

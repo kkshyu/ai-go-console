@@ -12,8 +12,13 @@ import {
   FIXED_ENDPOINT_URLS,
 } from "@/lib/service-types";
 import type { ServiceType } from "@prisma/client";
+import * as sandbox from "@/lib/docker-sandbox";
 
-const APPS_ROOT = path.join(process.cwd(), "apps");
+/**
+ * Metadata directory on host — only stores docker-compose.yml for production.
+ * App source code lives exclusively inside Docker containers.
+ */
+const APPS_META_ROOT = path.join(process.cwd(), "apps");
 
 export interface GenerateAppOptions {
   appId: string;
@@ -29,7 +34,8 @@ export interface GenerateAppOptions {
 }
 
 /**
- * Generates an app from a template into apps/<slug>/
+ * Generates an app inside a Docker container from a template base image.
+ * Template files are rendered in memory and injected via docker cp.
  */
 export async function generateApp(options: GenerateAppOptions): Promise<string> {
   const { appId, slug, orgSlug, name, description, template, port, prodPort } = options;
@@ -39,15 +45,8 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
     throw new Error(`Template "${template}" not found`);
   }
 
-  const appDir = path.join(APPS_ROOT, slug);
-
-  // Ensure apps directory exists
-  await fsp.mkdir(APPS_ROOT, { recursive: true });
-
-  // Remove existing directory if present (re-generation)
-  if (fs.existsSync(appDir)) {
-    await fsp.rm(appDir, { recursive: true, force: true });
-  }
+  // Remove existing container if present (re-generation)
+  await sandbox.removeDevContainer(slug);
 
   // Resolve environment variables from linked services
   const envVars = await resolveServiceEnvVars(appId);
@@ -63,48 +62,82 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
     envVars,
   };
 
-  // Copy and render template files
-  await copyDirectory(tmpl.directory, appDir, context);
+  // Render all template files in memory
+  const renderedFiles = await renderTemplateFiles(tmpl.directory, context);
 
-  // Write custom files from developer agent (overwrite template files if same path)
+  // Merge custom files from developer agent (overwrite template files if same path)
   if (options.files && options.files.length > 0) {
     for (const file of options.files) {
-      const filePath = path.join(appDir, file.path);
-      await fsp.mkdir(path.dirname(filePath), { recursive: true });
-      await fsp.writeFile(filePath, file.content, "utf-8");
-    }
-  }
-
-  // Add extra npm packages to package.json
-  if (options.npmPackages && options.npmPackages.length > 0) {
-    const pkgPath = path.join(appDir, "package.json");
-    const pkg = JSON.parse(await fsp.readFile(pkgPath, "utf-8"));
-    if (!pkg.dependencies) pkg.dependencies = {};
-    for (const pkgName of options.npmPackages) {
-      if (!pkg.dependencies[pkgName]) {
-        pkg.dependencies[pkgName] = "latest";
+      const existingIdx = renderedFiles.findIndex((f) => f.path === file.path);
+      if (existingIdx >= 0) {
+        renderedFiles[existingIdx] = file;
+      } else {
+        renderedFiles.push(file);
       }
     }
-    await fsp.writeFile(pkgPath, JSON.stringify(pkg, null, 2), "utf-8");
   }
 
-  return appDir;
+  // Add extra npm packages to the rendered package.json
+  if (options.npmPackages && options.npmPackages.length > 0) {
+    const pkgIdx = renderedFiles.findIndex((f) => f.path === "package.json");
+    if (pkgIdx >= 0) {
+      const pkg = JSON.parse(renderedFiles[pkgIdx].content);
+      if (!pkg.dependencies) pkg.dependencies = {};
+      for (const pkgName of options.npmPackages) {
+        if (!pkg.dependencies[pkgName]) {
+          pkg.dependencies[pkgName] = "latest";
+        }
+      }
+      renderedFiles[pkgIdx].content = JSON.stringify(pkg, null, 2);
+    }
+  }
+
+  // Build app-specific dev image (or tag base image)
+  if (options.npmPackages && options.npmPackages.length > 0) {
+    await sandbox.buildAppDevImage(slug, template, options.npmPackages);
+  } else {
+    await sandbox.tagBaseImage(slug, template);
+  }
+
+  // Create the dev container with service env vars
+  await sandbox.createDevContainer(slug, template, port, envVars);
+
+  // Inject all rendered files into the container
+  // Filter out docker-compose.yml — it stays on host for production
+  const containerFiles = renderedFiles.filter(
+    (f) => f.path !== "docker-compose.yml"
+  );
+  await sandbox.writeFiles(slug, containerFiles);
+
+  // Write docker-compose.yml to host metadata directory (for production use)
+  const composeFile = renderedFiles.find((f) => f.path === "docker-compose.yml");
+  if (composeFile) {
+    const metaDir = path.join(APPS_META_ROOT, slug);
+    await fsp.mkdir(metaDir, { recursive: true });
+    await fsp.writeFile(
+      path.join(metaDir, "docker-compose.yml"),
+      composeFile.content,
+      "utf-8"
+    );
+  }
+
+  return sandbox.devContainerName(slug);
 }
 
 /**
- * Recursively copies a directory, rendering .hbs files through Handlebars
+ * Recursively renders all files from a template directory through Handlebars.
+ * Returns files as in-memory array instead of writing to disk.
  */
-async function copyDirectory(
-  src: string,
-  dest: string,
-  context: Record<string, unknown>
-): Promise<void> {
-  await fsp.mkdir(dest, { recursive: true });
-
-  const entries = await fsp.readdir(src, { withFileTypes: true });
+async function renderTemplateFiles(
+  srcDir: string,
+  context: Record<string, unknown>,
+  basePath = ""
+): Promise<Array<{ path: string; content: string }>> {
+  const files: Array<{ path: string; content: string }> = [];
+  const entries = await fsp.readdir(srcDir, { withFileTypes: true });
 
   for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
+    const srcPath = path.join(srcDir, entry.name);
     let destName = entry.name;
     let isTemplate = false;
 
@@ -114,31 +147,28 @@ async function copyDirectory(
       isTemplate = true;
     }
 
-    const destPath = path.join(dest, destName);
+    const relativePath = basePath ? `${basePath}/${destName}` : destName;
 
     if (entry.isDirectory()) {
-      // Skip node_modules if present in template
       if (entry.name === "node_modules") continue;
-      await copyDirectory(srcPath, destPath, context);
+      const subFiles = await renderTemplateFiles(srcPath, context, relativePath);
+      files.push(...subFiles);
     } else {
-      if (isTemplate) {
-        // Render through Handlebars
-        const content = await fsp.readFile(srcPath, "utf-8");
-        const compiled = Handlebars.compile(content);
-        const rendered = compiled(context);
-        await fsp.writeFile(destPath, rendered, "utf-8");
-      } else {
-        // Copy as-is
-        await fsp.copyFile(srcPath, destPath);
-      }
+      const rawContent = await fsp.readFile(srcPath, "utf-8");
+      const content = isTemplate
+        ? Handlebars.compile(rawContent)(context)
+        : rawContent;
+      files.push({ path: relativePath, content });
     }
   }
+
+  return files;
 }
 
 /**
  * Resolve service env vars for an app from the database.
  */
-async function resolveServiceEnvVars(appId: string): Promise<Record<string, string>> {
+export async function resolveServiceEnvVars(appId: string): Promise<Record<string, string>> {
   const envVars: Record<string, string> = {};
 
   const appServices = await prisma.appService.findMany({
@@ -204,23 +234,37 @@ export async function regenerateCompose(appId: string, slug: string, orgSlug: st
   const compiled = Handlebars.compile(content);
   const rendered = compiled(context);
 
-  const appDir = path.join(APPS_ROOT, slug);
-  await fsp.writeFile(path.join(appDir, "docker-compose.yml"), rendered, "utf-8");
+  // Write to host metadata directory
+  const metaDir = path.join(APPS_META_ROOT, slug);
+  await fsp.mkdir(metaDir, { recursive: true });
+  await fsp.writeFile(path.join(metaDir, "docker-compose.yml"), rendered, "utf-8");
 }
 
 /**
- * Removes an app directory
+ * Removes an app's dev container and image, plus host metadata.
  */
 export async function removeApp(slug: string): Promise<void> {
-  const appDir = path.join(APPS_ROOT, slug);
-  if (fs.existsSync(appDir)) {
-    await fsp.rm(appDir, { recursive: true, force: true });
+  await sandbox.removeDevContainer(slug);
+  await sandbox.removeDevImage(slug);
+
+  // Clean up host metadata directory
+  const metaDir = path.join(APPS_META_ROOT, slug);
+  if (fs.existsSync(metaDir)) {
+    await fsp.rm(metaDir, { recursive: true, force: true });
   }
 }
 
 /**
- * Returns the absolute path for an app
+ * Returns the host metadata path for an app (only docker-compose.yml lives here).
+ * @deprecated Use docker-sandbox functions for file operations.
  */
 export function getAppPath(slug: string): string {
-  return path.join(APPS_ROOT, slug);
+  return path.join(APPS_META_ROOT, slug);
+}
+
+/**
+ * Returns the dev container name for an app.
+ */
+export function getContainerName(slug: string): string {
+  return sandbox.devContainerName(slug);
 }
