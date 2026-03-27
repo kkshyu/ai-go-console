@@ -282,6 +282,8 @@ export async function POST(request: NextRequest) {
         system,
         pmPrompt,
         appSlug,
+        appId,
+        userId: session?.user?.id,
       };
 
       const pmActor = new PMActor(pmConfig, orchState);

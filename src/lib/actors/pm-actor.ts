@@ -36,6 +36,7 @@ import {
 } from "../agents/orchestrator";
 import { createSpecialistActor, type SpecialistConfig } from "./specialist-actors";
 import { writeFiles } from "../docker-sandbox";
+import { prisma } from "../db";
 
 /** Maximum number of agent interactions per request. */
 const MAX_INTERACTIONS = 20;
@@ -77,6 +78,8 @@ export interface PMActorConfig {
   system: ActorSystem;
   pmPrompt: string;
   appSlug?: string;
+  appId?: string;
+  userId?: string;
 }
 
 export class PMActor extends Actor {
@@ -159,6 +162,9 @@ export class PMActor extends Actor {
 
     // Directly write files to Docker container if applicable
     await this.executeFileOperations(payload.content);
+
+    // Bind services selected by architect or required by developer
+    await this.bindServicesIfNeeded(payload.content);
 
     // Update state
     this.orchState = stateForAgentComplete(
@@ -626,6 +632,9 @@ export class PMActor extends Actor {
     // Directly write merged files to Docker container
     await this.executeFileOperations(mergedContent);
 
+    // Bind services from merged results
+    await this.bindServicesIfNeeded(mergedContent);
+
     // Reset parallel tracking
     this.pendingParallelResults.clear();
     this.expectedParallelCount = 0;
@@ -731,6 +740,110 @@ export class PMActor extends Actor {
     } catch (err) {
       console.warn(
         `[PMActor] Failed to write files to container: ${err instanceof Error ? err.message : "Unknown error"}`
+      );
+    }
+  }
+
+  // ---- Service Binding ----
+
+  /**
+   * Parse agent output for service requirements and bind authorized services to the app.
+   * Validates each service against the user's authorized instances.
+   * Sends an error event if any required service is not authorized.
+   */
+  private async bindServicesIfNeeded(content: string): Promise<void> {
+    if (!this.config.appId) return;
+
+    try {
+      const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
+      if (!jsonMatch) return;
+
+      const parsed = JSON.parse(jsonMatch[1]);
+
+      // Extract services from architect_design or developer create_app/modify_files
+      let services: Array<{ instanceId: string; name: string; type: string }> = [];
+      if (parsed.action === "architect_design" && parsed.design?.services) {
+        services = parsed.design.services;
+      } else if (parsed.requiredServices) {
+        services = parsed.requiredServices;
+      }
+
+      if (services.length === 0) return;
+
+      const serviceIds = services.map((s) => s.instanceId).filter(Boolean);
+      if (serviceIds.length === 0) return;
+
+      // Validate services exist and are authorized for this user
+      const isAdmin = this.config.serviceInstances.length > 0; // rough check
+      let authorizedServiceIds: Set<string>;
+
+      if (this.config.userId) {
+        // Check user authorization
+        const user = await prisma.user.findUnique({
+          where: { id: this.config.userId },
+          select: { role: true, organizationId: true },
+        });
+
+        if (user?.role === "admin") {
+          // Admin can use all org services
+          const orgServices = await prisma.service.findMany({
+            where: { organizationId: user.organizationId! },
+            select: { id: true },
+          });
+          authorizedServiceIds = new Set(orgServices.map((s) => s.id));
+        } else {
+          // Non-admin: only allowed instances
+          const allowed = await prisma.userAllowedServiceInstance.findMany({
+            where: { userId: this.config.userId },
+            select: { serviceId: true },
+          });
+          authorizedServiceIds = new Set(allowed.map((a) => a.serviceId));
+        }
+      } else {
+        // Fallback: use serviceInstances from config
+        authorizedServiceIds = new Set(this.config.serviceInstances.map((s) => s.id));
+      }
+
+      // Check for unauthorized services
+      const unauthorized = services.filter((s) => s.instanceId && !authorizedServiceIds.has(s.instanceId));
+      if (unauthorized.length > 0) {
+        const names = unauthorized.map((s) => `${s.name} (${s.type})`).join(", ");
+        await this.config.sendEvent({
+          pmMessage: `無法完成：您未被授權使用以下服務：${names}。請聯繫管理員取得授權。`,
+          agentRole: "pm",
+        });
+        return;
+      }
+
+      // Bind authorized services to the app (skip already-bound ones)
+      const existingBindings = await prisma.appService.findMany({
+        where: { appId: this.config.appId },
+        select: { serviceId: true },
+      });
+      const existingIds = new Set(existingBindings.map((b) => b.serviceId));
+      const newServiceIds = serviceIds.filter((id) => !existingIds.has(id));
+
+      if (newServiceIds.length > 0) {
+        await prisma.appService.createMany({
+          data: newServiceIds.map((svcId, index) => ({
+            appId: this.config.appId!,
+            serviceId: svcId,
+            envVarPrefix: existingBindings.length + index === 0 ? "SVC" : `SVC${existingBindings.length + index}`,
+          })),
+          skipDuplicates: true,
+        });
+
+        const boundNames = services
+          .filter((s) => newServiceIds.includes(s.instanceId))
+          .map((s) => s.name)
+          .join(", ");
+        await this.config.sendEvent({
+          servicesBound: { count: newServiceIds.length, names: boundNames },
+        });
+      }
+    } catch (err) {
+      console.warn(
+        `[PMActor] Failed to bind services: ${err instanceof Error ? err.message : "Unknown error"}`
       );
     }
   }
