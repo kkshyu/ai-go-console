@@ -20,6 +20,13 @@ export async function GET() {
       role: true,
       organizationId: true,
       createdAt: true,
+      allowedServices: {
+        select: {
+          service: {
+            select: { id: true, name: true, type: true },
+          },
+        },
+      },
     },
   });
 

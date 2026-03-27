@@ -24,6 +24,7 @@ interface UserItem {
   name: string;
   role: string;
   createdAt: string;
+  allowedServices: { service: { id: string; name: string; type: string } }[];
 }
 
 interface ServiceItem {
@@ -106,11 +107,27 @@ export default function UsersPage() {
     if (!servicesPanelUserId) return;
     setServicesSaving(true);
     try {
-      await fetch(`/api/users/${servicesPanelUserId}/allowed-services`, {
+      const res = await fetch(`/api/users/${servicesPanelUserId}/allowed-services`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ serviceIds: Array.from(userAllowedIds) }),
       });
+      if (res.ok) {
+        const updatedServices = (await res.json()) as ServiceItem[];
+        const userId = servicesPanelUserId;
+        setUsers((prev) =>
+          prev.map((u) =>
+            u.id === userId
+              ? {
+                  ...u,
+                  allowedServices: updatedServices.map((s) => ({
+                    service: { id: s.id, name: s.name, type: s.type },
+                  })),
+                }
+              : u
+          )
+        );
+      }
       setServicesPanelUserId(null);
     } catch {
       // ignore
@@ -283,7 +300,7 @@ export default function UsersPage() {
           {users.map((user) => (
             <Card key={user.id}>
               <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary">
                     {user.role === "admin" ? (
                       <Shield className="h-5 w-5" />
@@ -291,9 +308,18 @@ export default function UsersPage() {
                       <UserIcon className="h-5 w-5" />
                     )}
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium truncate">{user.name}</p>
                     <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+                    {user.allowedServices.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {user.allowedServices.map(({ service }) => (
+                          <Badge key={service.id} variant="outline" className="text-xs font-normal">
+                            {service.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
