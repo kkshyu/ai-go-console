@@ -30,11 +30,9 @@ import {
   Undo2,
   Server,
   FolderOpen,
-  File,
-  Folder,
-  ArrowUp,
 } from "lucide-react";
 import { AgentChatPanel, type AgentMessage } from "@/components/chat/agent-chat-panel";
+import { FileManager } from "@/components/file-manager/file-manager";
 import type { AgentRole } from "@/lib/agents/types";
 
 interface AppService {
@@ -104,11 +102,6 @@ export default function AppDetailPage() {
 
   // Right panel tab state
   const [rightPanel, setRightPanel] = useState<"preview" | "deploy" | "files">("preview");
-
-  // File manager state
-  const [fileList, setFileList] = useState<Array<{ name: string; type: "file" | "directory"; size: number; mtime: string }>>([]);
-  const [filePath, setFilePath] = useState("");
-  const [fileLoading, setFileLoading] = useState(false);
 
   // Dev server is running if we have a port and it's in developing state
   const [devRunning, setDevRunning] = useState(false);
@@ -397,43 +390,6 @@ export default function AppDetailPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  async function fetchFiles(subpath = "") {
-    setFileLoading(true);
-    try {
-      const params = subpath ? `?path=${encodeURIComponent(subpath)}` : "";
-      const res = await fetch(`/api/apps/${appId}/files${params}`);
-      const data = await res.json();
-      if (data.files) {
-        setFileList(data.files);
-        setFilePath(subpath);
-      }
-    } catch {} finally {
-      setFileLoading(false);
-    }
-  }
-
-  function openFileManager() {
-    setRightPanel("files");
-    fetchFiles("");
-  }
-
-  function navigateToDir(dirName: string) {
-    const newPath = filePath ? `${filePath}/${dirName}` : dirName;
-    fetchFiles(newPath);
-  }
-
-  function navigateUp() {
-    const parts = filePath.split("/").filter(Boolean);
-    parts.pop();
-    fetchFiles(parts.join("/"));
-  }
-
-  function formatFileSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
   const currentDeployment = deployments.find((d) => d.status === "running");
 
   if (!app) return <div className="p-8">Loading...</div>;
@@ -632,7 +588,7 @@ export default function AppDetailPage() {
                   ? "text-foreground bg-background border-b-2 border-primary -mb-px"
                   : "text-muted-foreground hover:text-foreground"
               }`}
-              onClick={openFileManager}
+              onClick={() => setRightPanel("files")}
             >
               <FolderOpen className="h-3 w-3" />
               {t("fileManager")}
@@ -927,64 +883,7 @@ export default function AppDetailPage() {
 
           {/* Files Panel */}
           {rightPanel === "files" && (
-            <div className="flex flex-1 flex-col rounded-b-lg border border-t-0 overflow-hidden bg-background min-h-0">
-              {/* Path bar */}
-              <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
-                {filePath && (
-                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={navigateUp}>
-                    <ArrowUp className="h-3 w-3" />
-                  </Button>
-                )}
-                <span className="text-xs font-mono text-muted-foreground truncate">/{filePath}</span>
-              </div>
-
-              {/* File list */}
-              <div className="flex-1 overflow-auto">
-                {fileLoading ? (
-                  <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-                    <RotateCw className="h-4 w-4 animate-spin mr-2" />
-                    Loading...
-                  </div>
-                ) : fileList.length === 0 ? (
-                  <div className="flex flex-1 flex-col items-center justify-center py-12 text-muted-foreground">
-                    <FolderOpen className="h-10 w-10 mb-3 opacity-20" />
-                    <p className="text-sm font-medium">Empty directory</p>
-                  </div>
-                ) : (
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b bg-muted/30">
-                        <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">Name</th>
-                        <th className="text-right px-3 py-1.5 font-medium text-muted-foreground w-20">Size</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {fileList.map((f) => (
-                        <tr
-                          key={f.name}
-                          className={`border-b last:border-0 hover:bg-muted/20 ${f.type === "directory" ? "cursor-pointer" : ""}`}
-                          onClick={() => f.type === "directory" && navigateToDir(f.name)}
-                        >
-                          <td className="px-3 py-1.5 font-mono">
-                            <span className="flex items-center gap-2">
-                              {f.type === "directory" ? (
-                                <Folder className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                              ) : (
-                                <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                              )}
-                              {f.name}
-                            </span>
-                          </td>
-                          <td className="px-3 py-1.5 text-right text-muted-foreground">
-                            {f.type === "file" ? formatFileSize(f.size) : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
+            <FileManager appId={app.id} />
           )}
         </div>
       </div>
