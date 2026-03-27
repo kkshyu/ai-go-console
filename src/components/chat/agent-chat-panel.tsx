@@ -290,14 +290,10 @@ export function AgentChatPanel({
           onAssistantComplete?.(displayContent, resolvedAgent || undefined);
         }
 
-        // Remove trailing empty message left over from agentComplete handler
-        setMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last && last.role === "assistant" && !last.content) {
-            return prev.slice(0, -1);
-          }
-          return prev;
-        });
+        // Remove any empty assistant messages left over from agentComplete handlers
+        setMessages((prev) =>
+          prev.filter((m) => m.role !== "assistant" || m.content)
+        );
       } catch {
         setMessages((prev) =>
           prev.map((m) =>

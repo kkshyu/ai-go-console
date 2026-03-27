@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import {
   streamChat,
   translateForUser,
+  stripJsonBlocks,
   buildAppContextPrompt,
   DEFAULT_MODEL,
   OUTPUT_MODEL,
@@ -71,6 +72,28 @@ const PROGRESS_MESSAGES: Record<string, string[]> = {
     "即將完成分析...",
   ],
 };
+
+/**
+ * Fallback messages when translation returns empty content.
+ * Ensures the user always sees something instead of a permanent spinner.
+ */
+const FALLBACK_MESSAGES: Record<string, Record<string, string>> = {
+  pm: {
+    dispatch: "正在安排專家處理您的需求...",
+    respond: "正在回覆您的問題...",
+    complete: "所有工作已完成！",
+    default: "正在處理中...",
+  },
+  architect: { default: "架構設計已完成。" },
+  developer: { default: "開發工作已完成。" },
+  reviewer: { default: "程式碼審查已完成。" },
+  devops: { default: "部署設定已完成。" },
+};
+
+function getFallbackMessage(agentRole: string, action?: string): string {
+  const agentMessages = FALLBACK_MESSAGES[agentRole] || FALLBACK_MESSAGES.pm;
+  return (action && agentMessages[action]) || agentMessages.default || "處理完成。";
+}
 
 /**
  * Map agent action types to artifact types for persistence.
@@ -440,9 +463,8 @@ export async function POST(request: NextRequest) {
           if (pmAction?.action === "dispatch") {
             await sendEvent({ translating: true, agentRole: "pm" });
             const translated = await translateWithProgress(result.content, "pm");
-            if (translated.content) {
-              await sendEvent({ content: translated.content, agentRole: "pm" });
-            }
+            const dispatchContent = translated.content || getFallbackMessage("pm", "dispatch");
+            await sendEvent({ content: dispatchContent, agentRole: "pm" });
             if (translated.usage) {
               await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
             }
@@ -450,6 +472,7 @@ export async function POST(request: NextRequest) {
               agentComplete: true,
               agentRole: "pm",
               rawContent: result.content,
+              orchestrationState: dispatch.orchestrationState,
             });
 
             dispatchedAgent = pmAction.target;
@@ -461,10 +484,8 @@ export async function POST(request: NextRequest) {
           if (pmAction?.action === "respond") {
             await sendEvent({ translating: true, agentRole: "pm" });
             const translated = await translateWithProgress(result.content, "pm");
-            const displayContent = translated.content || pmAction.message;
-            if (displayContent) {
-              await sendEvent({ content: displayContent, agentRole: "pm" });
-            }
+            const displayContent = translated.content || pmAction.message || getFallbackMessage("pm", "respond");
+            await sendEvent({ content: displayContent, agentRole: "pm" });
             if (translated.usage) {
               await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
             }
@@ -480,10 +501,8 @@ export async function POST(request: NextRequest) {
           if (pmAction?.action === "complete") {
             await sendEvent({ translating: true, agentRole: "pm" });
             const translated = await translateWithProgress(result.content, "pm");
-            const displayContent = translated.content || pmAction.summary;
-            if (displayContent) {
-              await sendEvent({ content: displayContent, agentRole: "pm" });
-            }
+            const displayContent = translated.content || pmAction.summary || getFallbackMessage("pm", "complete");
+            await sendEvent({ content: displayContent, agentRole: "pm" });
             if (translated.usage) {
               await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
             }
@@ -531,12 +550,11 @@ export async function POST(request: NextRequest) {
           // Otherwise treat as a respond and stop
           await sendEvent({ translating: true, agentRole: "pm" });
           const translated = await translateWithProgress(result.content, "pm");
-          if (translated.content || result.content) {
-            await sendEvent({
-              content: translated.content || result.content,
-              agentRole: "pm",
-            });
-          }
+          const fallbackContent = translated.content || stripJsonBlocks(result.content) || getFallbackMessage("pm", "default");
+          await sendEvent({
+            content: fallbackContent,
+            agentRole: "pm",
+          });
           if (translated.usage) {
             await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
           }
@@ -558,12 +576,11 @@ export async function POST(request: NextRequest) {
             result.content,
             dispatch.agentRole
           );
-          if (translated.content || result.content) {
-            await sendEvent({
-              content: translated.content || result.content,
-              agentRole: dispatch.agentRole,
-            });
-          }
+          const agentContent = translated.content || stripJsonBlocks(result.content) || getFallbackMessage(dispatch.agentRole);
+          await sendEvent({
+            content: agentContent,
+            agentRole: dispatch.agentRole,
+          });
           if (translated.usage) {
             await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
           }

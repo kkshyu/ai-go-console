@@ -7,13 +7,19 @@ import { AlertTriangle } from "lucide-react";
 import { AgentChatPanel } from "@/components/chat/agent-chat-panel";
 import type { AgentRole } from "@/lib/agents/types";
 
+interface ServiceRef {
+  instanceId?: string;
+  name?: string;
+  type: string;
+}
+
 interface CreateAppAction {
   action: "create_app";
   name: string;
   template: string;
   description?: string;
   config?: Record<string, unknown>;
-  requiredServices?: string[];
+  requiredServices?: (string | ServiceRef)[];
 }
 
 export default function CreateAppPage() {
@@ -55,12 +61,18 @@ export default function CreateAppPage() {
   const handleCreateApp = useCallback(
     async (action: CreateAppAction) => {
       if (action.requiredServices && action.requiredServices.length > 0) {
+        // requiredServices can be strings or objects with a type field
+        const getServiceType = (s: string | ServiceRef): string =>
+          typeof s === "string" ? s : s.type;
         const unauthorized = action.requiredServices.filter(
-          (s) => !allowedServices.includes(s)
+          (s) => !allowedServices.includes(getServiceType(s))
         );
         if (unauthorized.length > 0) {
+          const names = unauthorized.map((s) =>
+            typeof s === "string" ? s : s.name || s.type
+          );
           setServiceWarning(
-            `${t("serviceNotAuthorized")}: ${unauthorized.join(", ")}`
+            `${t("serviceNotAuthorized")}: ${names.join(", ")}`
           );
           return;
         }
