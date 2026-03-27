@@ -210,13 +210,14 @@ model ChatMessage {
 }
 
 model AgentPipeline {
-  id             String   @id @default(cuid())
-  status         String   @default("idle")
-  currentAgent   String?  @map("current_stage")
+  id              String   @id @default(cuid())
+  status          String   @default("idle")
+  currentAgent    String?  @map("current_stage")
   completedAgents String[] @map("completed_stages")
-  tasks          Json?    @map("stage_data")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  tasks           Json?    @map("stage_data")
+  parallelGroups  Json?    @map("parallel_groups")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   appId String? @map("app_id")
   app   App?    @relation(fields: [appId], references: [id], onDelete: Cascade)
@@ -235,6 +236,8 @@ model AgentArtifact {
   agentRole  String   @map("agent_role")
   type       String   // "design" | "spec" | "review" | "deployment" | "task"
   content    Json     // the structured JSON output from the agent
+  actorId    String?  @map("actor_id")  // actor instance ID (e.g. "developer-0")
+  taskId     String?  @map("task_id")   // parallel task identifier
   createdAt  DateTime @default(now()) @map("created_at")
 
   pipeline AgentPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
