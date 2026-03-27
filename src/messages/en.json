@@ -176,6 +176,8 @@
     "title": "Organization Settings",
     "orgName": "Organization Name",
     "orgNameDescription": "Change the display name of your organization",
+    "orgSlug": "Organization Slug",
+    "orgSlugDescription": "The URL-friendly identifier for your organization. Used in URLs and API paths.",
     "save": "Save",
     "customDomains": "Custom Domains",
     "customDomainsDescription": "Add custom domains for your organization. Apps are accessible at '{domain}/{app-slug}'",

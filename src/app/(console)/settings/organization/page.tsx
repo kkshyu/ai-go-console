@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Building2, Globe, Plus, Trash2, Check } from "lucide-react";
+import { Building2, Globe, Plus, Trash2, Check, Link } from "lucide-react";
 
 interface OrgDomain {
   id: string;
@@ -30,9 +30,12 @@ export default function OrganizationSettingsPage() {
   const t = useTranslations("organization");
   const [org, setOrg] = useState<OrgData | null>(null);
   const [orgName, setOrgName] = useState("");
+  const [orgSlug, setOrgSlug] = useState("");
   const [domains, setDomains] = useState<OrgDomain[]>([]);
   const [newDomain, setNewDomain] = useState("");
   const [savingName, setSavingName] = useState(false);
+  const [savingSlug, setSavingSlug] = useState(false);
+  const [slugError, setSlugError] = useState("");
 
   useEffect(() => {
     fetch("/api/organizations")
@@ -44,6 +47,7 @@ export default function OrganizationSettingsPage() {
         if (!data || !data.id) return;
         setOrg(data);
         setOrgName(data.name);
+        setOrgSlug(data.slug);
         fetch(`/api/organizations/${data.id}/domains`)
           .then((r) => r.json())
           .then(setDomains)
@@ -67,6 +71,29 @@ export default function OrganizationSettingsPage() {
       setOrg((prev) => (prev ? { ...prev, name: orgName.trim() } : null));
     }
     setSavingName(false);
+  }
+
+  async function handleSaveSlug(e: React.FormEvent) {
+    e.preventDefault();
+    if (!org || !orgSlug.trim() || orgSlug === org.slug) return;
+    setSavingSlug(true);
+    setSlugError("");
+
+    const res = await fetch(`/api/organizations/${org.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: org.name, slug: orgSlug.trim() }),
+    });
+
+    if (res.ok) {
+      const updated = await res.json();
+      setOrg(updated);
+      setOrgSlug(updated.slug);
+    } else {
+      const data = await res.json();
+      setSlugError(data.error || "Failed to update slug");
+    }
+    setSavingSlug(false);
   }
 
   async function handleAddDomain(e: React.FormEvent) {
@@ -137,6 +164,42 @@ export default function OrganizationSettingsPage() {
               <Check className="h-4 w-4" />
               {t("save")}
             </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* Org Slug */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Link className="h-5 w-5" />
+            {t("orgSlug")}
+          </CardTitle>
+          <CardDescription>{t("orgSlugDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSaveSlug} className="space-y-2">
+            <div className="flex gap-2">
+              <Input
+                value={orgSlug}
+                onChange={(e) => {
+                  setOrgSlug(e.target.value);
+                  setSlugError("");
+                }}
+                className="flex-1 font-mono"
+                placeholder="my-organization"
+              />
+              <Button
+                type="submit"
+                disabled={savingSlug || !orgSlug.trim() || orgSlug === org.slug}
+              >
+                <Check className="h-4 w-4" />
+                {t("save")}
+              </Button>
+            </div>
+            {slugError && (
+              <p className="text-sm text-destructive">{slugError}</p>
+            )}
           </form>
         </CardContent>
       </Card>
