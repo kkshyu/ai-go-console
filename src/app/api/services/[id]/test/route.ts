@@ -89,6 +89,7 @@ const testers: Record<ServiceType, ServiceTester> = {
   },
   gcs: configOnlyTester("Google Cloud Storage", ["projectId", "bucket"]),
   azure_blob: configOnlyTester("Azure Blob Storage", ["accountName", "accountKey", "containerName"]),
+  google_drive: configOnlyTester("Google Drive", ["clientId", "clientSecret"]),
 
   // --- payment ---
   stripe: async (config, endpointUrl) => {
