@@ -80,7 +80,7 @@
     "rollback": "回滾",
     "version": "版本",
     "buildLog": "建置日誌",
-    "systemLog": "系統日誌",
+    "systemLog": "執行日誌",
     "noDeployments": "尚無部署紀錄",
     "rollingBack": "回滾中...",
     "deployedAt": "部署時間",

@@ -80,7 +80,7 @@
     "rollback": "Rollback",
     "version": "Version",
     "buildLog": "Build Log",
-    "systemLog": "System Log",
+    "systemLog": "Runtime Log",
     "noDeployments": "No deployments yet",
     "rollingBack": "Rolling back...",
     "deployedAt": "Deployed at",
