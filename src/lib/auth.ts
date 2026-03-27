@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { ALL_SERVICE_TYPES } from "@/lib/service-types";
 import { encrypt } from "@/lib/crypto";
+import { provisionDatabase } from "@/lib/builtin-pg";
 import type { ServiceType } from "@prisma/client";
 
 function slugify(name: string): string {
@@ -34,12 +35,15 @@ async function createOrganizationWithDefaults(name: string) {
   // Auto-provision built-in services
   const orgSlug = org.slug;
 
+  // Provision a real database & user on the shared PostgreSQL instance
+  const pgCreds = await provisionDatabase(orgSlug);
+
   const pgConfig = encrypt(JSON.stringify({
     host: process.env.PLATFORM_PG_HOST || "localhost",
     port: process.env.PLATFORM_PG_PORT || "5432",
-    database: `org_${orgSlug}`,
-    username: `org_${orgSlug}`,
-    password: "platform-managed",
+    database: pgCreds.database,
+    username: pgCreds.username,
+    password: pgCreds.password,
   }));
   await prisma.service.create({
     data: {

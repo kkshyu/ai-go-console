@@ -1,6 +1,7 @@
 import { PrismaClient, UserRole, AppStatus, ServiceType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
+import { provisionDatabase } from "../src/lib/builtin-pg";
 
 const prisma = new PrismaClient();
 
@@ -102,17 +103,24 @@ async function main() {
   // ── 2b. Built-in services for each org ────────────────────────────────
 
   for (const org of [acme, startup]) {
+    // Provision a real database & user on the shared PostgreSQL instance
+    const pgCreds = await provisionDatabase(org.slug);
+
     const pgCfg = encrypt(JSON.stringify({
-      host: "localhost",
-      port: "5432",
-      database: `org_${org.slug}`,
-      username: `org_${org.slug}`,
-      password: "platform-managed",
+      host: process.env.PLATFORM_PG_HOST || "localhost",
+      port: process.env.PLATFORM_PG_PORT || "5432",
+      database: pgCreds.database,
+      username: pgCreds.username,
+      password: pgCreds.password,
     }));
 
     await prisma.service.upsert({
       where: { id: `builtin-pg-${org.slug}` },
-      update: {},
+      update: {
+        configEncrypted: pgCfg.ciphertext,
+        iv: pgCfg.iv,
+        authTag: pgCfg.authTag,
+      },
       create: {
         id: `builtin-pg-${org.slug}`,
         name: "Built-in PostgreSQL",
