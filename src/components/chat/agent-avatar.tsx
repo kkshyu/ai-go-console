@@ -29,12 +29,18 @@ const AGENT_BG: Record<AgentRole, string> = {
 
 interface AgentAvatarProps {
   agentRole?: AgentRole | null;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
 }
 
+const SIZE_MAP = {
+  sm: { container: "h-6 w-6", icon: "h-3 w-3" },
+  md: { container: "h-8 w-8", icon: "h-4 w-4" },
+  lg: { container: "h-12 w-12", icon: "h-6 w-6" },
+};
+
 export function AgentAvatar({ agentRole, size = "md" }: AgentAvatarProps) {
-  const sizeClasses = size === "sm" ? "h-6 w-6" : "h-8 w-8";
-  const iconSize = size === "sm" ? "h-3 w-3" : "h-4 w-4";
+  const sizeClasses = SIZE_MAP[size].container;
+  const iconSize = SIZE_MAP[size].icon;
 
   if (!agentRole) {
     return (

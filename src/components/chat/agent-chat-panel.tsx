@@ -7,7 +7,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Send, User, Loader2, ChevronDown, Zap } from "lucide-react";
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/ai";
-import { AGENT_DEFINITIONS, createInitialOrchestrationState } from "@/lib/agents/types";
+import {
+  AGENT_DEFINITIONS,
+  createInitialOrchestrationState,
+} from "@/lib/agents/types";
 import type { AgentRole, OrchestrationState } from "@/lib/agents/types";
 import { PipelineProgress } from "./pipeline-progress";
 import { MarkdownContent } from "@/components/chat/markdown-content";
@@ -362,11 +365,19 @@ export function AgentChatPanel({
         <div className="flex-1 overflow-y-auto space-y-4 mb-4">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-              <div className="flex gap-2 mb-4">
+              <div className="grid grid-cols-5 gap-3 mb-4 w-full max-w-lg">
                 {(["pm", "architect", "developer", "reviewer", "devops"] as AgentRole[]).map(
-                  (role) => (
-                    <AgentAvatar key={role} agentRole={role} size="sm" />
-                  )
+                  (role) => {
+                    const agent = AGENT_DEFINITIONS[role];
+                    const shortDesc = agent.description.split(" — ")[1] || agent.description;
+                    return (
+                      <div key={role} className="flex flex-col items-center text-center gap-1.5">
+                        <AgentAvatar agentRole={role} size="lg" />
+                        <span className="text-xs font-medium text-foreground">{agent.label}</span>
+                        <span className="text-[10px] leading-tight">{shortDesc}</span>
+                      </div>
+                    );
+                  }
                 )}
               </div>
               <p className="text-sm">{emptyStateText}</p>
