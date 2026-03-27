@@ -149,7 +149,7 @@ export default function AppsPage() {
           {t("noResults")}
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {filteredApps.map((app) => (
             <Link key={app.id} href={`/apps/${app.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer">
