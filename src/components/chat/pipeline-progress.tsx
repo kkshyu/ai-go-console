@@ -20,21 +20,36 @@ const ROLE_ICONS: Record<AgentRole, React.ComponentType<{ className?: string }>>
   devops: Rocket,
 };
 
+type AgentPhase = "thinking" | "translating" | "progress" | null;
+
 interface AgentProgressProps {
   state: OrchestrationState;
+  currentAgent?: AgentRole | null;
+  isLoading?: boolean;
+  agentPhase?: AgentPhase;
+  statusMessage?: string;
+  generatingText?: string;
 }
 
 /**
- * Displays dispatched agent tasks dynamically.
+ * Displays dispatched agent tasks dynamically with inline status text.
  * Only shows agents that PM has actually dispatched (not a fixed 5-stage bar).
+ * Includes real-time status for the currently active agent.
  */
-export function PipelineProgress({ state }: AgentProgressProps) {
+export function PipelineProgress({
+  state,
+  currentAgent,
+  isLoading,
+  agentPhase,
+  statusMessage,
+  generatingText = "Generating...",
+}: AgentProgressProps) {
   if (state.tasks.length === 0 && !state.currentAgent) {
     return null;
   }
 
   // Collect unique agents to show: tasks + current PM if running
-  const items: { role: AgentRole; isActive: boolean; isCompleted: boolean }[] = [];
+  const items: { role: AgentRole; isActive: boolean; isCompleted: boolean; summary?: string }[] = [];
 
   // If PM is currently active and no tasks yet, show PM
   if (state.currentAgent === "pm" && state.tasks.length === 0) {
@@ -46,46 +61,80 @@ export function PipelineProgress({ state }: AgentProgressProps) {
       role: task.agentRole,
       isActive: task.status === "running",
       isCompleted: task.status === "completed",
+      summary: task.description || task.summary,
     });
   }
 
-  return (
-    <div className="flex items-center gap-1 px-3 py-2 rounded-lg bg-muted/50 overflow-x-auto">
-      {items.map((item, index) => {
-        const Icon = ROLE_ICONS[item.role];
-        const agent = AGENT_DEFINITIONS[item.role];
+  // Determine the active status text for currently running non-PM agent
+  const activeNonPmAgent = currentAgent && currentAgent !== "pm" ? currentAgent : null;
+  const showActiveStatus = isLoading && activeNonPmAgent;
 
-        return (
-          <div key={`${item.role}-${index}`} className="flex items-center">
-            {index > 0 && (
-              <div
-                className={`w-4 h-px mx-0.5 ${
-                  item.isCompleted ? "bg-green-400" : "bg-border"
-                }`}
-              />
-            )}
-            <div
-              className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs whitespace-nowrap transition-all ${
-                item.isActive
-                  ? `bg-background shadow-sm ring-1 ring-border ${agent.color}`
-                  : item.isCompleted
-                    ? "text-green-600 dark:text-green-400"
-                    : "text-muted-foreground"
-              }`}
-              title={agent.description}
-            >
-              {item.isCompleted ? (
-                <Check className="h-3 w-3 shrink-0" />
-              ) : item.isActive ? (
-                <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
-              ) : (
-                <Icon className="h-3 w-3 shrink-0" />
+  return (
+    <div className="flex flex-col gap-1.5 px-3 py-2 rounded-lg bg-muted/50">
+      {/* Agent pipeline row */}
+      <div className="flex items-center gap-1 overflow-x-auto">
+        {items.map((item, index) => {
+          const Icon = ROLE_ICONS[item.role];
+          const agent = AGENT_DEFINITIONS[item.role];
+
+          return (
+            <div key={`${item.role}-${index}`} className="flex items-center">
+              {index > 0 && (
+                <div
+                  className={`w-4 h-px mx-0.5 ${
+                    item.isCompleted ? "bg-green-400" : "bg-border"
+                  }`}
+                />
               )}
-              <span className="hidden sm:inline">{agent.label}</span>
+              <div
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs whitespace-nowrap transition-all ${
+                  item.isActive
+                    ? `bg-background shadow-sm ring-1 ring-border ${agent.color}`
+                    : item.isCompleted
+                      ? "text-green-600 dark:text-green-400"
+                      : "text-muted-foreground"
+                }`}
+                title={item.summary || agent.description}
+              >
+                {item.isCompleted ? (
+                  <Check className="h-3 w-3 shrink-0" />
+                ) : item.isActive ? (
+                  <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+                ) : (
+                  <Icon className="h-3 w-3 shrink-0" />
+                )}
+                <span className="hidden sm:inline">{agent.label}</span>
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+
+      {/* Active agent status text */}
+      {showActiveStatus && (
+        <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground animate-pulse">
+          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+          <span>
+            {agentPhase === "progress" && statusMessage
+              ? statusMessage
+              : `${AGENT_DEFINITIONS[activeNonPmAgent]?.label}${
+                  agentPhase === "translating" ? " ..." : ` ${generatingText}`
+                }`}
+          </span>
+        </div>
+      )}
+
+      {/* PM thinking status */}
+      {isLoading && currentAgent === "pm" && (
+        <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground animate-pulse">
+          <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+          <span>
+            {agentPhase === "progress" && statusMessage
+              ? statusMessage
+              : `PM ${generatingText}`}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
