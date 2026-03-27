@@ -318,8 +318,7 @@ export class PMActor extends Actor {
 
       // ---- Handle dispatch ----
       if (pmAction?.action === "dispatch") {
-        await this.translateAndSendPM(result.content, "dispatch");
-
+        // No message to user — internal orchestration
         await sendEvent({
           agentComplete: true,
           agentRole: "pm",
@@ -334,8 +333,7 @@ export class PMActor extends Actor {
 
       // ---- Handle dispatch_parallel ----
       if (pmAction?.action === "dispatch_parallel") {
-        await this.translateAndSendPM(result.content, "dispatch");
-
+        // No message to user — internal orchestration
         await sendEvent({
           agentComplete: true,
           agentRole: "pm",
@@ -352,8 +350,12 @@ export class PMActor extends Actor {
 
       // ---- Handle respond ----
       if (pmAction?.action === "respond") {
-        await this.translateAndSendPM(result.content, "respond");
+        const displayContent = await this.getDisplayContent(result.content, "respond");
 
+        await sendEvent({
+          pmMessage: displayContent,
+          agentRole: "pm",
+        });
         await sendEvent({
           agentComplete: true,
           agentRole: "pm",
@@ -366,9 +368,13 @@ export class PMActor extends Actor {
 
       // ---- Handle complete ----
       if (pmAction?.action === "complete") {
-        await this.translateAndSendPM(result.content, "complete");
+        const displayContent = await this.getDisplayContent(result.content, "complete");
 
         this.orchState = stateForComplete(this.orchState, pmAction.summary);
+        await sendEvent({
+          pmMessage: displayContent,
+          agentRole: "pm",
+        });
         await sendEvent({
           agentComplete: true,
           agentRole: "pm",
@@ -387,9 +393,13 @@ export class PMActor extends Actor {
 
       if (allTasksDone) {
         const summary = `Completed ${this.orchState.tasks.length} tasks: ${this.orchState.tasks.map((t) => t.agentRole).join(", ")}`;
-        await this.translateAndSendPM(result.content || summary, "complete");
+        const displayContent = await this.getDisplayContent(result.content || summary, "complete");
 
         this.orchState = stateForComplete(this.orchState, summary);
+        await sendEvent({
+          pmMessage: displayContent,
+          agentRole: "pm",
+        });
         await sendEvent({
           agentComplete: true,
           agentRole: "pm",
@@ -402,7 +412,11 @@ export class PMActor extends Actor {
       }
 
       // Fallback: treat as respond
-      await this.translateAndSendPM(result.content, "default");
+      const fallbackContent = await this.getDisplayContent(result.content, "default");
+      await sendEvent({
+        pmMessage: fallbackContent,
+        agentRole: "pm",
+      });
       await sendEvent({
         agentComplete: true,
         agentRole: "pm",
@@ -723,7 +737,11 @@ export class PMActor extends Actor {
 
   // ---- Translation Helper ----
 
-  private async translateAndSendPM(content: string, action: string): Promise<void> {
+  /**
+   * Translate agent output to user-facing content.
+   * Returns the display string without sending SSE content events.
+   */
+  private async getDisplayContent(content: string, action: string): Promise<string> {
     const { sendEvent } = this.config;
 
     await sendEvent({ translating: true, agentRole: "pm" });
@@ -734,10 +752,10 @@ export class PMActor extends Actor {
       stripJsonBlocks(content) ||
       getFallbackMessage(action);
 
-    await sendEvent({ content: displayContent, agentRole: "pm" });
-
     if (translated.usage) {
       await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
     }
+
+    return displayContent;
   }
 }

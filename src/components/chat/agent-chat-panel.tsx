@@ -141,12 +141,6 @@ export function AgentChatPanel({
 
       onUserMessage?.(userMessage.content);
 
-      const assistantId = (Date.now() + 1).toString();
-      setMessages((prev) => [
-        ...prev,
-        { id: assistantId, role: "assistant", content: "", agentRole: null },
-      ]);
-
       try {
         const res = await fetch("/api/chat/multi-agent", {
           method: "POST",
@@ -173,10 +167,8 @@ export function AgentChatPanel({
         if (!reader) throw new Error(t("errorNoResponse"));
 
         const decoder = new TextDecoder();
-        let displayContent = "";
         let rawContent = "";
         let resolvedAgent: AgentRole | null = null;
-        let currentMsgId = assistantId;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -215,12 +207,22 @@ export function AgentChatPanel({
                 continue;
               }
 
+              // PM sends a complete message to the user
+              if (parsed.pmMessage) {
+                const msgId = (Date.now() + Math.random()).toString();
+                setMessages((prev) => [
+                  ...prev,
+                  { id: msgId, role: "assistant", content: parsed.pmMessage, agentRole: "pm" },
+                ]);
+                continue;
+              }
+
               // Agent completed
               if (parsed.agentComplete) {
                 rawContent = parsed.rawContent || rawContent;
                 setAgentPhase(null);
                 onAssistantResponse?.(rawContent, resolvedAgent || undefined);
-                onAssistantComplete?.(displayContent, resolvedAgent || undefined);
+                onAssistantComplete?.(rawContent, resolvedAgent || undefined);
 
                 // Update orchestration state if provided
                 if (parsed.orchestrationState) {
@@ -244,15 +246,9 @@ export function AgentChatPanel({
                   );
                 }
 
-                // Reset for next agent's message
-                displayContent = "";
+                // Reset for next agent
                 rawContent = "";
                 resolvedAgent = null;
-                currentMsgId = (Date.now() + Math.random()).toString();
-                setMessages((prev) => [
-                  ...prev,
-                  { id: currentMsgId, role: "assistant", content: "", agentRole: null },
-                ]);
                 continue;
               }
 
@@ -262,13 +258,6 @@ export function AgentChatPanel({
                 setCurrentAgent(parsed.agentRole);
                 setOrchState(parsed.orchestrationState);
                 onOrchestrationUpdate?.(parsed.orchestrationState);
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === currentMsgId
-                      ? { ...m, agentRole: parsed.agentRole }
-                      : m
-                  )
-                );
                 // Track active actor status
                 if (parsed.agentRole !== "pm") {
                   setActorStatuses((prev) => {
@@ -289,16 +278,11 @@ export function AgentChatPanel({
                 }
               }
 
-              // Translated content for display
+              // Translated content (accumulated for rawContent, not shown in-place)
               if (parsed.content) {
-                displayContent += parsed.content;
+                rawContent += parsed.content;
                 setAgentPhase(null);
                 setStatusMessage("");
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === currentMsgId ? { ...m, content: displayContent } : m
-                  )
-                );
               }
 
               // Parallel group status
@@ -378,12 +362,11 @@ export function AgentChatPanel({
               // Error
               if (parsed.error) {
                 setAgentPhase(null);
-                displayContent += `\n\nError: ${parsed.error}`;
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === currentMsgId ? { ...m, content: displayContent } : m
-                  )
-                );
+                const errorMsgId = (Date.now() + Math.random()).toString();
+                setMessages((prev) => [
+                  ...prev,
+                  { id: errorMsgId, role: "assistant", content: `Error: ${parsed.error}`, agentRole: "pm" },
+                ]);
               }
 
               // Token usage
@@ -413,28 +396,17 @@ export function AgentChatPanel({
         }
 
         // Final agent (no agentComplete event for the last one)
-        if (displayContent) {
-          onAssistantResponse?.(rawContent || displayContent, resolvedAgent || undefined);
-          onAssistantComplete?.(displayContent, resolvedAgent || undefined);
+        if (rawContent) {
+          onAssistantResponse?.(rawContent, resolvedAgent || undefined);
+          onAssistantComplete?.(rawContent, resolvedAgent || undefined);
         }
-
-        // Remove any empty assistant messages left over from agentComplete handlers
-        setMessages((prev) =>
-          prev.filter((m) => m.role !== "assistant" || m.content)
-        );
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error";
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId
-              ? {
-                  ...m,
-                  content:
-                    m.content || errorMessage || t("errorApiKey"),
-                }
-              : m
-          )
-        );
+        const errorId = (Date.now() + Math.random()).toString();
+        setMessages((prev) => [
+          ...prev,
+          { id: errorId, role: "assistant", content: errorMessage || t("errorApiKey"), agentRole: "pm" },
+        ]);
       } finally {
         setIsLoading(false);
         setCurrentAgent(null);
