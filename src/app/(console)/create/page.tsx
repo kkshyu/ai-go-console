@@ -184,15 +184,13 @@ export default function CreateAppPage() {
         });
         if (!res.ok) throw new Error("Failed to create app");
         const app = await res.json();
-        const genRes = await fetch(`/api/apps/${app.id}/lifecycle`, {
+        // Start dev server then navigate to app detail page
+        await fetch(`/api/apps/${app.id}/lifecycle`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "dev-start" }),
-        });
-        if (genRes.ok) {
-          const { port } = await genRes.json();
-          setPreviewPort(port || app.port);
-        }
+        }).catch(() => {});
+        router.push(`/apps/${app.id}`);
       } catch {
         // Error handled via chat message
       } finally {

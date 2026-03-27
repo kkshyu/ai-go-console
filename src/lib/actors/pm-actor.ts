@@ -479,10 +479,9 @@ export class PMActor extends Actor {
     system.send(taskMsg);
 
     // The specialist will process asynchronously.
-    // When done, it returns a task_result message which the actor system
-    // routes back to PM via handleAgentResult.
-    // We need to wait for it — set up a listener.
-    await this.waitForSpecialistResult(specialist.id);
+    // When done, its task_result message is automatically routed back
+    // to PM via the ActorSystem's systemSend mechanism.
+    // PM's onReceive will handle it via handleAgentResult.
   }
 
   private async dispatchParallel(
@@ -519,7 +518,9 @@ export class PMActor extends Actor {
     };
 
     // Spawn all developers and dispatch tasks concurrently
-    const promises = tasks.map(async (task, index) => {
+    for (let index = 0; index < tasks.length; index++) {
+      const task = tasks[index];
+
       // Update state for each developer
       this.orchState = stateForDispatch(
         this.orchState,
@@ -547,44 +548,12 @@ export class PMActor extends Actor {
       });
 
       system.send(parallelMsg);
+    }
 
-      // Wait for this developer to finish
-      await this.waitForSpecialistResult(developer.id);
-    });
-
-    // Wait for all developers to complete
-    await Promise.all(promises);
-  }
-
-  private async waitForSpecialistResult(specialistId: string): Promise<void> {
-    // Poll for the specialist's completion by waiting for the actor to finish processing
-    return new Promise<void>((resolve) => {
-      const check = setInterval(() => {
-        const actor = this.config.system.getActor(specialistId);
-        if (!actor) {
-          clearInterval(check);
-          this.activeTimers.delete(check);
-          resolve();
-          return;
-        }
-        const state = actor.getState();
-        if (state.status === "idle" || state.status === "dead") {
-          clearInterval(check);
-          this.activeTimers.delete(check);
-
-          // Process pending response
-          const response = actor.takePendingResponse();
-          if (response) {
-            // Route the response back to this PM actor
-            response.to = this.id;
-            this.send(response);
-          }
-
-          resolve();
-        }
-      }, 100);
-      this.activeTimers.add(check);
-    });
+    // Developers will process asynchronously. Their parallel_result messages
+    // are automatically routed back to PM via systemSend.
+    // PM's onReceive will handle them via handleParallelResult,
+    // which merges and continues when all results are collected.
   }
 
   // ---- Merge Parallel Results ----

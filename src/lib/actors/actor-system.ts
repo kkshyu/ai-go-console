@@ -72,6 +72,9 @@ export class ActorSystem {
       this.heartbeat.recordPong(actor.id);
     });
 
+    // Enable automatic response routing through the system
+    actor.setSystemSend((msg) => this.send(msg));
+
     await actor.onStart();
 
     // Monitor non-PM actors for heartbeat

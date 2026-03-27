@@ -22,6 +22,7 @@ export abstract class Actor {
   private _eventHandler: ActorEventHandler | null = null;
   private _lastTaskMessage: ActorMessage | null = null;
   private _heartbeatNotifier: (() => void) | null = null;
+  private _systemSend: ((msg: ActorMessage) => void) | null = null;
 
   constructor(id: string, role: AgentRole, maxRestarts = 2) {
     this.id = id;
@@ -86,8 +87,13 @@ export abstract class Actor {
       try {
         const response = await this.onReceive(message);
         if (response) {
-          // Response is routed back by the actor system
-          this._pendingResponse = response;
+          if (this._systemSend) {
+            // Route response through the ActorSystem automatically
+            this._systemSend(response);
+          } else {
+            // Fallback: store for polling (legacy)
+            this._pendingResponse = response;
+          }
         }
         this.updateStatus("idle");
       } catch (err) {
@@ -130,6 +136,11 @@ export abstract class Actor {
   /** Set a callback that notifies the heartbeat monitor on activity. */
   setHeartbeatNotifier(notifier: () => void): void {
     this._heartbeatNotifier = notifier;
+  }
+
+  /** Set a callback for routing responses through the ActorSystem. */
+  setSystemSend(fn: (msg: ActorMessage) => void): void {
+    this._systemSend = fn;
   }
 
   incrementRestartCount(): void {
