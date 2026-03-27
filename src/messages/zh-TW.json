@@ -72,7 +72,12 @@
     "closePreview": "關閉",
     "logs": "日誌",
     "console": "Console",
-    "clearConsole": "清除"
+    "clearConsole": "清除",
+    "searchApps": "搜尋應用程式...",
+    "allStatuses": "所有狀態",
+    "allTemplates": "所有範本",
+    "noResults": "沒有符合篩選條件的應用程式",
+    "serviceCount": "{count} 個服務"
   },
   "create": {
     "title": "建立應用",

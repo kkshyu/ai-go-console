@@ -72,7 +72,12 @@
     "closePreview": "Close",
     "logs": "Logs",
     "console": "Console",
-    "clearConsole": "Clear"
+    "clearConsole": "Clear",
+    "searchApps": "Search apps...",
+    "allStatuses": "All statuses",
+    "allTemplates": "All templates",
+    "noResults": "No apps match your filters",
+    "serviceCount": "{count} services"
   },
   "create": {
     "title": "Create App",
