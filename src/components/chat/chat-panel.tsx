@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -52,12 +53,17 @@ export function ChatPanel({
   onAssistantComplete,
   onTokenUsageChange,
   extraRequestBody,
-  placeholder = "Type a message...",
-  emptyStateText = "Start a conversation",
-  generatingText = "Generating...",
-  totalTokensLabel = "Tokens",
+  placeholder,
+  emptyStateText,
+  generatingText,
+  totalTokensLabel,
   externalLoading = false,
 }: ChatPanelProps) {
+  const t = useTranslations("chat");
+  const resolvedPlaceholder = placeholder ?? t("placeholder");
+  const resolvedEmptyStateText = emptyStateText ?? t("emptyState");
+  const resolvedGeneratingText = generatingText ?? t("generating");
+  const resolvedTotalTokensLabel = totalTokensLabel ?? t("totalTokens");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -135,10 +141,10 @@ export function ChatPanel({
           }),
         });
 
-        if (!res.ok) throw new Error("Chat API error");
+        if (!res.ok) throw new Error(t("errorApi"));
 
         const reader = res.body?.getReader();
-        if (!reader) throw new Error("No response body");
+        if (!reader) throw new Error(t("errorNoResponse"));
 
         const decoder = new TextDecoder();
         let fullContent = "";
@@ -213,7 +219,7 @@ export function ChatPanel({
                   ...m,
                   content:
                     m.content ||
-                    "Sorry, I encountered an error. Please check your OpenRouter API key is configured.",
+                    t("errorApiKey"),
                 }
               : m
           )
@@ -233,6 +239,7 @@ export function ChatPanel({
       onAssistantResponse,
       onAssistantComplete,
       onTokenUsageChange,
+      t,
     ]
   );
 
@@ -255,7 +262,7 @@ export function ChatPanel({
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
               <Bot className="h-12 w-12 mb-4" />
-              <p>{emptyStateText}</p>
+              <p>{resolvedEmptyStateText}</p>
             </div>
           )}
           {messages.map((message) => (
@@ -284,7 +291,7 @@ export function ChatPanel({
                     message.content
                   )
                 ) : (
-                  <span className="animate-pulse">{generatingText}</span>
+                  <span className="animate-pulse">{resolvedGeneratingText}</span>
                 )}
               </div>
               {message.role === "user" && (
@@ -301,7 +308,7 @@ export function ChatPanel({
               </div>
               <div className="bg-muted rounded-lg px-4 py-2 text-sm flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                {generatingText}
+                {resolvedGeneratingText}
               </div>
             </div>
           )}
@@ -314,7 +321,7 @@ export function ChatPanel({
             <div className="flex items-center gap-1">
               <Zap className="h-3 w-3" />
               <span>
-                {totalTokensLabel}: {formatTokenCount(totalTokens)}
+                {resolvedTotalTokensLabel}: {formatTokenCount(totalTokens)}
               </span>
             </div>
             <div className="h-3 w-px bg-border" />
@@ -372,7 +379,7 @@ export function ChatPanel({
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={placeholder}
+              placeholder={resolvedPlaceholder}
               disabled={disabled}
               className="flex-1"
             />

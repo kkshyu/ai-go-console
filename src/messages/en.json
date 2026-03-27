@@ -105,6 +105,7 @@
     "quickCreate": "Choose a template",
     "searchPlaceholder": "Search templates...",
     "creating": "Creating...",
+    "allCategories": "All",
     "presets": {
       "finance-expense-report": {
         "name": "Expense Report System",
@@ -492,6 +493,15 @@
       "completed": "Completed",
       "error": "Error"
     }
+  },
+  "chat": {
+    "placeholder": "Type a message...",
+    "emptyState": "Start a conversation",
+    "generating": "Generating...",
+    "totalTokens": "Tokens",
+    "errorApi": "Chat API error",
+    "errorNoResponse": "No response body",
+    "errorApiKey": "Sorry, I encountered an error. Please check your OpenRouter API key is configured."
   },
   "domains": {
     "title": "Custom Domains",

@@ -105,6 +105,7 @@
     "quickCreate": "選擇情境範本",
     "searchPlaceholder": "搜尋範本...",
     "creating": "建立中...",
+    "allCategories": "全部",
     "presets": {
       "finance-expense-report": {
         "name": "費用報銷系統",
@@ -492,6 +493,15 @@
       "completed": "已完成",
       "error": "錯誤"
     }
+  },
+  "chat": {
+    "placeholder": "輸入訊息...",
+    "emptyState": "開始對話",
+    "generating": "產生中...",
+    "totalTokens": "Token 用量",
+    "errorApi": "聊天 API 錯誤",
+    "errorNoResponse": "無回應內容",
+    "errorApiKey": "抱歉，發生錯誤。請確認 OpenRouter API Key 是否已設定。"
   },
   "domains": {
     "title": "自訂網域",
