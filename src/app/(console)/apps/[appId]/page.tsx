@@ -966,17 +966,7 @@ export default function AppDetailPage() {
 
           {/* Files Panel */}
           {rightPanel === "files" && (
-            <div className="flex flex-1 flex-col rounded-b-lg border border-t-0 overflow-hidden bg-background min-h-0">
-              <div className="flex items-center gap-1.5 px-3 py-1.5 border-b bg-muted/30">
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setFileManagerKey((k) => k + 1)}>
-                  <RotateCw className="h-3 w-3" />
-                  {t("refresh")}
-                </Button>
-              </div>
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <FileManager key={fileManagerKey} appId={app.id} />
-              </div>
-            </div>
+            <FileManager key={fileManagerKey} appId={app.id} />
           )}
         </div>
       </div>

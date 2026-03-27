@@ -247,7 +247,7 @@ export function FileManager({ appId }: FileManagerProps) {
               /{filePath}
             </span>
 
-            {/* Upload buttons */}
+            {/* Upload & refresh buttons */}
             <Button
               variant="ghost"
               size="icon"
@@ -267,6 +267,16 @@ export function FileManager({ appId }: FileManagerProps) {
               title="Upload Folder"
             >
               <FolderUp className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 shrink-0"
+              onClick={() => fetchFiles(filePath)}
+              disabled={fileLoading}
+              title="Refresh"
+            >
+              <RotateCw className={`h-3 w-3 ${fileLoading ? "animate-spin" : ""}`} />
             </Button>
             <input
               ref={fileInputRef}
