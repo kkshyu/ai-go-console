@@ -51,9 +51,6 @@ export async function POST(
           data: { status: "building" },
         });
 
-        // Stop dev server if running
-        await stopDevServer(app.slug);
-
         // Determine next version
         const lastDeployment = await prisma.deployment.findFirst({
           where: { appId },
