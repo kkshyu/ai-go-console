@@ -225,7 +225,7 @@ export default function CreateAppPage() {
         const res = await fetch("/api/apps", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, description, template: preset.template }),
+          body: JSON.stringify({ name, description, template: preset.template, presetId: preset.id }),
         });
         if (!res.ok) throw new Error("Failed to create app");
         const app = await res.json();
