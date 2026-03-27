@@ -107,6 +107,9 @@ abstract class BaseSpecialistActor extends Actor {
     const systemPrompt = this.buildPrompt(task) + artifactContext;
     const { sendEvent } = this.config;
 
+    // Reset heartbeat before LLM call (may take long before first token)
+    this.updateHeartbeat();
+
     // Send thinking event
     await sendEvent({ thinking: true, agentRole: this.role });
 

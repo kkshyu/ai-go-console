@@ -67,6 +67,11 @@ export class ActorSystem {
       }
     });
 
+    // Give actor a reference to notify heartbeat monitor on activity
+    actor.setHeartbeatNotifier(() => {
+      this.heartbeat.recordPong(actor.id);
+    });
+
     await actor.onStart();
 
     // Monitor non-PM actors for heartbeat

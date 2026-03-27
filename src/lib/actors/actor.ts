@@ -21,6 +21,7 @@ export abstract class Actor {
   private _state: ActorState;
   private _eventHandler: ActorEventHandler | null = null;
   private _lastTaskMessage: ActorMessage | null = null;
+  private _heartbeatNotifier: (() => void) | null = null;
 
   constructor(id: string, role: AgentRole, maxRestarts = 2) {
     this.id = id;
@@ -122,6 +123,13 @@ export abstract class Actor {
 
   updateHeartbeat(): void {
     this._state = { ...this._state, lastHeartbeat: Date.now() };
+    // Notify the heartbeat monitor so it doesn't time out this actor
+    this._heartbeatNotifier?.();
+  }
+
+  /** Set a callback that notifies the heartbeat monitor on activity. */
+  setHeartbeatNotifier(notifier: () => void): void {
+    this._heartbeatNotifier = notifier;
   }
 
   incrementRestartCount(): void {
