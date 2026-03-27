@@ -6,7 +6,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, AppWindow, Globe } from "lucide-react";
+import { PlusCircle, AppWindow, Globe, ServerCog } from "lucide-react";
+
+interface AppService {
+  service: { id: string; name: string; type: string };
+}
 
 interface AppItem {
   id: string;
@@ -16,6 +20,7 @@ interface AppItem {
   status: string;
   port: number | null;
   description: string | null;
+  services: AppService[];
 }
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
@@ -94,6 +99,17 @@ export default function AppsPage() {
                       </span>
                     )}
                   </div>
+                  {app.services && app.services.length > 0 && (
+                    <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                      <ServerCog className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      {app.services.map((as) => (
+                        <Badge key={as.service.id} variant="outline" className="text-xs font-normal">
+                          {as.service.name}
+                          <span className="ml-1 text-muted-foreground">{as.service.type}</span>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </Link>
