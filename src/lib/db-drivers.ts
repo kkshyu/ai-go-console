@@ -190,6 +190,7 @@ const mongoDriver: MongoDriver = {
 export function getDbDriver(serviceType: ServiceType): DbDriver {
   switch (serviceType) {
     case "postgresql":
+    case "built_in_pg":
       return postgresDriver;
     case "mysql":
       return mysqlDriver;

@@ -53,6 +53,9 @@ enum ServiceType {
   whatsapp
   discord
   telegram
+  // built-in (platform-managed)
+  built_in_pg
+  built_in_disk
 }
 
 model Organization {

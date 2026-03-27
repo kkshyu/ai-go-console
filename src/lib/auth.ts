@@ -3,6 +3,8 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { ALL_SERVICE_TYPES } from "@/lib/service-types";
+import { encrypt } from "@/lib/crypto";
+import type { ServiceType } from "@prisma/client";
 
 function slugify(name: string): string {
   return name
@@ -27,6 +29,41 @@ async function createOrganizationWithDefaults(name: string) {
       serviceType,
       enabled: true,
     })),
+  });
+
+  // Auto-provision built-in services
+  const orgSlug = org.slug;
+
+  const pgConfig = encrypt(JSON.stringify({
+    host: process.env.PLATFORM_PG_HOST || "localhost",
+    port: process.env.PLATFORM_PG_PORT || "5432",
+    database: `org_${orgSlug}`,
+    username: `org_${orgSlug}`,
+    password: "platform-managed",
+  }));
+  await prisma.service.create({
+    data: {
+      name: "Built-in PostgreSQL",
+      type: "built_in_pg" as ServiceType,
+      configEncrypted: pgConfig.ciphertext,
+      iv: pgConfig.iv,
+      authTag: pgConfig.authTag,
+      organizationId: org.id,
+    },
+  });
+
+  const diskConfig = encrypt(JSON.stringify({
+    basePath: `/data/storage/${orgSlug}`,
+  }));
+  await prisma.service.create({
+    data: {
+      name: "Built-in Disk Storage",
+      type: "built_in_disk" as ServiceType,
+      configEncrypted: diskConfig.ciphertext,
+      iv: diskConfig.iv,
+      authTag: diskConfig.authTag,
+      organizationId: org.id,
+    },
   });
 
   return org;

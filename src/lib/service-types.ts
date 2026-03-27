@@ -44,6 +44,9 @@ export const ALL_SERVICE_TYPES: ServiceType[] = [
   "whatsapp",
   "discord",
   "telegram",
+  // built-in
+  "built_in_pg",
+  "built_in_disk",
 ];
 
 export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
@@ -71,11 +74,14 @@ export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
   whatsapp: ServiceCategory.chat,
   discord: ServiceCategory.chat,
   telegram: ServiceCategory.chat,
+  // built-in
+  built_in_pg: ServiceCategory.database,
+  built_in_disk: ServiceCategory.storage,
 };
 
 export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
-  [ServiceCategory.database]: ["postgresql", "mysql", "mongodb"],
-  [ServiceCategory.storage]: ["s3", "gcs", "azure_blob"],
+  [ServiceCategory.database]: ["postgresql", "mysql", "mongodb", "built_in_pg"],
+  [ServiceCategory.storage]: ["s3", "gcs", "azure_blob", "built_in_disk"],
   [ServiceCategory.payment]: ["stripe", "paypal", "ecpay"],
   [ServiceCategory.email]: ["sendgrid", "ses", "mailgun"],
   [ServiceCategory.sms]: ["twilio", "vonage", "aws_sns"],
@@ -83,6 +89,15 @@ export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
   [ServiceCategory.platform]: ["supabase", "hasura"],
   [ServiceCategory.chat]: ["line_bot", "whatsapp", "discord", "telegram"],
 };
+
+export const BUILT_IN_SERVICE_TYPES: ReadonlySet<ServiceType> = new Set([
+  "built_in_pg",
+  "built_in_disk",
+]);
+
+export function isBuiltInServiceType(type: ServiceType): boolean {
+  return BUILT_IN_SERVICE_TYPES.has(type);
+}
 
 export interface ConfigFieldDef {
   key: string;
@@ -220,6 +235,9 @@ export const SERVICE_TYPE_CONFIG_FIELDS: Record<ServiceType, ConfigFieldDef[]> =
   telegram: [
     { key: "botToken", type: "password", placeholder: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" },
   ],
+  // built-in (auto-configured by platform)
+  built_in_pg: [],
+  built_in_disk: [],
 };
 
 export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
@@ -247,6 +265,8 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   whatsapp: "WhatsApp",
   discord: "Discord",
   telegram: "Telegram",
+  built_in_pg: "Built-in PostgreSQL",
+  built_in_disk: "Built-in Disk Storage",
 };
 
 export const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
@@ -302,6 +322,9 @@ export const SERVICE_TYPE_HTTP_MODE: Record<ServiceType, HttpMode> = {
   whatsapp: "fixed",
   discord: "fixed",
   telegram: "fixed",
+  // built-in
+  built_in_pg: "proxy",
+  built_in_disk: "sdk",
 };
 
 export const FIXED_ENDPOINT_URLS: Partial<Record<ServiceType, string>> = {

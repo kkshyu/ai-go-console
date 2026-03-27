@@ -128,6 +128,8 @@ ${instanceList}
 You MUST select services from the available instances above by their "id" and "name".
 If no instance exists for a needed service type, you may still recommend it but note that it needs to be created.
 
+IMPORTANT: Services of type "built_in_pg" (Built-in PostgreSQL) and "built_in_disk" (Built-in Disk Storage) are platform-managed and automatically available for every organization. They require no external credentials. Prefer using these built-in services for database and file storage needs unless the user specifically requires an external service.
+
 Output your design as:
 \`\`\`json
 {

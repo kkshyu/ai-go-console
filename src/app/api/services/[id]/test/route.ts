@@ -240,6 +240,14 @@ const testers: Record<ServiceType, ServiceTester> = {
     throw new Error(`Telegram API returned ${res.status}`);
   },
 
+  // --- built-in ---
+  built_in_pg: async (config) => {
+    const driver = getDbDriver("built_in_pg");
+    await driver.testConnection(config);
+    return { success: true, message: "Built-in PostgreSQL connection OK" };
+  },
+  built_in_disk: configOnlyTester("Built-in Disk Storage", ["basePath"]),
+
   // --- platform ---
   supabase: async (config, endpointUrl) => {
     const url = endpointUrl || config.projectUrl;

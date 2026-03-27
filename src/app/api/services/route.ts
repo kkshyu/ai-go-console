@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { encrypt } from "@/lib/crypto";
+import { isBuiltInServiceType } from "@/lib/service-types";
+import type { ServiceType } from "@prisma/client";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -24,7 +26,12 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json(services);
+  const servicesWithMeta = services.map((s) => ({
+    ...s,
+    builtIn: isBuiltInServiceType(s.type),
+  }));
+
+  return NextResponse.json(servicesWithMeta);
 }
 
 export async function POST(request: NextRequest) {
@@ -45,6 +52,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { error: "Name and type are required" },
       { status: 400 }
+    );
+  }
+
+  if (isBuiltInServiceType(type as ServiceType)) {
+    return NextResponse.json(
+      { error: "Built-in services are managed by the platform" },
+      { status: 403 }
     );
   }
 

@@ -45,6 +45,7 @@ const ALL_SERVICE_TYPES: ServiceType[] = [
   "auth0", "firebase_auth", "line_login",
   "supabase", "hasura",
   "line_bot", "whatsapp", "discord", "telegram",
+  "built_in_pg", "built_in_disk",
 ];
 
 // ── Main seed ───────────────────────────────────────────────────────────────
@@ -96,6 +97,52 @@ async function main() {
   }
 
   console.log("  ✓ Allowed services configured for all orgs");
+
+  // ── 2b. Built-in services for each org ────────────────────────────────
+
+  for (const org of [acme, startup]) {
+    const pgCfg = encrypt(JSON.stringify({
+      host: "localhost",
+      port: "5432",
+      database: `org_${org.slug}`,
+      username: `org_${org.slug}`,
+      password: "platform-managed",
+    }));
+
+    await prisma.service.upsert({
+      where: { id: `builtin-pg-${org.slug}` },
+      update: {},
+      create: {
+        id: `builtin-pg-${org.slug}`,
+        name: "Built-in PostgreSQL",
+        type: ServiceType.built_in_pg,
+        configEncrypted: pgCfg.ciphertext,
+        iv: pgCfg.iv,
+        authTag: pgCfg.authTag,
+        organizationId: org.id,
+      },
+    });
+
+    const diskCfg = encrypt(JSON.stringify({
+      basePath: `/data/storage/${org.slug}`,
+    }));
+
+    await prisma.service.upsert({
+      where: { id: `builtin-disk-${org.slug}` },
+      update: {},
+      create: {
+        id: `builtin-disk-${org.slug}`,
+        name: "Built-in Disk Storage",
+        type: ServiceType.built_in_disk,
+        configEncrypted: diskCfg.ciphertext,
+        iv: diskCfg.iv,
+        authTag: diskCfg.authTag,
+        organizationId: org.id,
+      },
+    });
+  }
+
+  console.log("  ✓ Built-in services provisioned for all orgs");
 
   // ── 3. Users ────────────────────────────────────────────────────────────
 

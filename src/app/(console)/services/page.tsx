@@ -18,6 +18,7 @@ import {
   SERVICE_TYPE_CONFIG_FIELDS,
   SERVICE_TYPE_CATEGORY,
   SERVICE_TYPE_HTTP_MODE,
+  isBuiltInServiceType,
   type ConfigFieldDef,
   ServiceCategory,
 } from "@/lib/service-types";
@@ -32,6 +33,7 @@ interface ServiceItem {
   name: string;
   type: string;
   endpointUrl: string | null;
+  builtIn?: boolean;
 }
 
 type ConnectionStatus = "untested" | "connected" | "failed";
@@ -102,7 +104,7 @@ export default function ServicesPage() {
 
   const availableTypesForCategory = formCategory
     ? (CATEGORY_SERVICE_TYPES[formCategory as ServiceCategory] || []).filter(
-        (st) => allowedTypes.has(st)
+        (st) => allowedTypes.has(st) && !isBuiltInServiceType(st as ServiceType)
       )
     : [];
 
@@ -526,6 +528,9 @@ export default function ServicesPage() {
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
                             <Badge variant="secondary">{t(`types.${svc.type}`)}</Badge>
+                            {svc.builtIn && (
+                              <Badge variant="default" className="text-xs">{t("builtIn")}</Badge>
+                            )}
                             {SERVICE_TYPE_HTTP_MODE[svc.type as ServiceType] ===
                             "proxy" ? (
                               <span className="text-xs text-muted-foreground truncate max-w-[200px]">
@@ -555,20 +560,24 @@ export default function ServicesPage() {
                             {t("testConnection")}
                           </span>
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => startEdit(svc)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDelete(svc.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {!svc.builtIn && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => startEdit(svc)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {!svc.builtIn && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDelete(svc.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )}

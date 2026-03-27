@@ -314,6 +314,8 @@
     "statusConnected": "Connected",
     "statusFailed": "Failed",
     "statusUntested": "Untested",
+    "builtIn": "Built-in",
+    "builtInHint": "This service is managed by the platform and cannot be deleted.",
     "category": "Category",
     "types": {
       "postgresql": "PostgreSQL",
@@ -339,7 +341,9 @@
       "line_bot": "LINE Bot",
       "whatsapp": "WhatsApp",
       "discord": "Discord",
-      "telegram": "Telegram"
+      "telegram": "Telegram",
+      "built_in_pg": "Built-in PostgreSQL",
+      "built_in_disk": "Built-in Disk Storage"
     },
     "categories": {
       "database": "Database",
