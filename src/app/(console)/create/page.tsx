@@ -19,7 +19,9 @@ import {
   Package,
   Zap,
   MessageSquare,
+  Search,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { AgentChatPanel } from "@/components/chat/agent-chat-panel";
 import type { AgentRole } from "@/lib/agents/types";
 
@@ -57,9 +59,11 @@ const APP_PRESETS: AppPreset[] = [
   { id: "finance-payroll", category: "finance", template: "nextjs-fullstack" },
   { id: "finance-tax-filing", category: "finance", template: "nextjs-fullstack" },
   { id: "finance-cashflow", category: "finance", template: "nextjs-fullstack" },
+  { id: "linebot-payment-notify", category: "finance", template: "line-bot" },
   { id: "legal-contract-manager", category: "legal", template: "nextjs-fullstack" },
   { id: "legal-case-tracker", category: "legal", template: "nextjs-fullstack" },
   { id: "legal-compliance-checklist", category: "legal", template: "nextjs-fullstack" },
+  { id: "linebot-contract-alert", category: "legal", template: "line-bot" },
   { id: "sales-crm", category: "sales", template: "nextjs-fullstack" },
   { id: "sales-quote-generator", category: "sales", template: "nextjs-fullstack" },
   { id: "sales-lead-tracker", category: "sales", template: "nextjs-fullstack" },
@@ -68,15 +72,24 @@ const APP_PRESETS: AppPreset[] = [
   { id: "sales-visit-log", category: "sales", template: "nextjs-fullstack" },
   { id: "sales-territory-map", category: "sales", template: "nextjs-fullstack" },
   { id: "sales-product-catalog", category: "sales", template: "nextjs-fullstack" },
+  { id: "linebot-customer-service", category: "sales", template: "line-bot" },
+  { id: "linebot-ecommerce", category: "sales", template: "line-bot" },
+  { id: "linebot-order-tracking", category: "sales", template: "line-bot" },
   { id: "hr-leave-system", category: "hr", template: "nextjs-fullstack" },
   { id: "hr-recruitment", category: "hr", template: "nextjs-fullstack" },
   { id: "hr-onboarding", category: "hr", template: "nextjs-fullstack" },
+  { id: "linebot-leave", category: "hr", template: "line-bot" },
   { id: "marketing-campaign", category: "marketing", template: "nextjs-fullstack" },
   { id: "marketing-content-calendar", category: "marketing", template: "nextjs-fullstack" },
+  { id: "linebot-member-card", category: "marketing", template: "line-bot" },
+  { id: "linebot-survey", category: "marketing", template: "line-bot" },
   { id: "pm-task-board", category: "pm", template: "nextjs-fullstack" },
   { id: "pm-meeting-notes", category: "pm", template: "nextjs-fullstack" },
+  { id: "linebot-notification", category: "pm", template: "line-bot" },
   { id: "it-helpdesk", category: "it", template: "nextjs-fullstack" },
+  { id: "linebot-faq", category: "it", template: "line-bot" },
   { id: "ops-inventory", category: "ops", template: "nextjs-fullstack" },
+  { id: "linebot-booking", category: "ops", template: "line-bot" },
 ];
 
 const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -99,6 +112,7 @@ export default function CreateAppPage() {
 
   const [mode, setMode] = useState<CreateMode>("quick");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [creatingPreset, setCreatingPreset] = useState<string | null>(null);
 
   // Chat mode state
@@ -223,9 +237,16 @@ export default function CreateAppPage() {
     [creatingPreset, t, router]
   );
 
-  const filteredPresets = selectedCategory
-    ? APP_PRESETS.filter((p) => p.category === selectedCategory)
-    : APP_PRESETS;
+  const filteredPresets = APP_PRESETS.filter((p) => {
+    if (selectedCategory && p.category !== selectedCategory) return false;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const name = t(`presets.${p.id}.name`).toLowerCase();
+      const desc = t(`presets.${p.id}.description`).toLowerCase();
+      return name.includes(query) || desc.includes(query);
+    }
+    return true;
+  });
 
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col">
@@ -275,6 +296,17 @@ export default function CreateAppPage() {
       {mode === "quick" && (
         <div className="flex-1 overflow-y-auto space-y-4 pb-4">
           <p className="text-sm text-muted-foreground">{t("quickCreate")}</p>
+
+          {/* Search */}
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder={t("searchPlaceholder")}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
 
           {/* Category Filter */}
           <div className="flex flex-wrap gap-2">

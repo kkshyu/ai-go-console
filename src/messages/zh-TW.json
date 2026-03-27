@@ -84,6 +84,7 @@
     "modeQuickDescription": "選擇適合職務的情境範本，一鍵建立應用",
     "modeChatDescription": "描述需求，由 AI Agent 團隊協助建立",
     "quickCreate": "選擇情境範本",
+    "searchPlaceholder": "搜尋範本...",
     "creating": "建立中...",
     "presets": {
       "finance-expense-report": {
@@ -197,6 +198,50 @@
       "ops-inventory": {
         "name": "庫存管理系統",
         "description": "商品庫存即時查詢、進出貨紀錄與低庫存警示"
+      },
+      "linebot-payment-notify": {
+        "name": "LINE 帳款通知機器人",
+        "description": "應收應付帳款到期提醒、付款確認通知與逾期催收推播"
+      },
+      "linebot-contract-alert": {
+        "name": "LINE 合約提醒機器人",
+        "description": "合約到期自動提醒、續約通知推播與重要法務事項即時通知"
+      },
+      "linebot-customer-service": {
+        "name": "LINE 客服機器人",
+        "description": "自動回覆客戶常見問題、轉接真人客服與對話紀錄管理"
+      },
+      "linebot-ecommerce": {
+        "name": "LINE 電商機器人",
+        "description": "商品瀏覽、加入購物車、下單結帳與訂單查詢一站式服務"
+      },
+      "linebot-order-tracking": {
+        "name": "LINE 訂單查詢機器人",
+        "description": "透過訂單編號即時查詢物流狀態、配送進度與預計到貨時間"
+      },
+      "linebot-leave": {
+        "name": "LINE 請假機器人",
+        "description": "LINE 上直接申請請假、查詢假別餘額、主管即時審核通知"
+      },
+      "linebot-member-card": {
+        "name": "LINE 會員卡機器人",
+        "description": "電子會員卡、點數累積兌換、會員等級查詢與專屬優惠推播"
+      },
+      "linebot-survey": {
+        "name": "LINE 問卷機器人",
+        "description": "互動式問卷調查、滿意度評分收集與統計結果即時查看"
+      },
+      "linebot-notification": {
+        "name": "LINE 通知機器人",
+        "description": "主動推播任務進度、會議提醒、系統通知與排程訊息"
+      },
+      "linebot-faq": {
+        "name": "LINE FAQ 機器人",
+        "description": "關鍵字比對自動回答常見問題，支援圖文選單與快速回覆"
+      },
+      "linebot-booking": {
+        "name": "LINE 預約機器人",
+        "description": "線上預約時段查詢、預約確認通知與取消改期處理"
       }
     },
     "presetCategories": {
