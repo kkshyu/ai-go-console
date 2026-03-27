@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
   const organizationId = session?.user?.organizationId;
 
   const body = await request.json();
-  const { name, description, template, config, serviceIds, userId } = body;
+  const { name, description, template, config, serviceIds, userId, files, npmPackages } = body;
 
   if (!name || !template) {
     return NextResponse.json(
@@ -134,6 +134,8 @@ export async function POST(request: NextRequest) {
       template,
       port,
       serviceIds,
+      files,
+      npmPackages,
     });
   } catch (error) {
     await prisma.app.delete({ where: { id: app.id } });
