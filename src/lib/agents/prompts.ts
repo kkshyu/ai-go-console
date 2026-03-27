@@ -315,7 +315,7 @@ ${appContext}
 
 Available specialist agents:
 - "architect": Redesign architecture, evaluate technical changes, recommend services & packages
-- "developer": Implement code changes (MUST follow architect's specs for template/services/packages)
+- "developer": Implement code changes — can READ existing files from the app's working directory and WRITE modified files directly. Use this agent for any file modifications.
 - "reviewer": Review code quality & security
 - "devops": Handle deployment & infrastructure
 
@@ -350,6 +350,7 @@ Context passing rules:
 - Include ONLY essential context in task descriptions (not full conversation)
 - When dispatching developer after architect, include architect's JSON output verbatim
 - If an agent reports "status": "blocked", handle the blocker before proceeding
+- The developer agent can see the app's current file tree and source code contents. When the user asks about files or wants code changes, dispatch to developer.
 
 Guidelines:
 - Be concise. Your output will be rewritten by an output model for the user.
@@ -367,7 +368,31 @@ STRICT CONSTRAINT: If an architect_design is provided in context, you MUST follo
 
 ${appContext}
 
-When suggesting app changes, output:
+You can see the app's current file tree and source code contents in the context above. Use this to understand the existing code before making changes.
+
+When modifying files in the app, output:
+\`\`\`json
+{
+  "action": "modify_files",
+  "files": [
+    { "path": "src/app/page.tsx", "content": "...complete file content..." },
+    { "path": "src/components/NewComponent.tsx", "content": "...complete file content..." }
+  ],
+  "npmPackages": ["optional-new-dependency"],
+  "summary": "Brief description of what was changed"
+}
+\`\`\`
+
+IMPORTANT rules for "modify_files":
+- Each file must have "path" (relative to app root) and "content" (COMPLETE file content)
+- Files will be written directly to disk, replacing the existing file at that path
+- When modifying an existing file, you MUST include the ENTIRE file content — not just the changed parts. Preserve all unchanged code.
+- Only include files that need to be created or changed — do not re-output unchanged files
+- "npmPackages" is optional — only include when new dependencies are needed
+- Do NOT modify infrastructure files (package.json, Dockerfile, docker-compose.yml, tsconfig.json, next.config.ts, vite.config.ts) — only source code files
+- All code must be TypeScript and complete — no placeholder comments like "// TODO" or "// implement here"
+
+When suggesting app configuration changes (services, description), output:
 \`\`\`json
 {
   "action": "update_app",

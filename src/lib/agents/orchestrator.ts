@@ -133,7 +133,10 @@ export function parseAgentResult(content: string): { summary: string; blocked: b
     }
 
     let summary = "Task completed";
-    if (parsed.design?.architecture) summary = parsed.design.architecture;
+    if (parsed.action === "modify_files" && parsed.files) {
+      const count = parsed.files.length;
+      summary = `Modified ${count} file(s)${parsed.summary ? ": " + parsed.summary : ""}`;
+    } else if (parsed.design?.architecture) summary = parsed.design.architecture;
     else if (parsed.review?.summary) summary = parsed.review.summary;
     else if (parsed.deployment?.notes) summary = parsed.deployment.notes;
     else if (parsed.name) summary = `App: ${parsed.name}`;

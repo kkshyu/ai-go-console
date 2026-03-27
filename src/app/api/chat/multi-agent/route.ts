@@ -11,6 +11,7 @@ import {
   OUTPUT_MODEL,
   type ChatMessage,
 } from "@/lib/ai";
+import { buildFileTreeContext } from "@/lib/file-context";
 import {
   routeMessage,
   parsePMAction,
@@ -103,6 +104,7 @@ function getArtifactType(content: string): string | null {
       architect_design: "design",
       create_app: "implementation",
       update_app: "implementation",
+      modify_files: "implementation",
       review_result: "review",
       deploy_ready: "deployment",
       dispatch: "task",
@@ -227,6 +229,7 @@ export async function POST(request: NextRequest) {
       },
     });
     if (app) {
+      const fileContext = await buildFileTreeContext(app.slug);
       appContext = buildAppContextPrompt(
         {
           name: app.name,
@@ -239,7 +242,8 @@ export async function POST(request: NextRequest) {
             type: s.service.type,
           })),
         },
-        allowedServices
+        allowedServices,
+        fileContext
       );
     }
   }

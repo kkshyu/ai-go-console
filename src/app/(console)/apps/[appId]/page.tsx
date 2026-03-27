@@ -361,10 +361,30 @@ export default function AppDetailPage() {
             .then((res) => res.json())
             .then(setApp)
             .catch(() => {});
+        } else if (parsed.action === "modify_files" && parsed.files) {
+          // Write files to the app's working directory
+          fetch(`/api/apps/${appId}/files`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ files: parsed.files }),
+          })
+            .then((res) => res.json())
+            .then(() => {
+              // Refresh app data
+              fetch(`/api/apps/${appId}`)
+                .then((res) => res.json())
+                .then(setApp)
+                .catch(() => {});
+              // Refresh file manager if open
+              if (rightPanel === "files") {
+                fetchFiles(filePath);
+              }
+            })
+            .catch(() => {});
         }
       } catch {}
     },
-    [appId]
+    [appId, rightPanel, filePath]
   );
 
   async function handleSaveSlug() {
