@@ -60,6 +60,7 @@ export default function AppDetailPage() {
   const [app, setApp] = useState<AppData | null>(null);
   const [logs, setLogs] = useState("");
   const [loading, setLoading] = useState(false);
+  const [buildOutput, setBuildOutput] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<AgentMessage[]>([]);
   const [chatLoaded, setChatLoaded] = useState(false);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
@@ -159,16 +160,28 @@ export default function AppDetailPage() {
 
   async function doAction(action: string) {
     setLoading(true);
+    if (action === "publish") {
+      setBuildOutput(null);
+      setBottomPanel("logs");
+    } else {
+      setBuildOutput(null);
+    }
     try {
       const res = await fetch(`/api/apps/${appId}/lifecycle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      await res.json();
+      const data = await res.json();
+      if (action === "publish") {
+        setBuildOutput(data.output || (data.error ? `Error: ${data.error}` : "Build completed"));
+      }
       const appRes = await fetch(`/api/apps/${appId}`);
       setApp(await appRes.json());
     } catch (err) {
+      if (action === "publish") {
+        setBuildOutput("Build failed: " + (err instanceof Error ? err.message : "Unknown error"));
+      }
       console.error(err);
     } finally {
       setLoading(false);
@@ -508,7 +521,9 @@ export default function AppDetailPage() {
                 onClick={() => setBottomPanel(bottomPanel === "logs" ? null : "logs")}
               >
                 <Terminal className="h-3 w-3" />
-                {t("logs")}
+                {buildOutput !== null || (loading && app?.status === "building")
+                  ? t("deployLogs")
+                  : t("logs")}
               </button>
               <button
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -532,10 +547,19 @@ export default function AppDetailPage() {
 
             {/* Bottom panel content */}
             {bottomPanel === "logs" && (
-              <pre className="h-40 overflow-auto p-3 text-xs font-mono whitespace-pre-wrap border-t bg-muted/20">
-                {logs || "No logs available"}
-                <div ref={logsEndRef} />
-              </pre>
+              <div className="h-40 overflow-auto border-t bg-muted/20">
+                {loading && app?.status === "building" && buildOutput === null ? (
+                  <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
+                    <RotateCw className="h-3 w-3 animate-spin" />
+                    <span>{t("building")}...</span>
+                  </div>
+                ) : (
+                  <pre className="p-3 text-xs font-mono whitespace-pre-wrap">
+                    {buildOutput !== null ? buildOutput : (logs || "No logs available")}
+                    <div ref={logsEndRef} />
+                  </pre>
+                )}
+              </div>
             )}
             {bottomPanel === "console" && (
               <div className="h-40 overflow-auto p-3 text-xs font-mono border-t bg-muted/20">

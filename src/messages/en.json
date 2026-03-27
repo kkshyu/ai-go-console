@@ -52,6 +52,7 @@
     "developing": "Developing",
     "stopped": "Stopped",
     "building": "Building",
+    "deployLogs": "Deploy Logs",
     "running": "Running",
     "error": "Error",
     "preview": "Preview",
