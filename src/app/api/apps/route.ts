@@ -128,12 +128,12 @@ export async function POST(request: NextRequest) {
 
   try {
     await generateApp({
+      appId: app.id,
       slug,
       name,
       description,
       template,
       port,
-      serviceIds,
       files,
       npmPackages,
     });
