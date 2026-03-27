@@ -315,7 +315,7 @@ export default function CreateAppPage() {
               size="sm"
               onClick={() => setSelectedCategory(null)}
             >
-              全部
+              {t("allCategories")}
             </Button>
             {CATEGORIES.map((cat) => {
               const Icon = CATEGORY_ICONS[cat];

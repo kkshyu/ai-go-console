@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -61,14 +62,20 @@ export function AgentChatPanel({
   onAssistantComplete,
   onOrchestrationUpdate,
   extraRequestBody,
-  placeholder = "Type a message...",
-  emptyStateText = "Start a conversation",
-  generatingText = "Generating...",
-  totalTokensLabel = "Tokens",
+  placeholder,
+  emptyStateText,
+  generatingText,
+  totalTokensLabel,
   externalLoading = false,
   pipelineId,
   showProgress = true,
 }: AgentChatPanelProps) {
+  const t = useTranslations("chat");
+  const tAgents = useTranslations("agents");
+  const resolvedPlaceholder = placeholder ?? t("placeholder");
+  const resolvedEmptyStateText = emptyStateText ?? t("emptyState");
+  const resolvedGeneratingText = generatingText ?? t("generating");
+  const resolvedTotalTokensLabel = totalTokensLabel ?? t("totalTokens");
   const [messages, setMessages] = useState<AgentMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -151,10 +158,10 @@ export function AgentChatPanel({
           }),
         });
 
-        if (!res.ok) throw new Error("Chat API error");
+        if (!res.ok) throw new Error(t("errorApi"));
 
         const reader = res.body?.getReader();
-        if (!reader) throw new Error("No response body");
+        if (!reader) throw new Error(t("errorNoResponse"));
 
         const decoder = new TextDecoder();
         let displayContent = "";
@@ -305,7 +312,7 @@ export function AgentChatPanel({
                   ...m,
                   content:
                     m.content ||
-                    "Sorry, I encountered an error. Please check your OpenRouter API key is configured.",
+                    t("errorApiKey"),
                 }
               : m
           )
@@ -330,6 +337,7 @@ export function AgentChatPanel({
       onAssistantResponse,
       onAssistantComplete,
       onOrchestrationUpdate,
+      t,
     ]
   );
 
@@ -356,7 +364,7 @@ export function AgentChatPanel({
               isLoading={isLoading || externalLoading}
               agentPhase={agentPhase}
               statusMessage={statusMessage}
-              generatingText={generatingText}
+              generatingText={resolvedGeneratingText}
             />
           </div>
         )}
@@ -368,19 +376,17 @@ export function AgentChatPanel({
               <div className="grid grid-cols-5 gap-3 mb-4 w-full max-w-lg">
                 {(["pm", "architect", "developer", "reviewer", "devops"] as AgentRole[]).map(
                   (role) => {
-                    const agent = AGENT_DEFINITIONS[role];
-                    const shortDesc = agent.description.split(" — ")[1] || agent.description;
                     return (
                       <div key={role} className="flex flex-col items-center text-center gap-1.5">
                         <AgentAvatar agentRole={role} size="lg" />
-                        <span className="text-xs font-medium text-foreground">{agent.label}</span>
-                        <span className="text-[10px] leading-tight">{shortDesc}</span>
+                        <span className="text-xs font-medium text-foreground">{tAgents(`roles.${role}`)}</span>
+                        <span className="text-[10px] leading-tight">{tAgents(`roleDescriptions.${role}`)}</span>
                       </div>
                     );
                   }
                 )}
               </div>
-              <p className="text-sm">{emptyStateText}</p>
+              <p className="text-sm">{resolvedEmptyStateText}</p>
             </div>
           )}
           {messages
@@ -416,7 +422,7 @@ export function AgentChatPanel({
                   ) : (
                     <span className="flex items-center gap-2 animate-pulse">
                       <Loader2 className="h-3 w-3 animate-spin" />
-                      {generatingText}
+                      {resolvedGeneratingText}
                     </span>
                   )}
                 </div>
@@ -433,7 +439,7 @@ export function AgentChatPanel({
               <AgentAvatar agentRole="pm" />
               <div className="bg-muted rounded-lg px-4 py-2 text-sm flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                {generatingText}
+                {resolvedGeneratingText}
               </div>
             </div>
           )}
@@ -446,7 +452,7 @@ export function AgentChatPanel({
             <div className="flex items-center gap-1">
               <Zap className="h-3 w-3" />
               <span>
-                {totalTokensLabel}: {formatTokenCount(totalTokens)}
+                {resolvedTotalTokensLabel}: {formatTokenCount(totalTokens)}
               </span>
             </div>
             <div className="h-3 w-px bg-border" />
@@ -504,7 +510,7 @@ export function AgentChatPanel({
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={placeholder}
+              placeholder={resolvedPlaceholder}
               disabled={disabled}
               className="flex-1"
             />

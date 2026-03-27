@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import {
   ClipboardList,
   Blocks,
@@ -42,8 +43,10 @@ export function PipelineProgress({
   isLoading,
   agentPhase,
   statusMessage,
-  generatingText = "Generating...",
+  generatingText,
 }: AgentProgressProps) {
+  const t = useTranslations("chat");
+  const resolvedGeneratingText = generatingText ?? t("generating");
   if (state.tasks.length === 0 && !state.currentAgent) {
     return null;
   }
@@ -118,7 +121,7 @@ export function PipelineProgress({
             {agentPhase === "progress" && statusMessage
               ? statusMessage
               : `${AGENT_DEFINITIONS[activeNonPmAgent]?.label}${
-                  agentPhase === "translating" ? " ..." : ` ${generatingText}`
+                  agentPhase === "translating" ? " ..." : ` ${resolvedGeneratingText}`
                 }`}
           </span>
         </div>
@@ -131,7 +134,7 @@ export function PipelineProgress({
           <span>
             {agentPhase === "progress" && statusMessage
               ? statusMessage
-              : `PM ${generatingText}`}
+              : `PM ${resolvedGeneratingText}`}
           </span>
         </div>
       )}
