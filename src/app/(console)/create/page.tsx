@@ -6,9 +6,24 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Loader2, DollarSign, Scale, Briefcase, Users, Megaphone, ClipboardList, Monitor, Package } from "lucide-react";
+import {
+  AlertTriangle,
+  Loader2,
+  DollarSign,
+  Scale,
+  Briefcase,
+  Users,
+  Megaphone,
+  ClipboardList,
+  Monitor,
+  Package,
+  Zap,
+  MessageSquare,
+} from "lucide-react";
 import { AgentChatPanel } from "@/components/chat/agent-chat-panel";
 import type { AgentRole } from "@/lib/agents/types";
+
+type CreateMode = "quick" | "chat";
 
 interface ServiceRef {
   instanceId?: string;
@@ -81,15 +96,18 @@ export default function CreateAppPage() {
   const t = useTranslations("create");
   const tAgents = useTranslations("agents");
   const router = useRouter();
+
+  const [mode, setMode] = useState<CreateMode>("quick");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [creatingPreset, setCreatingPreset] = useState<string | null>(null);
+
+  // Chat mode state
   const [previewPort, setPreviewPort] = useState<number | null>(null);
   const [creatingApp, setCreatingApp] = useState(false);
   const [serviceWarning, setServiceWarning] = useState<string | null>(null);
   const [allowedServices, setAllowedServices] = useState<string[]>([]);
   const [pipelineId, setPipelineId] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [creatingPreset, setCreatingPreset] = useState<string | null>(null);
 
-  // Load allowed services for this org
   useEffect(() => {
     fetch("/api/organizations")
       .then((r) => r.json())
@@ -104,8 +122,9 @@ export default function CreateAppPage() {
       .catch(() => {});
   }, []);
 
-  // Create a pipeline on mount
+  // Only create pipeline when chat mode is first selected
   useEffect(() => {
+    if (mode !== "chat" || pipelineId) return;
     fetch("/api/pipelines", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -114,7 +133,7 @@ export default function CreateAppPage() {
       .then((r) => r.json())
       .then((pipeline) => setPipelineId(pipeline.id))
       .catch(() => {});
-  }, []);
+  }, [mode, pipelineId]);
 
   const handleCreateApp = useCallback(
     async (action: CreateAppAction) => {
@@ -128,9 +147,7 @@ export default function CreateAppPage() {
           const names = unauthorized.map((s) =>
             typeof s === "string" ? s : s.name || s.type
           );
-          setServiceWarning(
-            `${t("serviceNotAuthorized")}: ${names.join(", ")}`
-          );
+          setServiceWarning(`${t("serviceNotAuthorized")}: ${names.join(", ")}`);
           return;
         }
       }
@@ -150,17 +167,13 @@ export default function CreateAppPage() {
             npmPackages: action.npmPackages,
           }),
         });
-
         if (!res.ok) throw new Error("Failed to create app");
-
         const app = await res.json();
-
         const genRes = await fetch(`/api/apps/${app.id}/lifecycle`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "dev-start" }),
         });
-
         if (genRes.ok) {
           const { port } = await genRes.json();
           setPreviewPort(port || app.port);
@@ -180,9 +193,7 @@ export default function CreateAppPage() {
       if (!jsonMatch) return;
       try {
         const parsed = JSON.parse(jsonMatch[1]);
-        if (parsed.action === "create_app") {
-          handleCreateApp(parsed as CreateAppAction);
-        }
+        if (parsed.action === "create_app") handleCreateApp(parsed as CreateAppAction);
       } catch {}
     },
     [handleCreateApp]
@@ -218,117 +229,159 @@ export default function CreateAppPage() {
 
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col">
-      <div className="mb-4">
+      {/* Header */}
+      <div className="mb-6">
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{t("title")}</h1>
-        <p className="text-sm text-muted-foreground mt-1">{tAgents("subtitle")}</p>
       </div>
 
-      {serviceWarning && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span>{serviceWarning}</span>
+      {/* Mode Toggle */}
+      <div className="mb-6 grid grid-cols-2 gap-3 max-w-lg">
+        <button
+          onClick={() => setMode("quick")}
+          className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors ${
+            mode === "quick"
+              ? "border-primary bg-primary/5"
+              : "border-border hover:border-primary/40 hover:bg-accent"
+          }`}
+        >
+          <div className={`rounded-lg p-2 shrink-0 ${mode === "quick" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+            <Zap className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="font-semibold text-sm">{t("modeQuick")}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{t("modeQuickDescription")}</p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => setMode("chat")}
+          className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors ${
+            mode === "chat"
+              ? "border-primary bg-primary/5"
+              : "border-border hover:border-primary/40 hover:bg-accent"
+          }`}
+        >
+          <div className={`rounded-lg p-2 shrink-0 ${mode === "chat" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
+            <MessageSquare className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="font-semibold text-sm">{t("modeChat")}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{t("modeChatDescription")}</p>
+          </div>
+        </button>
+      </div>
+
+      {/* Quick Create Mode */}
+      {mode === "quick" && (
+        <div className="flex-1 overflow-y-auto space-y-4 pb-4">
+          <p className="text-sm text-muted-foreground">{t("quickCreate")}</p>
+
+          {/* Category Filter */}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={selectedCategory === null ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedCategory(null)}
+            >
+              全部
+            </Button>
+            {CATEGORIES.map((cat) => {
+              const Icon = CATEGORY_ICONS[cat];
+              return (
+                <Button
+                  key={cat}
+                  variant={selectedCategory === cat ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {t(`presetCategories.${cat}`)}
+                </Button>
+              );
+            })}
+          </div>
+
+          {/* Preset Grid */}
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {filteredPresets.map((preset) => {
+              const Icon = CATEGORY_ICONS[preset.category];
+              const isCreating = creatingPreset === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  onClick={() => handlePresetCreate(preset)}
+                  disabled={!!creatingPreset}
+                  className="flex items-start gap-3 rounded-xl border bg-card p-4 text-left transition-colors hover:shadow-md hover:border-primary/40 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <div className="rounded-lg bg-muted p-2 shrink-0 mt-0.5">
+                    {isCreating ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Icon className="h-4 w-4" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm">{t(`presets.${preset.id}.name`)}</span>
+                      <Badge variant="outline" className="text-xs font-normal">
+                        {t(`presetCategories.${preset.category}`)}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-snug">
+                      {t(`presets.${preset.id}.description`)}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      <div className="flex flex-1 gap-4 min-h-0">
-        {/* Left: Chat + Quick Create */}
-        <div className="flex flex-1 flex-col gap-4 min-h-0">
-          <AgentChatPanel
-            placeholder={t("placeholder")}
-            emptyStateText={tAgents("emptyState")}
-            generatingText={t("generating")}
-            totalTokensLabel={t("totalTokens")}
-            externalLoading={creatingApp}
-            onAssistantResponse={handleAssistantResponse}
-            onOrchestrationUpdate={handleOrchestrationUpdate}
-            pipelineId={pipelineId || undefined}
-            showProgress={true}
-          />
+      {/* Chat Mode */}
+      {mode === "chat" && (
+        <div className="flex flex-1 gap-4 min-h-0">
+          <div className="flex flex-1 flex-col min-h-0">
+            {serviceWarning && (
+              <div className="mb-3 flex items-center gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>{serviceWarning}</span>
+              </div>
+            )}
+            <AgentChatPanel
+              placeholder={t("placeholder")}
+              emptyStateText={tAgents("emptyState")}
+              generatingText={t("generating")}
+              totalTokensLabel={t("totalTokens")}
+              externalLoading={creatingApp}
+              onAssistantResponse={handleAssistantResponse}
+              onOrchestrationUpdate={handleOrchestrationUpdate}
+              pipelineId={pipelineId || undefined}
+              showProgress={true}
+            />
+          </div>
 
-          {/* Quick Create Section */}
-          <div className="shrink-0 space-y-3 pb-2">
-            <div className="flex items-center gap-2">
-              <div className="h-px flex-1 bg-border" />
-              <span className="text-xs text-muted-foreground">{t("quickCreate")}</span>
-              <div className="h-px flex-1 bg-border" />
-            </div>
-
-            {/* Category Tabs */}
-            <div className="flex flex-wrap gap-1.5">
-              {CATEGORIES.map((cat) => {
-                const Icon = CATEGORY_ICONS[cat];
-                return (
-                  <Button
-                    key={cat}
-                    variant={selectedCategory === cat ? "default" : "outline"}
-                    size="sm"
-                    className="h-7 text-xs px-2.5"
-                    onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
-                  >
-                    <Icon className="h-3 w-3" />
-                    {t(`presetCategories.${cat}`)}
-                  </Button>
-                );
-              })}
-            </div>
-
-            {/* Preset Cards */}
-            <div className="grid grid-cols-2 gap-2">
-              {filteredPresets.map((preset) => {
-                const Icon = CATEGORY_ICONS[preset.category];
-                const isCreating = creatingPreset === preset.id;
-                return (
-                  <button
-                    key={preset.id}
-                    onClick={() => handlePresetCreate(preset)}
-                    disabled={!!creatingPreset}
-                    className="flex items-start gap-2.5 rounded-lg border bg-card p-3 text-left text-sm transition-colors hover:bg-accent hover:border-primary/40 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    <div className="rounded-md bg-muted p-1.5 shrink-0 mt-0.5">
-                      {isCreating ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Icon className="h-3.5 w-3.5" />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-medium leading-snug">{t(`presets.${preset.id}.name`)}</span>
-                        <Badge variant="outline" className="text-xs font-normal h-4 px-1">
-                          {t(`presetCategories.${preset.category}`)}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-snug">
-                        {t(`presets.${preset.id}.description`)}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+          {/* Preview Panel */}
+          <div className="hidden lg:flex w-1/2">
+            <Card className="flex flex-1 flex-col overflow-hidden">
+              {previewPort ? (
+                <iframe
+                  src={`http://localhost:${previewPort}`}
+                  className="flex-1 w-full border-0"
+                  title="App Preview"
+                />
+              ) : (
+                <CardContent className="flex flex-1 items-center justify-center text-center text-muted-foreground">
+                  <div>
+                    <p className="text-lg font-medium">{t("preview")}</p>
+                    <p className="text-sm mt-1">{tAgents("previewHint")}</p>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
           </div>
         </div>
-
-        {/* Preview Panel */}
-        <div className="hidden lg:flex w-1/2">
-          <Card className="flex flex-1 flex-col overflow-hidden">
-            {previewPort ? (
-              <iframe
-                src={`http://localhost:${previewPort}`}
-                className="flex-1 w-full border-0"
-                title="App Preview"
-              />
-            ) : (
-              <CardContent className="flex flex-1 items-center justify-center text-center text-muted-foreground">
-                <div>
-                  <p className="text-lg font-medium">{t("preview")}</p>
-                  <p className="text-sm mt-1">{tAgents("previewHint")}</p>
-                </div>
-              </CardContent>
-            )}
-          </Card>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
