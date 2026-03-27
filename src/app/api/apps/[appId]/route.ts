@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { prisma, getOrgSlug } from "@/lib/db";
 import { removeApp } from "@/lib/generator";
 import { stopApp } from "@/lib/docker";
 import { stopDevServer } from "@/lib/dev-server";
@@ -88,16 +88,18 @@ export async function DELETE(
     return NextResponse.json({ error: "App not found" }, { status: 404 });
   }
 
+  const orgSlug = await getOrgSlug(app.userId);
+
   // Stop running processes
   try {
-    await stopDevServer(app.slug);
+    await stopDevServer(orgSlug, app.slug);
   } catch { /* ignore */ }
   try {
     await stopApp(app.slug);
   } catch { /* ignore */ }
 
   // Remove files
-  await removeApp(app.slug);
+  await removeApp(orgSlug, app.slug);
 
   // Delete from DB
   await prisma.app.delete({ where: { id: appId } });

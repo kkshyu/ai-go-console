@@ -1,7 +1,7 @@
 services:
   app:
     build: .
-    container_name: aigo-{{orgSlug}}-{{slug}}
+    container_name: aigo-{{orgSlug}}-{{slug}}-prod
     restart: unless-stopped
     ports:
       - "{{prodPort}}:3000"

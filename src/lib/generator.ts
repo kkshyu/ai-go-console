@@ -46,7 +46,7 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
   }
 
   // Remove existing container if present (re-generation)
-  await sandbox.removeDevContainer(slug);
+  await sandbox.removeDevContainer(orgSlug, slug);
 
   // Resolve environment variables from linked services
   const envVars = await resolveServiceEnvVars(appId);
@@ -94,20 +94,20 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
 
   // Build app-specific dev image (or tag base image)
   if (options.npmPackages && options.npmPackages.length > 0) {
-    await sandbox.buildAppDevImage(slug, template, options.npmPackages);
+    await sandbox.buildAppDevImage(orgSlug, slug, template, options.npmPackages);
   } else {
-    await sandbox.tagBaseImage(slug, template);
+    await sandbox.tagBaseImage(orgSlug, slug, template);
   }
 
   // Create the dev container with service env vars
-  await sandbox.createDevContainer(slug, template, port, envVars);
+  await sandbox.createDevContainer(orgSlug, slug, template, port, envVars);
 
   // Inject all rendered files into the container
   // Filter out docker-compose.yml — it stays on host for production
   const containerFiles = renderedFiles.filter(
     (f) => f.path !== "docker-compose.yml"
   );
-  await sandbox.writeFiles(slug, containerFiles);
+  await sandbox.writeFiles(orgSlug, slug, containerFiles);
 
   // Write docker-compose.yml to host metadata directory (for production use)
   const composeFile = renderedFiles.find((f) => f.path === "docker-compose.yml");
@@ -121,7 +121,7 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
     );
   }
 
-  return sandbox.devContainerName(slug);
+  return sandbox.devContainerName(orgSlug, slug);
 }
 
 /**
@@ -243,9 +243,9 @@ export async function regenerateCompose(appId: string, slug: string, orgSlug: st
 /**
  * Removes an app's dev container and image, plus host metadata.
  */
-export async function removeApp(slug: string): Promise<void> {
-  await sandbox.removeDevContainer(slug);
-  await sandbox.removeDevImage(slug);
+export async function removeApp(orgSlug: string, slug: string): Promise<void> {
+  await sandbox.removeDevContainer(orgSlug, slug);
+  await sandbox.removeDevImage(orgSlug, slug);
 
   // Clean up host metadata directory
   const metaDir = path.join(APPS_META_ROOT, slug);
@@ -265,6 +265,6 @@ export function getAppPath(slug: string): string {
 /**
  * Returns the dev container name for an app.
  */
-export function getContainerName(slug: string): string {
-  return sandbox.devContainerName(slug);
+export function getContainerName(orgSlug: string, slug: string): string {
+  return sandbox.devContainerName(orgSlug, slug);
 }

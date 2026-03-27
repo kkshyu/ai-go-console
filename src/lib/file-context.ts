@@ -82,10 +82,10 @@ function filePriority(relativePath: string): number {
  * Reads from the app's Docker container instead of host filesystem.
  * Returns a string suitable for injection into agent system prompts.
  */
-export async function buildFileTreeContext(slug: string): Promise<string> {
+export async function buildFileTreeContext(orgSlug: string, slug: string): Promise<string> {
   let entries: FileEntry[];
   try {
-    entries = await sandbox.listFileTree(slug);
+    entries = await sandbox.listFileTree(orgSlug, slug);
   } catch {
     return "App container not found or not accessible.";
   }
@@ -123,7 +123,7 @@ export async function buildFileTreeContext(slug: string): Promise<string> {
     if (totalChars >= MAX_TOTAL_CHARS) break;
 
     try {
-      let content = await sandbox.readFile(slug, file.relativePath);
+      let content = await sandbox.readFile(orgSlug, slug, file.relativePath);
       const size = Buffer.byteLength(content, "utf-8");
 
       if (size > MAX_FILE_CHARS * 2) continue; // Skip very large files

@@ -5,18 +5,19 @@ import * as sandbox from "@/lib/docker-sandbox";
  * The container must already exist (created by generateApp).
  */
 export async function startDevServer(
+  orgSlug: string,
   slug: string,
   _template: string,
   port: number
 ): Promise<{ pid: number; port: number }> {
   // Stop existing server if running
-  await stopDevServer(slug);
+  await stopDevServer(orgSlug, slug);
 
   // Inject console bridge script into the container
-  await sandbox.injectConsoleBridge(slug);
+  await sandbox.injectConsoleBridge(orgSlug, slug);
 
   // Start the container (dev server CMD runs automatically)
-  await sandbox.startDevContainer(slug);
+  await sandbox.startDevContainer(orgSlug, slug);
 
   return { pid: 0, port };
 }
@@ -24,19 +25,19 @@ export async function startDevServer(
 /**
  * Stop a dev server for an app.
  */
-export async function stopDevServer(slug: string): Promise<void> {
-  await sandbox.stopDevContainer(slug);
+export async function stopDevServer(orgSlug: string, slug: string): Promise<void> {
+  await sandbox.stopDevContainer(orgSlug, slug);
 }
 
 /**
  * Get dev server status.
  */
-export async function getDevServerStatus(slug: string): Promise<{
+export async function getDevServerStatus(orgSlug: string, slug: string): Promise<{
   running: boolean;
   port?: number;
   pid?: number;
 }> {
-  const status = await sandbox.getDevContainerStatus(slug);
+  const status = await sandbox.getDevContainerStatus(orgSlug, slug);
   if (status === "running") {
     return { running: true, pid: 0 };
   }
@@ -46,8 +47,8 @@ export async function getDevServerStatus(slug: string): Promise<{
 /**
  * Get dev server logs.
  */
-export function getDevServerLogs(slug: string, lines = 50): Promise<string[]> {
-  return sandbox.getDevContainerLogs(slug, lines).then((logs) =>
+export function getDevServerLogs(orgSlug: string, slug: string, lines = 50): Promise<string[]> {
+  return sandbox.getDevContainerLogs(orgSlug, slug, lines).then((logs) =>
     logs.split("\n").slice(-lines)
   );
 }

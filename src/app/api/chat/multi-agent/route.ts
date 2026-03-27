@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { prisma, getOrgSlug } from "@/lib/db";
 import {
   buildAppContextPrompt,
   DEFAULT_MODEL,
@@ -142,6 +142,7 @@ export async function POST(request: NextRequest) {
   // Build app context if working on existing app
   let appContext: string | undefined;
   let appSlug: string | undefined;
+  let appOrgSlug: string | undefined;
   if (appId) {
     const app = await prisma.app.findUnique({
       where: { id: appId },
@@ -155,7 +156,9 @@ export async function POST(request: NextRequest) {
     });
     if (app) {
       appSlug = app.slug;
-      const fileContext = await buildFileTreeContext(app.slug);
+      appOrgSlug = await getOrgSlug(app.userId);
+      const orgSlug = appOrgSlug;
+      const fileContext = await buildFileTreeContext(orgSlug, app.slug);
       appContext = buildAppContextPrompt(
         {
           name: app.name,
@@ -281,6 +284,7 @@ export async function POST(request: NextRequest) {
         appSlug,
         appId,
         userId: session?.user?.id,
+        orgSlug: appOrgSlug,
       };
 
       const pmActor = new PMActor(pmConfig, orchState);

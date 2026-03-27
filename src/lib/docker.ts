@@ -12,7 +12,7 @@ function composeFile(slug: string): string {
 }
 
 function containerName(orgSlug: string, slug: string): string {
-  return `aigo-${orgSlug}-${slug}`;
+  return `aigo-${orgSlug}-${slug}-prod`;
 }
 
 /**

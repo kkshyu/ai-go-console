@@ -79,6 +79,7 @@ export interface PMActorConfig {
   appSlug?: string;
   appId?: string;
   userId?: string;
+  orgSlug?: string;
 }
 
 export class PMActor extends Actor {
@@ -728,7 +729,7 @@ export class PMActor extends Actor {
           parsed.action === "create_app" ||
           parsed.action === "update_app")
       ) {
-        await writeFiles(this.config.appSlug, parsed.files);
+        await writeFiles(this.config.orgSlug || "default", this.config.appSlug, parsed.files);
         await this.config.sendEvent({
           filesWritten: {
             count: parsed.files.length,

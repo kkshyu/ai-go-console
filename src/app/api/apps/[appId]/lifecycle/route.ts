@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import fsp from "node:fs/promises";
 import crypto from "node:crypto";
-import { prisma } from "@/lib/db";
+import { prisma, getOrgSlug } from "@/lib/db";
 import { startDevServer, stopDevServer, getDevServerLogs } from "@/lib/dev-server";
 import { startApp, stopApp, restartApp, getAppLogs, getAppDockerStatus, tagImage, startAppFromImage } from "@/lib/docker";
 import { regenerateCompose, getAppPath } from "@/lib/generator";
@@ -11,13 +11,6 @@ import { syncRoutes } from "@/lib/proxy";
 import * as sandbox from "@/lib/docker-sandbox";
 import { getTemplate } from "@/lib/templates";
 
-async function getOrgSlug(userId: string): Promise<string> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { organization: { select: { slug: true } } },
-  });
-  return user?.organization?.slug || "default";
-}
 
 export async function POST(
   request: NextRequest,
@@ -32,6 +25,8 @@ export async function POST(
     return NextResponse.json({ error: "App not found" }, { status: 404 });
   }
 
+  const orgSlug = await getOrgSlug(app.userId);
+
   try {
     switch (action) {
       case "dev-start": {
@@ -39,17 +34,16 @@ export async function POST(
         if (!app.port) {
           return NextResponse.json({ error: "No port assigned" }, { status: 400 });
         }
-        const result = await startDevServer(app.slug, app.template, app.port);
+        const result = await startDevServer(orgSlug, app.slug, app.template, app.port);
         return NextResponse.json({ success: true, ...result });
       }
 
       case "dev-stop": {
-        await stopDevServer(app.slug);
+        await stopDevServer(orgSlug, app.slug);
         return NextResponse.json({ success: true });
       }
 
       case "publish": {
-        const orgSlug = await getOrgSlug(app.userId);
 
         await prisma.app.update({
           where: { id: appId },
@@ -69,7 +63,7 @@ export async function POST(
             appId,
             status: "building",
             version,
-            imageTag: `aigo-${orgSlug}-${app.slug}:v${version}`,
+            imageTag: `aigo-${orgSlug}-${app.slug}-prod:v${version}`,
           },
         });
 
@@ -79,7 +73,7 @@ export async function POST(
         // Export source from dev container to temp directory for production build
         const tmpDir = path.join(os.tmpdir(), `aigo-publish-${crypto.randomUUID()}`);
         try {
-          await sandbox.exportSource(app.slug, tmpDir);
+          await sandbox.exportSource(orgSlug, app.slug, tmpDir);
 
           // Copy production Dockerfile from template into build context
           const tmpl = getTemplate(app.template);
@@ -91,6 +85,13 @@ export async function POST(
           // Copy docker-compose.yml from host metadata directory
           const composeSrc = path.join(getAppPath(app.slug), "docker-compose.yml");
           await fsp.copyFile(composeSrc, path.join(tmpDir, "docker-compose.yml"));
+
+          // Stop existing production container before re-deploying to avoid name conflict
+          try {
+            await stopApp(app.slug);
+          } catch {
+            // ignore if not running
+          }
 
           // Build and start production container from the temp directory
           const { execFile } = await import("node:child_process");
@@ -144,8 +145,6 @@ export async function POST(
         if (!targetDeployment || targetDeployment.appId !== appId) {
           return NextResponse.json({ error: "Deployment not found" }, { status: 404 });
         }
-
-        const orgSlug = await getOrgSlug(app.userId);
 
         await prisma.app.update({
           where: { id: appId },
@@ -224,13 +223,13 @@ export async function POST(
           const logs = await getAppLogs(app.slug);
           return NextResponse.json({ logs });
         } else {
-          const logs = await getDevServerLogs(app.slug);
+          const logs = await getDevServerLogs(orgSlug, app.slug);
           return NextResponse.json({ logs: logs.join("\n") });
         }
       }
 
       case "dev-logs": {
-        const logs = await getDevServerLogs(app.slug);
+        const logs = await getDevServerLogs(orgSlug, app.slug);
         return NextResponse.json({ logs: logs.join("\n") });
       }
 
@@ -247,10 +246,17 @@ export async function POST(
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown error";
-    await prisma.app.update({
-      where: { id: appId },
-      data: { status: "error" },
-    });
+    // Update app status and mark any "building" deployments as failed
+    await Promise.all([
+      prisma.app.update({
+        where: { id: appId },
+        data: { status: "error" },
+      }),
+      prisma.deployment.updateMany({
+        where: { appId, status: "building" },
+        data: { status: "failed", buildLog: msg },
+      }),
+    ]);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
