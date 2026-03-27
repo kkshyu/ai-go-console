@@ -22,6 +22,9 @@ import {
   ExternalLink,
   ServerCog,
   Pencil,
+  ChevronUp,
+  ChevronDown,
+  MessageSquare,
 } from "lucide-react";
 import { AgentChatPanel, type AgentMessage } from "@/components/chat/agent-chat-panel";
 import type { AgentRole } from "@/lib/agents/types";
@@ -60,6 +63,7 @@ export default function AppDetailPage() {
   const [chatMessages, setChatMessages] = useState<AgentMessage[]>([]);
   const [chatLoaded, setChatLoaded] = useState(false);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  const [chatCollapsed, setChatCollapsed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
   const [editingSlug, setEditingSlug] = useState(false);
@@ -345,27 +349,40 @@ export default function AppDetailPage() {
       )}
 
       {/* Main Content: Chat + Preview */}
-      <div className="flex flex-1 gap-4 min-h-0">
+      <div className="flex flex-1 gap-4 min-h-0 flex-col lg:flex-row">
         {/* Multi-Agent Chat Panel */}
-        <div className="flex flex-1 flex-col min-h-0">
-          {chatLoaded && (
-            <AgentChatPanel
-              initialMessages={chatMessages}
-              extraRequestBody={{ appId: appId as string }}
-              placeholder={t("chatPlaceholder")}
-              emptyStateText={t("chatEmptyState")}
-              generatingText={t("generating")}
-              totalTokensLabel={t("totalTokens")}
-              onUserMessage={handleUserMessage}
-              onAssistantComplete={handleAssistantComplete}
-              onAssistantResponse={handleAssistantResponse}
-              showProgress={true}
-            />
-          )}
+        <div className={`flex flex-col min-h-0 transition-all duration-200 overflow-hidden ${chatCollapsed ? "shrink-0 basis-auto" : "shrink-0 basis-1/2 lg:basis-auto lg:shrink-1"} lg:flex-1`}>
+          {/* Collapse toggle — mobile/tablet only */}
+          <button
+            className="flex lg:hidden items-center justify-between px-3 py-2 bg-muted/40 rounded-t-lg border border-b-0 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => setChatCollapsed((v) => !v)}
+          >
+            <span className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Chat
+            </span>
+            {chatCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          </button>
+          <div className={`${chatCollapsed ? "hidden lg:flex" : "flex"} flex-1 flex-col min-h-0`}>
+            {chatLoaded && (
+              <AgentChatPanel
+                initialMessages={chatMessages}
+                extraRequestBody={{ appId: appId as string }}
+                placeholder={t("chatPlaceholder")}
+                emptyStateText={t("chatEmptyState")}
+                generatingText={t("generating")}
+                totalTokensLabel={t("totalTokens")}
+                onUserMessage={handleUserMessage}
+                onAssistantComplete={handleAssistantComplete}
+                onAssistantResponse={handleAssistantResponse}
+                showProgress={true}
+              />
+            )}
+          </div>
         </div>
 
         {/* Preview Panel — browser-like chrome */}
-        <div className="hidden lg:flex lg:w-[480px] flex-col min-h-0">
+        <div className="flex flex-1 lg:flex-none lg:w-[480px] flex-col min-h-0">
           {hasPreview ? (
             <div className="flex flex-1 flex-col rounded-lg border overflow-hidden bg-background">
               {/* Browser toolbar */}
