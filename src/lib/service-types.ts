@@ -8,6 +8,7 @@ export enum ServiceCategory {
   sms = "sms",
   auth = "auth",
   platform = "platform",
+  chat = "chat",
 }
 
 export const ALL_SERVICE_TYPES: ServiceType[] = [
@@ -38,6 +39,11 @@ export const ALL_SERVICE_TYPES: ServiceType[] = [
   // platform
   "supabase",
   "hasura",
+  // chat
+  "line_bot",
+  "whatsapp",
+  "discord",
+  "telegram",
 ];
 
 export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
@@ -61,6 +67,10 @@ export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
   line_login: ServiceCategory.auth,
   supabase: ServiceCategory.platform,
   hasura: ServiceCategory.platform,
+  line_bot: ServiceCategory.chat,
+  whatsapp: ServiceCategory.chat,
+  discord: ServiceCategory.chat,
+  telegram: ServiceCategory.chat,
 };
 
 export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
@@ -71,6 +81,7 @@ export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
   [ServiceCategory.sms]: ["twilio", "vonage", "aws_sns"],
   [ServiceCategory.auth]: ["auth0", "firebase_auth", "line_login"],
   [ServiceCategory.platform]: ["supabase", "hasura"],
+  [ServiceCategory.chat]: ["line_bot", "whatsapp", "discord", "telegram"],
 };
 
 export interface ConfigFieldDef {
@@ -192,6 +203,23 @@ export const SERVICE_TYPE_CONFIG_FIELDS: Record<ServiceType, ConfigFieldDef[]> =
   hasura: [
     { key: "adminSecret", type: "password", placeholder: "your-admin-secret" },
   ],
+  // --- chat ---
+  line_bot: [
+    { key: "channelAccessToken", type: "password", placeholder: "your-channel-access-token" },
+    { key: "channelSecret", type: "password", placeholder: "your-channel-secret" },
+  ],
+  whatsapp: [
+    { key: "phoneNumberId", type: "text", placeholder: "123456789012345" },
+    { key: "accessToken", type: "password", placeholder: "your-access-token" },
+    { key: "verifyToken", type: "text", placeholder: "your-verify-token" },
+  ],
+  discord: [
+    { key: "botToken", type: "password", placeholder: "your-bot-token" },
+    { key: "applicationId", type: "text", placeholder: "123456789012345678" },
+  ],
+  telegram: [
+    { key: "botToken", type: "password", placeholder: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" },
+  ],
 };
 
 export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
@@ -215,6 +243,10 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   line_login: "LINE Login",
   supabase: "Supabase",
   hasura: "Hasura",
+  line_bot: "LINE Bot",
+  whatsapp: "WhatsApp",
+  discord: "Discord",
+  telegram: "Telegram",
 };
 
 export const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
@@ -225,6 +257,7 @@ export const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
   [ServiceCategory.sms]: "SMS",
   [ServiceCategory.auth]: "Authentication",
   [ServiceCategory.platform]: "Platform",
+  [ServiceCategory.chat]: "Chat",
 };
 
 /**
@@ -264,6 +297,11 @@ export const SERVICE_TYPE_HTTP_MODE: Record<ServiceType, HttpMode> = {
   // platform — user provides project URL / endpoint
   supabase: "user-provided",
   hasura: "user-provided",
+  // chat — fixed well-known API URLs
+  line_bot: "fixed",
+  whatsapp: "fixed",
+  discord: "fixed",
+  telegram: "fixed",
 };
 
 export const FIXED_ENDPOINT_URLS: Partial<Record<ServiceType, string>> = {
@@ -273,6 +311,10 @@ export const FIXED_ENDPOINT_URLS: Partial<Record<ServiceType, string>> = {
   mailgun: "https://api.mailgun.net",
   twilio: "https://api.twilio.com",
   vonage: "https://rest.nexmo.com",
+  line_bot: "https://api.line.me",
+  whatsapp: "https://graph.facebook.com",
+  discord: "https://discord.com/api",
+  telegram: "https://api.telegram.org",
 };
 
 /**

@@ -335,7 +335,11 @@
       "firebase_auth": "Firebase Auth",
       "line_login": "LINE Login",
       "supabase": "Supabase",
-      "hasura": "Hasura"
+      "hasura": "Hasura",
+      "line_bot": "LINE Bot",
+      "whatsapp": "WhatsApp",
+      "discord": "Discord",
+      "telegram": "Telegram"
     },
     "categories": {
       "database": "Database",
@@ -344,7 +348,8 @@
       "email": "Email",
       "sms": "SMS",
       "auth": "Authentication",
-      "platform": "Platform"
+      "platform": "Platform",
+      "chat": "Chat"
     }
   },
   "organization": {

@@ -44,6 +44,7 @@ const ALL_SERVICE_TYPES: ServiceType[] = [
   "twilio", "vonage", "aws_sns",
   "auth0", "firebase_auth", "line_login",
   "supabase", "hasura",
+  "line_bot", "whatsapp", "discord", "telegram",
 ];
 
 // ── Main seed ───────────────────────────────────────────────────────────────

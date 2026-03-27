@@ -29,7 +29,7 @@ export const DEFAULT_MODEL = AVAILABLE_MODELS[0].id;
 export function buildSystemPrompt(allowedServices?: string[]): string {
   const serviceList = allowedServices && allowedServices.length > 0
     ? allowedServices.join(", ")
-    : "postgresql, mysql, mongodb, s3, gcs, azure_blob, stripe, paypal, ecpay, sendgrid, ses, mailgun, twilio, vonage, aws_sns, auth0, firebase_auth, line_login, supabase, hasura";
+    : "postgresql, mysql, mongodb, s3, gcs, azure_blob, stripe, paypal, ecpay, sendgrid, ses, mailgun, twilio, vonage, aws_sns, auth0, firebase_auth, line_login, supabase, hasura, line_bot, whatsapp, discord, telegram";
 
   return `You are AI Go, an intelligent assistant that helps users create web applications.
 
@@ -89,6 +89,12 @@ Authentication:
 Platform:
 - "supabase": Supabase platform (database, auth, storage, realtime)
 - "hasura": Hasura GraphQL engine
+
+Chat:
+- "line_bot": LINE Bot Messaging API
+- "whatsapp": WhatsApp Business API (Meta Cloud API)
+- "discord": Discord Bot API
+- "telegram": Telegram Bot API
 
 Guidelines:
 1. Ask the user what they want to build
