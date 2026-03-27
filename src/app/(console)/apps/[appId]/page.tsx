@@ -69,6 +69,7 @@ export default function AppDetailPage() {
   const [iframeKey, setIframeKey] = useState(0);
   const [consoleLogs, setConsoleLogs] = useState<Array<{ level: string; message: string; timestamp: number }>>([]);
   const [bottomPanel, setBottomPanel] = useState<"logs" | "console" | null>(null);
+  const [lastActivePanel, setLastActivePanel] = useState<"logs" | "console">("logs");
   const [editingSlug, setEditingSlug] = useState(false);
   const [slugValue, setSlugValue] = useState("");
   const [slugError, setSlugError] = useState("");
@@ -274,6 +275,158 @@ export default function AppDetailPage() {
   }
 
   if (!app) return <div className="p-8">Loading...</div>;
+
+  const consoleLevelConfig: Record<string, { icon: string; bg: string; border: string; iconColor: string; textColor: string }> = {
+    error: {
+      icon: "\u2715",
+      bg: "bg-red-50 dark:bg-red-950/30",
+      border: "border-l-2 border-l-red-500",
+      iconColor: "text-red-500",
+      textColor: "text-red-700 dark:text-red-400",
+    },
+    warn: {
+      icon: "\u26A0",
+      bg: "bg-yellow-50 dark:bg-yellow-950/30",
+      border: "border-l-2 border-l-yellow-500",
+      iconColor: "text-yellow-600",
+      textColor: "text-yellow-800 dark:text-yellow-300",
+    },
+    info: {
+      icon: "\u2139",
+      bg: "",
+      border: "border-l-2 border-l-blue-400",
+      iconColor: "text-blue-500",
+      textColor: "text-foreground",
+    },
+    log: {
+      icon: "",
+      bg: "",
+      border: "border-l-2 border-l-transparent",
+      iconColor: "",
+      textColor: "text-foreground",
+    },
+  };
+
+  function renderBottomToolbar() {
+    return (
+      <div className="flex items-center border-t bg-muted/40">
+        <button
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+            bottomPanel === "logs"
+              ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          onClick={() => {
+            if (bottomPanel === "logs") {
+              setBottomPanel(null);
+            } else {
+              setBottomPanel("logs");
+              setLastActivePanel("logs");
+            }
+          }}
+        >
+          <Terminal className="h-3 w-3" />
+          {buildOutput !== null || (loading && app?.status === "building")
+            ? t("deployLogs")
+            : t("logs")}
+        </button>
+        <button
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+            bottomPanel === "console"
+              ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+          onClick={() => {
+            if (bottomPanel === "console") {
+              setBottomPanel(null);
+            } else {
+              setBottomPanel("console");
+              setLastActivePanel("console");
+            }
+          }}
+        >
+          <Monitor className="h-3 w-3" />
+          {t("console")}
+        </button>
+        <div className="ml-auto flex items-center gap-0.5 pr-1">
+          {bottomPanel === "logs" && (
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setLogs(""); setBuildOutput(null); }}>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
+          {bottomPanel === "console" && (
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setConsoleLogs([])}>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={() => {
+              if (bottomPanel) {
+                setLastActivePanel(bottomPanel);
+                setBottomPanel(null);
+              } else {
+                setBottomPanel(lastActivePanel);
+              }
+            }}
+          >
+            {bottomPanel ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderBottomPanels() {
+    return (
+      <>
+        {bottomPanel === "logs" && (
+          <div className="h-40 overflow-auto border-t" style={{ backgroundColor: "#1a1b26" }}>
+            {loading && app?.status === "building" && buildOutput === null ? (
+              <div className="flex items-center gap-2 p-3 text-xs" style={{ color: "#7aa2f7" }}>
+                <RotateCw className="h-3 w-3 animate-spin" />
+                <span>{t("building")}...</span>
+              </div>
+            ) : (
+              <pre className="p-3 text-xs font-mono whitespace-pre-wrap leading-relaxed" style={{ color: "#a9b1d6" }}>
+                {buildOutput !== null ? buildOutput : (logs || "No logs available")}
+                <div ref={logsEndRef} />
+              </pre>
+            )}
+          </div>
+        )}
+        {bottomPanel === "console" && (
+          <div className="h-40 overflow-auto text-xs font-mono border-t bg-white dark:bg-[#242424]">
+            {consoleLogs.length === 0 ? (
+              <div className="p-3 text-muted-foreground italic">No console output</div>
+            ) : (
+              consoleLogs.map((entry, i) => {
+                const time = new Date(entry.timestamp).toLocaleTimeString("en-US", {
+                  hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit", fractionalSecondDigits: 3,
+                });
+                const config = consoleLevelConfig[entry.level] || consoleLevelConfig.log;
+                return (
+                  <div
+                    key={i}
+                    className={`flex items-start gap-2 px-3 py-1 border-b border-border/40 ${config.bg} ${config.border}`}
+                  >
+                    {config.icon && (
+                      <span className={`shrink-0 ${config.iconColor} w-4 text-center`}>{config.icon}</span>
+                    )}
+                    <span className={`flex-1 ${config.textColor} break-all`}>{entry.message}</span>
+                    <span className="shrink-0 text-muted-foreground/60 tabular-nums">{time}</span>
+                  </div>
+                );
+              })
+            )}
+            <div ref={consoleEndRef} />
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col">
@@ -510,83 +663,8 @@ export default function AppDetailPage() {
               </>
             )}
 
-            {/* Bottom toolbar — Logs / Console tabs */}
-            <div className="flex items-center border-t bg-muted/40">
-              <button
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                  bottomPanel === "logs"
-                    ? "text-foreground bg-background border-t-2 border-primary -mt-px"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => setBottomPanel(bottomPanel === "logs" ? null : "logs")}
-              >
-                <Terminal className="h-3 w-3" />
-                {buildOutput !== null || (loading && app?.status === "building")
-                  ? t("deployLogs")
-                  : t("logs")}
-              </button>
-              <button
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                  bottomPanel === "console"
-                    ? "text-foreground bg-background border-t-2 border-primary -mt-px"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => setBottomPanel(bottomPanel === "console" ? null : "console")}
-              >
-                <Monitor className="h-3 w-3" />
-                {t("console")}
-              </button>
-              {bottomPanel === "console" && (
-                <div className="ml-auto pr-1">
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setConsoleLogs([])}>
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {/* Bottom panel content */}
-            {bottomPanel === "logs" && (
-              <div className="h-40 overflow-auto border-t bg-muted/20">
-                {loading && app?.status === "building" && buildOutput === null ? (
-                  <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
-                    <RotateCw className="h-3 w-3 animate-spin" />
-                    <span>{t("building")}...</span>
-                  </div>
-                ) : (
-                  <pre className="p-3 text-xs font-mono whitespace-pre-wrap">
-                    {buildOutput !== null ? buildOutput : (logs || "No logs available")}
-                    <div ref={logsEndRef} />
-                  </pre>
-                )}
-              </div>
-            )}
-            {bottomPanel === "console" && (
-              <div className="h-40 overflow-auto p-3 text-xs font-mono border-t bg-muted/20">
-                {consoleLogs.length === 0 ? (
-                  <span className="text-muted-foreground">No console output</span>
-                ) : (
-                  consoleLogs.map((entry, i) => (
-                    <div
-                      key={i}
-                      className={
-                        entry.level === "error"
-                          ? "text-red-500"
-                          : entry.level === "warn"
-                            ? "text-yellow-500"
-                            : entry.level === "info"
-                              ? "text-blue-500"
-                              : "text-foreground"
-                      }
-                    >
-                      <span className="text-muted-foreground mr-2">[{entry.level}]</span>
-                      {entry.message}
-                    </div>
-                  ))
-                )}
-                <div ref={consoleEndRef} />
-              </div>
-            )}
+            {renderBottomToolbar()}
+            {renderBottomPanels()}
           </div>
         </div>
       </div>
@@ -611,6 +689,8 @@ export default function AppDetailPage() {
               className="flex-1 w-full border-0"
               title="App Preview Fullscreen"
             />
+            {renderBottomToolbar()}
+            {renderBottomPanels()}
           </div>
         </div>
       )}
