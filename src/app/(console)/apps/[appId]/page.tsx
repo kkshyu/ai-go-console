@@ -29,6 +29,10 @@ import {
   History,
   Undo2,
   Server,
+  FolderOpen,
+  File,
+  Folder,
+  ArrowUp,
 } from "lucide-react";
 import { AgentChatPanel, type AgentMessage } from "@/components/chat/agent-chat-panel";
 import type { AgentRole } from "@/lib/agents/types";
@@ -97,6 +101,14 @@ export default function AppDetailPage() {
   const [rollingBack, setRollingBack] = useState(false);
   const prodLogsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prodLogsEndRef = useRef<HTMLDivElement>(null);
+
+  // Right panel tab state
+  const [rightPanel, setRightPanel] = useState<"preview" | "deploy" | "files">("preview");
+
+  // File manager state
+  const [fileList, setFileList] = useState<Array<{ name: string; type: "file" | "directory"; size: number; mtime: string }>>([]);
+  const [filePath, setFilePath] = useState("");
+  const [fileLoading, setFileLoading] = useState(false);
 
   // Dev server is running if we have a port and it's in developing state
   const [devRunning, setDevRunning] = useState(false);
@@ -385,6 +397,43 @@ export default function AppDetailPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function fetchFiles(subpath = "") {
+    setFileLoading(true);
+    try {
+      const params = subpath ? `?path=${encodeURIComponent(subpath)}` : "";
+      const res = await fetch(`/api/apps/${appId}/files${params}`);
+      const data = await res.json();
+      if (data.files) {
+        setFileList(data.files);
+        setFilePath(subpath);
+      }
+    } catch {} finally {
+      setFileLoading(false);
+    }
+  }
+
+  function openFileManager() {
+    setRightPanel("files");
+    fetchFiles("");
+  }
+
+  function navigateToDir(dirName: string) {
+    const newPath = filePath ? `${filePath}/${dirName}` : dirName;
+    fetchFiles(newPath);
+  }
+
+  function navigateUp() {
+    const parts = filePath.split("/").filter(Boolean);
+    parts.pop();
+    fetchFiles(parts.join("/"));
+  }
+
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
   const currentDeployment = deployments.find((d) => d.status === "running");
 
   if (!app) return <div className="p-8">Loading...</div>;
@@ -479,12 +528,12 @@ export default function AppDetailPage() {
           {devRunning ? (
             <Button size="sm" variant="outline" onClick={() => doAction("dev-stop")} disabled={loading}>
               <Square className="h-3.5 w-3.5" />
-              {t("devStop")}
+              {t("previewStop")}
             </Button>
           ) : (
             <Button size="sm" variant="outline" onClick={() => doAction("dev-start")} disabled={loading}>
               <Play className="h-3.5 w-3.5" />
-              Dev
+              {t("previewStart")}
             </Button>
           )}
 
@@ -546,288 +595,388 @@ export default function AppDetailPage() {
           </div>
         </div>
 
-        {/* Right Column: Preview + Deployments stacked */}
-        <div className="flex flex-1 lg:flex-none lg:w-[480px] flex-col min-h-0 gap-3">
-          {/* Preview Panel — dev server only */}
-          <div className="flex flex-1 flex-col rounded-lg border overflow-hidden bg-background min-h-0">
-            {hasPreview ? (
-              <>
-                {/* Browser toolbar */}
-                <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
-                  {/* Traffic lights */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="h-3 w-3 rounded-full bg-[#FF5F57]" />
-                    <span className="h-3 w-3 rounded-full bg-[#FEBC2E]" />
-                    <span className="h-3 w-3 rounded-full bg-[#28C840]" />
-                  </div>
-                  {/* Address bar */}
-                  <div className="flex flex-1 items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 min-w-0">
-                    <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
-                    <span className="flex-1 text-xs font-mono text-muted-foreground truncate">
-                      {previewUrl}
-                    </span>
+        {/* Right Column: Tabbed panels */}
+        <div className="flex flex-1 lg:flex-none lg:w-[480px] flex-col min-h-0">
+          {/* Panel tabs */}
+          <div className="flex items-center border-b bg-muted/40 rounded-t-lg">
+            <button
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${
+                rightPanel === "preview"
+                  ? "text-foreground bg-background border-b-2 border-primary -mb-px"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => setRightPanel("preview")}
+            >
+              <Globe className="h-3 w-3" />
+              {t("preview")}
+            </button>
+            <button
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${
+                rightPanel === "deploy"
+                  ? "text-foreground bg-background border-b-2 border-primary -mb-px"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => setRightPanel("deploy")}
+            >
+              <Server className="h-3 w-3" />
+              {t("deployments")}
+              {currentDeployment && (
+                <Badge variant="success" className="text-[10px] px-1.5 py-0">
+                  v{currentDeployment.version}
+                </Badge>
+              )}
+            </button>
+            <button
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${
+                rightPanel === "files"
+                  ? "text-foreground bg-background border-b-2 border-primary -mb-px"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={openFileManager}
+            >
+              <FolderOpen className="h-3 w-3" />
+              {t("fileManager")}
+            </button>
+          </div>
+
+          {/* Preview Panel */}
+          {rightPanel === "preview" && (
+            <div className="flex flex-1 flex-col rounded-b-lg border border-t-0 overflow-hidden bg-background min-h-0">
+              {hasPreview ? (
+                <>
+                  {/* Browser toolbar */}
+                  <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
+                    {/* Traffic lights */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="h-3 w-3 rounded-full bg-[#FF5F57]" />
+                      <span className="h-3 w-3 rounded-full bg-[#FEBC2E]" />
+                      <span className="h-3 w-3 rounded-full bg-[#28C840]" />
+                    </div>
+                    {/* Address bar */}
+                    <div className="flex flex-1 items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 min-w-0">
+                      <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
+                      <span className="flex-1 text-xs font-mono text-muted-foreground truncate">
+                        {previewUrl}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 shrink-0"
+                        onClick={() => setIframeKey((k) => k + 1)}
+                        title="Refresh"
+                      >
+                        <RotateCw className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={copyUrl}>
+                        {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                      </Button>
+                    </div>
+                    {/* Actions */}
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-5 w-5 shrink-0"
-                      onClick={() => setIframeKey((k) => k + 1)}
-                      title="Refresh"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => window.open(previewUrl!, "_blank")}
+                      title="Open in browser"
                     >
-                      <RotateCw className="h-3 w-3" />
+                      <ExternalLink className="h-3 w-3" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={copyUrl}>
-                      {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => setPreviewFullscreen(true)}
+                      title={t("fullscreen")}
+                    >
+                      <Maximize2 className="h-3 w-3" />
                     </Button>
                   </div>
-                  {/* Actions */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0"
-                    onClick={() => window.open(previewUrl!, "_blank")}
-                    title="Open in browser"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0"
-                    onClick={() => setPreviewFullscreen(true)}
-                    title={t("fullscreen")}
-                  >
-                    <Maximize2 className="h-3 w-3" />
-                  </Button>
-                </div>
-                <iframe
-                  key={iframeKey}
-                  src={`http://localhost:${app.port}`}
-                  className="flex-1 w-full border-0"
-                  title="App Preview"
-                />
-              </>
-            ) : (
-              <>
-                {/* Browser toolbar — disabled state */}
-                <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
-                    <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
-                    <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
+                  <iframe
+                    key={iframeKey}
+                    src={`http://localhost:${app.port}`}
+                    className="flex-1 w-full border-0"
+                    title="App Preview"
+                  />
+                </>
+              ) : (
+                <>
+                  {/* Browser toolbar — disabled state */}
+                  <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
+                      <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
+                      <span className="h-3 w-3 rounded-full bg-muted-foreground/20" />
+                    </div>
+                    <div className="flex flex-1 items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 min-w-0 opacity-50">
+                      <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
+                      <span className="flex-1 text-xs font-mono text-muted-foreground">—</span>
+                    </div>
                   </div>
-                  <div className="flex flex-1 items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 min-w-0 opacity-50">
-                    <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
-                    <span className="flex-1 text-xs font-mono text-muted-foreground">—</span>
+                  <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
+                    <Globe className="h-10 w-10 mb-3 opacity-20" />
+                    <p className="text-sm font-medium">{t("serverNotRunning")}</p>
+                    <p className="text-xs mt-1">{t("startDevServer")}</p>
                   </div>
-                </div>
-                <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
-                  <Globe className="h-10 w-10 mb-3 opacity-20" />
-                  <p className="text-sm font-medium">{t("serverNotRunning")}</p>
-                  <p className="text-xs mt-1">{t("startDevServer")}</p>
-                </div>
-              </>
-            )}
+                </>
+              )}
 
-            {/* Bottom toolbar — Dev Logs / Console tabs */}
-            <div className="flex items-center border-t bg-muted/40">
-              <button
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                  bottomPanel === "logs"
-                    ? "text-foreground bg-background border-t-2 border-primary -mt-px"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => setBottomPanel(bottomPanel === "logs" ? null : "logs")}
-              >
-                <Terminal className="h-3 w-3" />
-                {t("logs")}
-              </button>
-              <button
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                  bottomPanel === "console"
-                    ? "text-foreground bg-background border-t-2 border-primary -mt-px"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => setBottomPanel(bottomPanel === "console" ? null : "console")}
-              >
-                <Monitor className="h-3 w-3" />
-                {t("console")}
-              </button>
+              {/* Bottom toolbar — Dev Logs / Console tabs */}
+              <div className="flex items-center border-t bg-muted/40">
+                <button
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                    bottomPanel === "logs"
+                      ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => setBottomPanel(bottomPanel === "logs" ? null : "logs")}
+                >
+                  <Terminal className="h-3 w-3" />
+                  {t("logs")}
+                </button>
+                <button
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                    bottomPanel === "console"
+                      ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => setBottomPanel(bottomPanel === "console" ? null : "console")}
+                >
+                  <Monitor className="h-3 w-3" />
+                  {t("console")}
+                </button>
+                {bottomPanel === "console" && (
+                  <div className="ml-auto pr-1">
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setConsoleLogs([])}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom panel content — dev server only */}
+              {bottomPanel === "logs" && (
+                <div className="h-40 overflow-auto border-t bg-muted/20">
+                  <pre className="p-3 text-xs font-mono whitespace-pre-wrap">
+                    {devLogs || "No logs available"}
+                    <div ref={logsEndRef} />
+                  </pre>
+                </div>
+              )}
               {bottomPanel === "console" && (
-                <div className="ml-auto pr-1">
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setConsoleLogs([])}>
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                <div className="h-40 overflow-auto p-3 text-xs font-mono border-t bg-muted/20">
+                  {consoleLogs.length === 0 ? (
+                    <span className="text-muted-foreground">No console output</span>
+                  ) : (
+                    consoleLogs.map((entry, i) => (
+                      <div
+                        key={i}
+                        className={
+                          entry.level === "error"
+                            ? "text-red-500"
+                            : entry.level === "warn"
+                              ? "text-yellow-500"
+                              : entry.level === "info"
+                                ? "text-blue-500"
+                                : "text-foreground"
+                        }
+                      >
+                        <span className="text-muted-foreground mr-2">[{entry.level}]</span>
+                        {entry.message}
+                      </div>
+                    ))
+                  )}
+                  <div ref={consoleEndRef} />
                 </div>
               )}
             </div>
-
-            {/* Bottom panel content — dev server only */}
-            {bottomPanel === "logs" && (
-              <div className="h-40 overflow-auto border-t bg-muted/20">
-                <pre className="p-3 text-xs font-mono whitespace-pre-wrap">
-                  {devLogs || "No logs available"}
-                  <div ref={logsEndRef} />
-                </pre>
-              </div>
-            )}
-            {bottomPanel === "console" && (
-              <div className="h-40 overflow-auto p-3 text-xs font-mono border-t bg-muted/20">
-                {consoleLogs.length === 0 ? (
-                  <span className="text-muted-foreground">No console output</span>
-                ) : (
-                  consoleLogs.map((entry, i) => (
-                    <div
-                      key={i}
-                      className={
-                        entry.level === "error"
-                          ? "text-red-500"
-                          : entry.level === "warn"
-                            ? "text-yellow-500"
-                            : entry.level === "info"
-                              ? "text-blue-500"
-                              : "text-foreground"
-                      }
-                    >
-                      <span className="text-muted-foreground mr-2">[{entry.level}]</span>
-                      {entry.message}
-                    </div>
-                  ))
-                )}
-                <div ref={consoleEndRef} />
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Deployments Panel */}
-          <div className="flex flex-col rounded-lg border overflow-hidden bg-background shrink-0">
-            {/* Deploy panel tabs */}
-            <div className="flex items-center border-b bg-muted/40">
-              <div className="flex items-center gap-1.5 px-3 py-1.5">
-                <Server className="h-3 w-3 text-muted-foreground" />
-                <span className="text-xs font-medium text-muted-foreground">{t("deployments")}</span>
-                {currentDeployment && (
-                  <Badge variant="success" className="text-[10px] px-1.5 py-0">
-                    v{currentDeployment.version}
-                  </Badge>
-                )}
+          {rightPanel === "deploy" && (
+            <div className="flex flex-1 flex-col rounded-b-lg border border-t-0 overflow-hidden bg-background min-h-0">
+              {/* Deploy sub-tabs */}
+              <div className="flex items-center border-b bg-muted/40">
+                <button
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                    deployPanel === "systemLog"
+                      ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => setDeployPanel(deployPanel === "systemLog" ? null : "systemLog")}
+                >
+                  <Terminal className="h-3 w-3" />
+                  {t("systemLog")}
+                </button>
+                <button
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                    deployPanel === "buildLog"
+                      ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => setDeployPanel(deployPanel === "buildLog" ? null : "buildLog")}
+                >
+                  <Terminal className="h-3 w-3" />
+                  {t("buildLog")}
+                </button>
+                <button
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
+                    deployPanel === "history"
+                      ? "text-foreground bg-background border-t-2 border-primary -mt-px"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => setDeployPanel(deployPanel === "history" ? null : "history")}
+                >
+                  <History className="h-3 w-3" />
+                  {t("deploymentHistory")}
+                </button>
               </div>
-              <div className="h-4 w-px bg-border" />
-              <button
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                  deployPanel === "systemLog"
-                    ? "text-foreground bg-background border-t-2 border-primary -mt-px"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => setDeployPanel(deployPanel === "systemLog" ? null : "systemLog")}
-              >
-                <Terminal className="h-3 w-3" />
-                {t("systemLog")}
-              </button>
-              <button
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                  deployPanel === "buildLog"
-                    ? "text-foreground bg-background border-t-2 border-primary -mt-px"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => setDeployPanel(deployPanel === "buildLog" ? null : "buildLog")}
-              >
-                <Terminal className="h-3 w-3" />
-                {t("buildLog")}
-              </button>
-              <button
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
-                  deployPanel === "history"
-                    ? "text-foreground bg-background border-t-2 border-primary -mt-px"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => setDeployPanel(deployPanel === "history" ? null : "history")}
-              >
-                <History className="h-3 w-3" />
-                {t("deploymentHistory")}
-              </button>
-            </div>
 
-            {/* Deploy panel content */}
-            {deployPanel === "systemLog" && (
-              <div className="h-48 overflow-auto border-t bg-muted/20">
-                {isProdRunning ? (
-                  <pre className="p-3 text-xs font-mono whitespace-pre-wrap">
-                    {prodLogs || "No logs available"}
-                    <div ref={prodLogsEndRef} />
-                  </pre>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-                    {t("noDeployments")}
-                  </div>
+              {/* Deploy panel content */}
+              {deployPanel === "systemLog" ? (
+                <div className="flex-1 overflow-auto bg-muted/20">
+                  {isProdRunning ? (
+                    <pre className="p-3 text-xs font-mono whitespace-pre-wrap">
+                      {prodLogs || "No logs available"}
+                      <div ref={prodLogsEndRef} />
+                    </pre>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
+                      {t("noDeployments")}
+                    </div>
+                  )}
+                </div>
+              ) : deployPanel === "buildLog" ? (
+                <div className="flex-1 overflow-auto bg-muted/20">
+                  {loading && (app?.status === "building" || rollingBack) && buildOutput === null ? (
+                    <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
+                      <RotateCw className="h-3 w-3 animate-spin" />
+                      <span>{rollingBack ? t("rollingBack") : `${t("building")}...`}</span>
+                    </div>
+                  ) : buildOutput ? (
+                    <pre className="p-3 text-xs font-mono whitespace-pre-wrap">{buildOutput}</pre>
+                  ) : currentDeployment?.buildLog ? (
+                    <pre className="p-3 text-xs font-mono whitespace-pre-wrap">{currentDeployment.buildLog}</pre>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
+                      {t("noDeployments")}
+                    </div>
+                  )}
+                </div>
+              ) : deployPanel === "history" ? (
+                <div className="flex-1 overflow-auto bg-muted/20">
+                  {deployments.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
+                      {t("noDeployments")}
+                    </div>
+                  ) : (
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b bg-muted/30">
+                          <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">{t("version")}</th>
+                          <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">{t("status")}</th>
+                          <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">{t("deployedAt")}</th>
+                          <th className="text-right px-3 py-1.5 font-medium text-muted-foreground">{t("actions")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {deployments.map((d) => (
+                          <tr key={d.id} className="border-b last:border-0 hover:bg-muted/20">
+                            <td className="px-3 py-1.5 font-mono">
+                              v{d.version}
+                              {d.status === "running" && (
+                                <Badge variant="success" className="ml-2 text-[10px] px-1 py-0">
+                                  {t("currentVersion")}
+                                </Badge>
+                              )}
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <Badge variant={statusVariant[d.status] || "secondary"} className="text-[10px]">
+                                {d.status}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-1.5 text-muted-foreground">
+                              {new Date(d.createdAt).toLocaleString()}
+                            </td>
+                            <td className="px-3 py-1.5 text-right">
+                              {d.status !== "running" && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={() => handleRollback(d.id)}
+                                  disabled={loading || rollingBack}
+                                >
+                                  <Undo2 className="h-3 w-3 mr-1" />
+                                  {t("rollback")}
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-1 items-center justify-center text-muted-foreground">
+                  <p className="text-xs">{t("noDeployments")}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Files Panel */}
+          {rightPanel === "files" && (
+            <div className="flex flex-1 flex-col rounded-b-lg border border-t-0 overflow-hidden bg-background min-h-0">
+              {/* Path bar */}
+              <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
+                {filePath && (
+                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={navigateUp}>
+                    <ArrowUp className="h-3 w-3" />
+                  </Button>
                 )}
+                <span className="text-xs font-mono text-muted-foreground truncate">/{filePath}</span>
               </div>
-            )}
-            {deployPanel === "buildLog" && (
-              <div className="h-48 overflow-auto border-t bg-muted/20">
-                {loading && (app?.status === "building" || rollingBack) && buildOutput === null ? (
-                  <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
-                    <RotateCw className="h-3 w-3 animate-spin" />
-                    <span>{rollingBack ? t("rollingBack") : `${t("building")}...`}</span>
+
+              {/* File list */}
+              <div className="flex-1 overflow-auto">
+                {fileLoading ? (
+                  <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                    <RotateCw className="h-4 w-4 animate-spin mr-2" />
+                    Loading...
                   </div>
-                ) : buildOutput ? (
-                  <pre className="p-3 text-xs font-mono whitespace-pre-wrap">{buildOutput}</pre>
-                ) : currentDeployment?.buildLog ? (
-                  <pre className="p-3 text-xs font-mono whitespace-pre-wrap">{currentDeployment.buildLog}</pre>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-                    {t("noDeployments")}
-                  </div>
-                )}
-              </div>
-            )}
-            {deployPanel === "history" && (
-              <div className="h-48 overflow-auto border-t bg-muted/20">
-                {deployments.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-                    {t("noDeployments")}
+                ) : fileList.length === 0 ? (
+                  <div className="flex flex-1 flex-col items-center justify-center py-12 text-muted-foreground">
+                    <FolderOpen className="h-10 w-10 mb-3 opacity-20" />
+                    <p className="text-sm font-medium">Empty directory</p>
                   </div>
                 ) : (
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b bg-muted/30">
-                        <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">{t("version")}</th>
-                        <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">{t("status")}</th>
-                        <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">{t("deployedAt")}</th>
-                        <th className="text-right px-3 py-1.5 font-medium text-muted-foreground">{t("actions")}</th>
+                        <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">Name</th>
+                        <th className="text-right px-3 py-1.5 font-medium text-muted-foreground w-20">Size</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {deployments.map((d) => (
-                        <tr key={d.id} className="border-b last:border-0 hover:bg-muted/20">
+                      {fileList.map((f) => (
+                        <tr
+                          key={f.name}
+                          className={`border-b last:border-0 hover:bg-muted/20 ${f.type === "directory" ? "cursor-pointer" : ""}`}
+                          onClick={() => f.type === "directory" && navigateToDir(f.name)}
+                        >
                           <td className="px-3 py-1.5 font-mono">
-                            v{d.version}
-                            {d.status === "running" && (
-                              <Badge variant="success" className="ml-2 text-[10px] px-1 py-0">
-                                {t("currentVersion")}
-                              </Badge>
-                            )}
+                            <span className="flex items-center gap-2">
+                              {f.type === "directory" ? (
+                                <Folder className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                              ) : (
+                                <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              )}
+                              {f.name}
+                            </span>
                           </td>
-                          <td className="px-3 py-1.5">
-                            <Badge variant={statusVariant[d.status] || "secondary"} className="text-[10px]">
-                              {d.status}
-                            </Badge>
-                          </td>
-                          <td className="px-3 py-1.5 text-muted-foreground">
-                            {new Date(d.createdAt).toLocaleString()}
-                          </td>
-                          <td className="px-3 py-1.5 text-right">
-                            {d.status !== "running" && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-6 px-2 text-xs"
-                                onClick={() => handleRollback(d.id)}
-                                disabled={loading || rollingBack}
-                              >
-                                <Undo2 className="h-3 w-3 mr-1" />
-                                {t("rollback")}
-                              </Button>
-                            )}
+                          <td className="px-3 py-1.5 text-right text-muted-foreground">
+                            {f.type === "file" ? formatFileSize(f.size) : "—"}
                           </td>
                         </tr>
                       ))}
@@ -835,8 +984,8 @@ export default function AppDetailPage() {
                   </table>
                 )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -863,6 +1012,7 @@ export default function AppDetailPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
