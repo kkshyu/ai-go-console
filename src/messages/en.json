@@ -84,6 +84,7 @@
     "modeQuickDescription": "Pick a role template and create instantly",
     "modeChatDescription": "Describe your needs, let AI agents build it",
     "quickCreate": "Choose a template",
+    "searchPlaceholder": "Search templates...",
     "creating": "Creating...",
     "presets": {
       "finance-expense-report": {
@@ -197,6 +198,50 @@
       "ops-inventory": {
         "name": "Inventory Manager",
         "description": "Real-time inventory lookup, stock-in/out records, and low-stock alerts"
+      },
+      "linebot-payment-notify": {
+        "name": "LINE Payment Reminder Bot",
+        "description": "Accounts receivable/payable due reminders, payment confirmations, and overdue collection alerts"
+      },
+      "linebot-contract-alert": {
+        "name": "LINE Contract Alert Bot",
+        "description": "Auto contract expiry reminders, renewal notifications, and important legal matter alerts"
+      },
+      "linebot-customer-service": {
+        "name": "LINE Customer Service Bot",
+        "description": "Auto-reply to common questions, hand off to live agents, and conversation log management"
+      },
+      "linebot-ecommerce": {
+        "name": "LINE E-Commerce Bot",
+        "description": "Product browsing, cart management, checkout, and order inquiry all-in-one"
+      },
+      "linebot-order-tracking": {
+        "name": "LINE Order Tracking Bot",
+        "description": "Real-time logistics status, delivery progress, and estimated arrival by order number"
+      },
+      "linebot-leave": {
+        "name": "LINE Leave Request Bot",
+        "description": "Submit leave requests via LINE, check leave balance, and instant manager approval notifications"
+      },
+      "linebot-member-card": {
+        "name": "LINE Member Card Bot",
+        "description": "Digital membership card, points earning/redemption, tier lookup, and exclusive offers"
+      },
+      "linebot-survey": {
+        "name": "LINE Survey Bot",
+        "description": "Interactive surveys, satisfaction rating collection, and real-time result statistics"
+      },
+      "linebot-notification": {
+        "name": "LINE Notification Bot",
+        "description": "Push task progress, meeting reminders, system alerts, and scheduled messages"
+      },
+      "linebot-faq": {
+        "name": "LINE FAQ Bot",
+        "description": "Keyword-matched auto answers for FAQs with rich menus and quick reply support"
+      },
+      "linebot-booking": {
+        "name": "LINE Booking Bot",
+        "description": "Online slot lookup, booking confirmation notifications, and reschedule/cancel handling"
       }
     },
     "presetCategories": {
