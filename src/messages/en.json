@@ -78,7 +78,133 @@
     "generating": "Generating app...",
     "serviceNotAuthorized": "Required service not authorized for your organization",
     "contactAdmin": "Please contact your organization admin to enable these services.",
-    "totalTokens": "Tokens"
+    "totalTokens": "Tokens",
+    "quickCreate": "Or choose a role template to create instantly",
+    "creating": "Creating...",
+    "presets": {
+      "finance-expense-report": {
+        "name": "Expense Report System",
+        "description": "Submit expense reports online, manager approval, finance reimbursement tracking"
+      },
+      "finance-invoice-manager": {
+        "name": "Invoice Manager",
+        "description": "Invoice entry, reconciliation, overdue reminders, and report export"
+      },
+      "finance-budget-tracker": {
+        "name": "Budget Tracker Dashboard",
+        "description": "Department budgeting, real-time spending monitoring, and budget utilization visualization"
+      },
+      "finance-accounts-receivable": {
+        "name": "Accounts Receivable",
+        "description": "Customer payment tracking, aging analysis, collection reminders, and receipt records"
+      },
+      "finance-accounts-payable": {
+        "name": "Accounts Payable",
+        "description": "Vendor payment scheduling, approval workflows, and payment status tracking"
+      },
+      "finance-payroll": {
+        "name": "Payroll Calculator",
+        "description": "Employee salary calculation, overtime and bonus computation, and payslip generation"
+      },
+      "finance-tax-filing": {
+        "name": "Tax Filing Assistant",
+        "description": "Tax data preparation, tax amount estimation, and filing deadline reminders"
+      },
+      "finance-cashflow": {
+        "name": "Cash Flow Forecast",
+        "description": "Daily cash inflow/outflow tracking, future cash flow projection, and funding gap alerts"
+      },
+      "legal-contract-manager": {
+        "name": "Contract Manager",
+        "description": "Contract creation, review workflow, expiry reminders, and e-signatures"
+      },
+      "legal-case-tracker": {
+        "name": "Case Tracker",
+        "description": "Litigation progress tracking, document management, and deadline reminders"
+      },
+      "legal-compliance-checklist": {
+        "name": "Compliance Checklist",
+        "description": "Regulatory compliance checklists, audit logs, and compliance report generation"
+      },
+      "sales-crm": {
+        "name": "CRM",
+        "description": "Customer data management, sales funnel tracking, and performance dashboard"
+      },
+      "sales-quote-generator": {
+        "name": "Quote Generator",
+        "description": "Quick quote creation, product catalog selection, and PDF export"
+      },
+      "sales-lead-tracker": {
+        "name": "Lead Tracker Board",
+        "description": "Lead management, follow-up reminders, and deal stage board"
+      },
+      "sales-order-management": {
+        "name": "Order Management",
+        "description": "Order creation, shipment tracking, returns handling, and order status lookup"
+      },
+      "sales-commission": {
+        "name": "Commission Calculator",
+        "description": "Sales rep performance stats, commission rules, payout calculation, and disbursement records"
+      },
+      "sales-visit-log": {
+        "name": "Client Visit Log",
+        "description": "Visit scheduling, visit notes, client feedback tracking, and visit reports"
+      },
+      "sales-territory-map": {
+        "name": "Sales Territory Manager",
+        "description": "Territory assignment, regional performance comparison, and customer distribution visualization"
+      },
+      "sales-product-catalog": {
+        "name": "Product Catalog",
+        "description": "Product info management, spec comparison, pricing lookup, and catalog sharing"
+      },
+      "hr-leave-system": {
+        "name": "Leave Management",
+        "description": "Online leave requests, leave type management, approvals, and attendance stats"
+      },
+      "hr-recruitment": {
+        "name": "Recruitment Platform",
+        "description": "Job posting, resume collection, interview scheduling, and hiring pipeline"
+      },
+      "hr-onboarding": {
+        "name": "Onboarding System",
+        "description": "New hire onboarding workflow, document checklist, and training schedule"
+      },
+      "marketing-campaign": {
+        "name": "Campaign Manager",
+        "description": "Campaign planning, budget allocation, performance tracking, and ROI analysis"
+      },
+      "marketing-content-calendar": {
+        "name": "Content Calendar",
+        "description": "Social post scheduling, content review workflow, and multi-platform publishing"
+      },
+      "pm-task-board": {
+        "name": "Task Board",
+        "description": "Task creation and assignment, board view, progress tracking, and milestones"
+      },
+      "pm-meeting-notes": {
+        "name": "Meeting Notes",
+        "description": "Meeting minutes, action item tracking, and decision archiving"
+      },
+      "it-helpdesk": {
+        "name": "IT Helpdesk",
+        "description": "IT issue reporting, ticket assignment, progress tracking, and knowledge base"
+      },
+      "ops-inventory": {
+        "name": "Inventory Manager",
+        "description": "Real-time inventory lookup, stock-in/out records, and low-stock alerts"
+      }
+    },
+    "presetCategories": {
+      "finance": "Finance",
+      "legal": "Legal",
+      "sales": "Sales",
+      "hr": "HR",
+      "marketing": "Marketing",
+      "pm": "Project Mgmt",
+      "it": "IT",
+      "ops": "Operations"
+    }
   },
   "services": {
     "title": "Services",

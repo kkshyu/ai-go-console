@@ -2,8 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
-import { AlertTriangle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, Loader2, DollarSign, Scale, Briefcase, Users, Megaphone, ClipboardList, Monitor, Package } from "lucide-react";
 import { AgentChatPanel } from "@/components/chat/agent-chat-panel";
 import type { AgentRole } from "@/lib/agents/types";
 
@@ -24,14 +27,67 @@ interface CreateAppAction {
   npmPackages?: string[];
 }
 
+interface AppPreset {
+  id: string;
+  category: string;
+  template: string;
+}
+
+const APP_PRESETS: AppPreset[] = [
+  { id: "finance-expense-report", category: "finance", template: "nextjs-fullstack" },
+  { id: "finance-invoice-manager", category: "finance", template: "nextjs-fullstack" },
+  { id: "finance-budget-tracker", category: "finance", template: "nextjs-fullstack" },
+  { id: "finance-accounts-receivable", category: "finance", template: "nextjs-fullstack" },
+  { id: "finance-accounts-payable", category: "finance", template: "nextjs-fullstack" },
+  { id: "finance-payroll", category: "finance", template: "nextjs-fullstack" },
+  { id: "finance-tax-filing", category: "finance", template: "nextjs-fullstack" },
+  { id: "finance-cashflow", category: "finance", template: "nextjs-fullstack" },
+  { id: "legal-contract-manager", category: "legal", template: "nextjs-fullstack" },
+  { id: "legal-case-tracker", category: "legal", template: "nextjs-fullstack" },
+  { id: "legal-compliance-checklist", category: "legal", template: "nextjs-fullstack" },
+  { id: "sales-crm", category: "sales", template: "nextjs-fullstack" },
+  { id: "sales-quote-generator", category: "sales", template: "nextjs-fullstack" },
+  { id: "sales-lead-tracker", category: "sales", template: "nextjs-fullstack" },
+  { id: "sales-order-management", category: "sales", template: "nextjs-fullstack" },
+  { id: "sales-commission", category: "sales", template: "nextjs-fullstack" },
+  { id: "sales-visit-log", category: "sales", template: "nextjs-fullstack" },
+  { id: "sales-territory-map", category: "sales", template: "nextjs-fullstack" },
+  { id: "sales-product-catalog", category: "sales", template: "nextjs-fullstack" },
+  { id: "hr-leave-system", category: "hr", template: "nextjs-fullstack" },
+  { id: "hr-recruitment", category: "hr", template: "nextjs-fullstack" },
+  { id: "hr-onboarding", category: "hr", template: "nextjs-fullstack" },
+  { id: "marketing-campaign", category: "marketing", template: "nextjs-fullstack" },
+  { id: "marketing-content-calendar", category: "marketing", template: "nextjs-fullstack" },
+  { id: "pm-task-board", category: "pm", template: "nextjs-fullstack" },
+  { id: "pm-meeting-notes", category: "pm", template: "nextjs-fullstack" },
+  { id: "it-helpdesk", category: "it", template: "nextjs-fullstack" },
+  { id: "ops-inventory", category: "ops", template: "nextjs-fullstack" },
+];
+
+const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  finance: DollarSign,
+  legal: Scale,
+  sales: Briefcase,
+  hr: Users,
+  marketing: Megaphone,
+  pm: ClipboardList,
+  it: Monitor,
+  ops: Package,
+};
+
+const CATEGORIES = ["finance", "legal", "sales", "hr", "marketing", "pm", "it", "ops"];
+
 export default function CreateAppPage() {
   const t = useTranslations("create");
   const tAgents = useTranslations("agents");
+  const router = useRouter();
   const [previewPort, setPreviewPort] = useState<number | null>(null);
   const [creatingApp, setCreatingApp] = useState(false);
   const [serviceWarning, setServiceWarning] = useState<string | null>(null);
   const [allowedServices, setAllowedServices] = useState<string[]>([]);
   const [pipelineId, setPipelineId] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [creatingPreset, setCreatingPreset] = useState<string | null>(null);
 
   // Load allowed services for this org
   useEffect(() => {
@@ -63,7 +119,6 @@ export default function CreateAppPage() {
   const handleCreateApp = useCallback(
     async (action: CreateAppAction) => {
       if (action.requiredServices && action.requiredServices.length > 0) {
-        // requiredServices can be strings or objects with a type field
         const getServiceType = (s: string | ServiceRef): string =>
           typeof s === "string" ? s : s.type;
         const unauthorized = action.requiredServices.filter(
@@ -133,9 +188,33 @@ export default function CreateAppPage() {
     [handleCreateApp]
   );
 
-  const handleOrchestrationUpdate = useCallback(() => {
-    // Could trigger additional actions based on orchestration state changes
-  }, []);
+  const handleOrchestrationUpdate = useCallback(() => {}, []);
+
+  const handlePresetCreate = useCallback(
+    async (preset: AppPreset) => {
+      if (creatingPreset) return;
+      setCreatingPreset(preset.id);
+      try {
+        const name = t(`presets.${preset.id}.name`);
+        const description = t(`presets.${preset.id}.description`);
+        const res = await fetch("/api/apps", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, description, template: preset.template }),
+        });
+        if (!res.ok) throw new Error("Failed to create app");
+        const app = await res.json();
+        router.push(`/apps/${app.id}`);
+      } catch {
+        setCreatingPreset(null);
+      }
+    },
+    [creatingPreset, t, router]
+  );
+
+  const filteredPresets = selectedCategory
+    ? APP_PRESETS.filter((p) => p.category === selectedCategory)
+    : APP_PRESETS;
 
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col">
@@ -152,8 +231,8 @@ export default function CreateAppPage() {
       )}
 
       <div className="flex flex-1 gap-4 min-h-0">
-        {/* Chat Panel */}
-        <div className="flex flex-1 flex-col">
+        {/* Left: Chat + Quick Create */}
+        <div className="flex flex-1 flex-col gap-4 min-h-0">
           <AgentChatPanel
             placeholder={t("placeholder")}
             emptyStateText={tAgents("emptyState")}
@@ -165,6 +244,69 @@ export default function CreateAppPage() {
             pipelineId={pipelineId || undefined}
             showProgress={true}
           />
+
+          {/* Quick Create Section */}
+          <div className="shrink-0 space-y-3 pb-2">
+            <div className="flex items-center gap-2">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-xs text-muted-foreground">{t("quickCreate")}</span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+
+            {/* Category Tabs */}
+            <div className="flex flex-wrap gap-1.5">
+              {CATEGORIES.map((cat) => {
+                const Icon = CATEGORY_ICONS[cat];
+                return (
+                  <Button
+                    key={cat}
+                    variant={selectedCategory === cat ? "default" : "outline"}
+                    size="sm"
+                    className="h-7 text-xs px-2.5"
+                    onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
+                  >
+                    <Icon className="h-3 w-3" />
+                    {t(`presetCategories.${cat}`)}
+                  </Button>
+                );
+              })}
+            </div>
+
+            {/* Preset Cards */}
+            <div className="grid grid-cols-2 gap-2">
+              {filteredPresets.map((preset) => {
+                const Icon = CATEGORY_ICONS[preset.category];
+                const isCreating = creatingPreset === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    onClick={() => handlePresetCreate(preset)}
+                    disabled={!!creatingPreset}
+                    className="flex items-start gap-2.5 rounded-lg border bg-card p-3 text-left text-sm transition-colors hover:bg-accent hover:border-primary/40 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <div className="rounded-md bg-muted p-1.5 shrink-0 mt-0.5">
+                      {isCreating ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Icon className="h-3.5 w-3.5" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-medium leading-snug">{t(`presets.${preset.id}.name`)}</span>
+                        <Badge variant="outline" className="text-xs font-normal h-4 px-1">
+                          {t(`presetCategories.${preset.category}`)}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-snug">
+                        {t(`presets.${preset.id}.description`)}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Preview Panel */}

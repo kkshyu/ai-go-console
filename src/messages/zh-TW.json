@@ -78,7 +78,133 @@
     "generating": "正在產生應用程式...",
     "serviceNotAuthorized": "所需的服務尚未授權給您的組織",
     "contactAdmin": "請聯繫組織管理員以啟用這些服務。",
-    "totalTokens": "Token 用量"
+    "totalTokens": "Token 用量",
+    "quickCreate": "或選擇情境範本，一鍵建立",
+    "creating": "建立中...",
+    "presets": {
+      "finance-expense-report": {
+        "name": "費用報銷系統",
+        "description": "員工線上提交費用報銷單，主管審核，財務撥款追蹤"
+      },
+      "finance-invoice-manager": {
+        "name": "發票管理平台",
+        "description": "進銷項發票登錄、對帳、逾期提醒與報表匯出"
+      },
+      "finance-budget-tracker": {
+        "name": "預算追蹤儀表板",
+        "description": "部門預算編列、即時花費監控與預算達成率視覺化"
+      },
+      "finance-accounts-receivable": {
+        "name": "應收帳款管理",
+        "description": "客戶帳款追蹤、帳齡分析、催收提醒與收款紀錄"
+      },
+      "finance-accounts-payable": {
+        "name": "應付帳款管理",
+        "description": "供應商付款排程、付款審核流程與付款狀態追蹤"
+      },
+      "finance-payroll": {
+        "name": "薪資計算系統",
+        "description": "員工薪資計算、加班費與獎金試算、薪資條產出"
+      },
+      "finance-tax-filing": {
+        "name": "稅務申報助手",
+        "description": "營業稅、所得稅申報資料整理、稅額試算與申報時程提醒"
+      },
+      "finance-cashflow": {
+        "name": "現金流量預測",
+        "description": "每日現金流入流出追蹤、未來現金流預測與資金缺口警示"
+      },
+      "legal-contract-manager": {
+        "name": "合約管理系統",
+        "description": "合約建立、審閱流程、到期提醒與電子簽核"
+      },
+      "legal-case-tracker": {
+        "name": "案件追蹤系統",
+        "description": "訴訟案件進度追蹤、文件管理與時程提醒"
+      },
+      "legal-compliance-checklist": {
+        "name": "法遵檢核平台",
+        "description": "法規遵循檢核清單、稽核紀錄與合規報告產出"
+      },
+      "sales-crm": {
+        "name": "客戶關係管理",
+        "description": "客戶資料管理、銷售漏斗追蹤與業績儀表板"
+      },
+      "sales-quote-generator": {
+        "name": "報價單產生器",
+        "description": "快速建立報價單、產品目錄選擇與 PDF 匯出"
+      },
+      "sales-lead-tracker": {
+        "name": "商機追蹤看板",
+        "description": "潛在客戶管理、跟進提醒與商機階段看板"
+      },
+      "sales-order-management": {
+        "name": "訂單管理系統",
+        "description": "訂單建立、出貨追蹤、退換貨處理與訂單狀態查詢"
+      },
+      "sales-commission": {
+        "name": "業績獎金計算",
+        "description": "業務員業績統計、獎金規則設定、佣金試算與發放紀錄"
+      },
+      "sales-visit-log": {
+        "name": "客戶拜訪紀錄",
+        "description": "業務拜訪排程、拜訪紀錄填寫、客戶回饋追蹤與拜訪報表"
+      },
+      "sales-territory-map": {
+        "name": "銷售區域管理",
+        "description": "業務區域劃分、區域業績對比、客戶分佈視覺化"
+      },
+      "sales-product-catalog": {
+        "name": "產品型錄系統",
+        "description": "產品資訊管理、規格比較、價格查詢與型錄分享"
+      },
+      "hr-leave-system": {
+        "name": "請假管理系統",
+        "description": "線上請假申請、假別管理、主管審核與假勤統計"
+      },
+      "hr-recruitment": {
+        "name": "招募管理平台",
+        "description": "職缺發布、履歷收集、面試排程與錄取流程追蹤"
+      },
+      "hr-onboarding": {
+        "name": "新人報到系統",
+        "description": "新進員工報到流程、文件繳交清單與教育訓練排程"
+      },
+      "marketing-campaign": {
+        "name": "行銷活動管理",
+        "description": "行銷活動規劃、預算分配、成效追蹤與 ROI 分析"
+      },
+      "marketing-content-calendar": {
+        "name": "內容行事曆",
+        "description": "社群貼文排程、內容審核流程與多平台發布管理"
+      },
+      "pm-task-board": {
+        "name": "專案任務看板",
+        "description": "任務建立與指派、看板視圖、進度追蹤與里程碑管理"
+      },
+      "pm-meeting-notes": {
+        "name": "會議記錄系統",
+        "description": "會議紀錄、待辦事項追蹤與會議決議歸檔"
+      },
+      "it-helpdesk": {
+        "name": "IT 服務台",
+        "description": "IT 問題回報、工單指派、處理進度追蹤與知識庫"
+      },
+      "ops-inventory": {
+        "name": "庫存管理系統",
+        "description": "商品庫存即時查詢、進出貨紀錄與低庫存警示"
+      }
+    },
+    "presetCategories": {
+      "finance": "財務",
+      "legal": "法務",
+      "sales": "業務",
+      "hr": "人資",
+      "marketing": "行銷",
+      "pm": "專案管理",
+      "it": "資訊",
+      "ops": "營運"
+    }
   },
   "services": {
     "title": "服務",
