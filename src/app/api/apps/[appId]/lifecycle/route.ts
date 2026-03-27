@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import os from "node:os";
+import path from "node:path";
+import fsp from "node:fs/promises";
+import crypto from "node:crypto";
 import { prisma } from "@/lib/db";
 import { startDevServer, stopDevServer, getDevServerLogs } from "@/lib/dev-server";
 import { startApp, stopApp, restartApp, getAppLogs, getAppDockerStatus, tagImage, startAppFromImage } from "@/lib/docker";
-import { regenerateCompose } from "@/lib/generator";
+import { regenerateCompose, getAppPath } from "@/lib/generator";
 import { syncRoutes } from "@/lib/proxy";
+import * as sandbox from "@/lib/docker-sandbox";
+import { getTemplate } from "@/lib/templates";
 
 async function getOrgSlug(userId: string): Promise<string> {
   const user = await prisma.user.findUnique({
@@ -29,7 +35,7 @@ export async function POST(
   try {
     switch (action) {
       case "dev-start": {
-        // Start dev server for live preview
+        // Start dev server inside Docker container
         if (!app.port) {
           return NextResponse.json({ error: "No port assigned" }, { status: 400 });
         }
@@ -45,7 +51,6 @@ export async function POST(
       case "publish": {
         const orgSlug = await getOrgSlug(app.userId);
 
-        // Build Docker image and start production container
         await prisma.app.update({
           where: { id: appId },
           data: { status: "building" },
@@ -68,36 +73,63 @@ export async function POST(
           },
         });
 
-        // Regenerate docker-compose.yml to pick up latest service bindings
+        // Regenerate docker-compose.yml with latest service bindings
         await regenerateCompose(app.id, app.slug, orgSlug, app.template, app.prodPort!);
 
-        // Build and start Docker container (startApp uses --build)
-        const output = await startApp(app.slug);
+        // Export source from dev container to temp directory for production build
+        const tmpDir = path.join(os.tmpdir(), `aigo-publish-${crypto.randomUUID()}`);
+        try {
+          await sandbox.exportSource(app.slug, tmpDir);
 
-        // Tag the image for rollback
-        await tagImage(orgSlug, app.slug, version);
+          // Copy production Dockerfile from template into build context
+          const tmpl = getTemplate(app.template);
+          if (tmpl) {
+            const dockerfileSrc = path.join(tmpl.directory, "Dockerfile");
+            await fsp.copyFile(dockerfileSrc, path.join(tmpDir, "Dockerfile"));
+          }
 
-        // Update deployment record
-        await prisma.deployment.update({
-          where: { id: deployment.id },
-          data: { status: "running", buildLog: output },
-        });
+          // Copy docker-compose.yml from host metadata directory
+          const composeSrc = path.join(getAppPath(app.slug), "docker-compose.yml");
+          await fsp.copyFile(composeSrc, path.join(tmpDir, "docker-compose.yml"));
 
-        // Mark previous deployments as stopped
-        await prisma.deployment.updateMany({
-          where: { appId, id: { not: deployment.id }, status: "running" },
-          data: { status: "stopped" },
-        });
+          // Build and start production container from the temp directory
+          const { execFile } = await import("node:child_process");
+          const { promisify } = await import("node:util");
+          const execFileAsync = promisify(execFile);
 
-        await prisma.app.update({
-          where: { id: appId },
-          data: { status: "running" },
-        });
+          const { stdout, stderr } = await execFileAsync(
+            "docker",
+            ["compose", "-f", path.join(tmpDir, "docker-compose.yml"), "up", "-d", "--build"],
+            { timeout: 300_000, cwd: tmpDir }
+          );
+          const output = stdout + stderr;
 
-        // Sync Caddy routes
-        syncRoutes().catch(() => {});
+          // Tag the image for rollback
+          await tagImage(orgSlug, app.slug, version);
 
-        return NextResponse.json({ success: true, output, deployment });
+          // Update deployment record
+          await prisma.deployment.update({
+            where: { id: deployment.id },
+            data: { status: "running", buildLog: output },
+          });
+
+          // Mark previous deployments as stopped
+          await prisma.deployment.updateMany({
+            where: { appId, id: { not: deployment.id }, status: "running" },
+            data: { status: "stopped" },
+          });
+
+          await prisma.app.update({
+            where: { id: appId },
+            data: { status: "running" },
+          });
+
+          syncRoutes().catch(() => {});
+
+          return NextResponse.json({ success: true, output, deployment });
+        } finally {
+          await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+        }
       }
 
       case "rollback": {
@@ -127,13 +159,13 @@ export async function POST(
         const output = await startAppFromImage(orgSlug, app.slug, targetDeployment.version);
 
         // Create a new deployment record for the rollback
-        const lastDeployment = await prisma.deployment.findFirst({
+        const lastDep = await prisma.deployment.findFirst({
           where: { appId },
           orderBy: { version: "desc" },
         });
-        const newVersion = (lastDeployment?.version ?? 0) + 1;
+        const newVersion = (lastDep?.version ?? 0) + 1;
 
-        const deployment = await prisma.deployment.create({
+        const dep = await prisma.deployment.create({
           data: {
             appId,
             status: "running",
@@ -143,9 +175,8 @@ export async function POST(
           },
         });
 
-        // Mark previous deployments as stopped
         await prisma.deployment.updateMany({
-          where: { appId, id: { not: deployment.id }, status: "running" },
+          where: { appId, id: { not: dep.id }, status: "running" },
           data: { status: "stopped" },
         });
 
@@ -156,7 +187,7 @@ export async function POST(
 
         syncRoutes().catch(() => {});
 
-        return NextResponse.json({ success: true, output, deployment });
+        return NextResponse.json({ success: true, output, deployment: dep });
       }
 
       case "start": {
@@ -193,13 +224,13 @@ export async function POST(
           const logs = await getAppLogs(app.slug);
           return NextResponse.json({ logs });
         } else {
-          const logs = getDevServerLogs(app.slug);
+          const logs = await getDevServerLogs(app.slug);
           return NextResponse.json({ logs: logs.join("\n") });
         }
       }
 
       case "dev-logs": {
-        const logs = getDevServerLogs(app.slug);
+        const logs = await getDevServerLogs(app.slug);
         return NextResponse.json({ logs: logs.join("\n") });
       }
 
