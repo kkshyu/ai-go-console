@@ -5,6 +5,18 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 
+/** Max file size for reading content (100KB) */
+const MAX_READ_SIZE = 100 * 1024;
+
+/** Paths that cannot be written to */
+const WRITE_BLOCKED_PREFIXES = ["node_modules/", ".git/"];
+
+function resolveAndValidate(appDir: string, subpath: string): string | null {
+  const resolved = path.resolve(appDir, subpath);
+  if (!resolved.startsWith(appDir)) return null;
+  return resolved;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ appId: string }> }
@@ -22,11 +34,29 @@ export async function GET(
   }
 
   const subpath = request.nextUrl.searchParams.get("path") || "";
+  const wantContent = request.nextUrl.searchParams.get("content") === "true";
 
   // Prevent path traversal
-  const resolved = path.resolve(appDir, subpath);
-  if (!resolved.startsWith(appDir)) {
+  const resolved = resolveAndValidate(appDir, subpath);
+  if (!resolved) {
     return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+  }
+
+  // If content=true, read a single file's content
+  if (wantContent) {
+    try {
+      const stat = await fsp.stat(resolved);
+      if (stat.isDirectory()) {
+        return NextResponse.json({ error: "Path is a directory, not a file" }, { status: 400 });
+      }
+      if (stat.size > MAX_READ_SIZE) {
+        return NextResponse.json({ error: "File too large" }, { status: 413 });
+      }
+      const content = await fsp.readFile(resolved, "utf-8");
+      return NextResponse.json({ path: subpath, content, size: stat.size });
+    } catch {
+      return NextResponse.json({ error: "Failed to read file" }, { status: 500 });
+    }
   }
 
   try {
@@ -74,6 +104,53 @@ export async function POST(
     return NextResponse.json({ error: "App directory not found" }, { status: 404 });
   }
 
+  const contentType = request.headers.get("content-type") || "";
+
+  // JSON body: agent modify_files action
+  if (contentType.includes("application/json")) {
+    const body = await request.json();
+    const { files } = body as {
+      files?: Array<{ path: string; content: string }>;
+    };
+
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return NextResponse.json({ error: "files array required" }, { status: 400 });
+    }
+
+    const written: string[] = [];
+    const errors: string[] = [];
+
+    for (const file of files) {
+      if (!file.path || typeof file.path !== "string") {
+        errors.push("Invalid file path");
+        continue;
+      }
+
+      const normalizedPath = file.path.replace(/\\/g, "/");
+      if (WRITE_BLOCKED_PREFIXES.some((p) => normalizedPath.startsWith(p))) {
+        errors.push(`Cannot write to protected path: ${file.path}`);
+        continue;
+      }
+
+      const resolved = resolveAndValidate(appDir, file.path);
+      if (!resolved) {
+        errors.push(`Invalid path: ${file.path}`);
+        continue;
+      }
+
+      try {
+        await fsp.mkdir(path.dirname(resolved), { recursive: true });
+        await fsp.writeFile(resolved, file.content, "utf-8");
+        written.push(file.path);
+      } catch (err) {
+        errors.push(`Failed to write ${file.path}: ${err instanceof Error ? err.message : "unknown"}`);
+      }
+    }
+
+    return NextResponse.json({ written: written.length, files: written, errors });
+  }
+
+  // FormData body: file upload from UI
   try {
     const formData = await request.formData();
     const basePath = (formData.get("basePath") as string) || "";
@@ -87,21 +164,17 @@ export async function POST(
       const file = files[i];
       const relativePath = relativePaths[i] || file.name;
 
-      // Build target path
       const targetPath = basePath
         ? path.join(appDir, basePath, relativePath)
         : path.join(appDir, relativePath);
 
-      // Prevent path traversal
       const resolved = path.resolve(targetPath);
       if (!resolved.startsWith(appDir)) {
         continue;
       }
 
-      // Ensure parent directory exists
       await fsp.mkdir(path.dirname(resolved), { recursive: true });
 
-      // Write file
       const buffer = Buffer.from(await file.arrayBuffer());
       await fsp.writeFile(resolved, buffer);
       uploaded++;

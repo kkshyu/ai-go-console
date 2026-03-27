@@ -119,7 +119,8 @@ export interface AppContext {
 
 export function buildAppContextPrompt(
   app: AppContext,
-  allowedServices?: string[]
+  allowedServices?: string[],
+  fileContext?: string
 ): string {
   const serviceList =
     allowedServices && allowedServices.length > 0
@@ -130,6 +131,10 @@ export function buildAppContextPrompt(
     app.services && app.services.length > 0
       ? app.services.map((s) => `${s.name} (${s.type})`).join(", ")
       : "None";
+
+  const fileSection = fileContext
+    ? `\n\nCurrent app files:\n${fileContext}`
+    : "";
 
   return `You are AI Go, an intelligent assistant that helps users develop and improve their web applications.
 
@@ -147,6 +152,7 @@ Available templates:
 - "nextjs-fullstack": Full-stack Next.js application with App Router and Tailwind.
 
 Available service types for this organization: ${serviceList}
+${fileSection}
 
 When the user wants to update the app configuration, add services, or change settings, respond with a JSON block:
 \`\`\`json
