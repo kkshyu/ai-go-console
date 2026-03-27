@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p ${PORT:-3000}",
-    "build": "next build",
+    "build": "bash scripts/build-base-images.sh && next build",
     "start": "next start",
     "lint": "next lint",
     "db:migrate": "prisma migrate dev",
