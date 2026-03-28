@@ -4,9 +4,9 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Send, User, Loader2, Zap, MessageCircle } from "lucide-react";
+import { Send, User, Loader2, Zap, MessageCircle, Paperclip } from "lucide-react";
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/ai";
-import { FileAttachmentInput, type FileAttachment } from "@/components/chat/file-attachment-input";
+import { FileAttachmentInput, type FileAttachment, type FileAttachmentInputHandle } from "@/components/chat/file-attachment-input";
 import {
   createInitialOrchestrationState,
 } from "@/lib/agents/types";
@@ -80,6 +80,7 @@ export function AgentChatPanel({
   const resolvedEmptyStateText = emptyStateText ?? t("emptyState");
   const resolvedGeneratingText = generatingText ?? t("generating");
   const resolvedTotalTokensLabel = totalTokensLabel ?? t("totalTokens");
+  const fileAttachmentRef = useRef<FileAttachmentInputHandle>(null);
   const [messages, setMessages] = useState<AgentMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
@@ -605,11 +606,24 @@ export function AgentChatPanel({
         <div>
           <form onSubmit={handleSubmit} className="flex flex-col gap-2">
             <FileAttachmentInput
+              ref={fileAttachmentRef}
               attachments={attachments}
               onAttachmentsChange={setAttachments}
               disabled={disabled}
+              hideButton
             />
             <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={() => fileAttachmentRef.current?.triggerFileSelect()}
+                disabled={disabled}
+                title={t("attachFile")}
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
               <div className="relative flex flex-1 items-center rounded-md border bg-background focus-within:ring-1 focus-within:ring-ring">
                 <input
                   value={input}
