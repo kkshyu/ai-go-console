@@ -8,7 +8,7 @@
 
 import * as k8s from "@kubernetes/client-node";
 import { config } from "./client";
-import { getImageUrl, getBaseImageUrl } from "./builder";
+import { getInClusterImageUrl } from "./builder";
 
 // ── Naming Conventions ───────────────────────────────────────────────────────
 
@@ -74,7 +74,7 @@ export interface DevPodOptions {
 export function generateDevPodSpec(opts: DevPodOptions): k8s.V1Pod {
   const name = devPodName(opts.orgSlug, opts.slug);
   const labels = commonLabels(opts.orgSlug, opts.slug, "dev");
-  const image = getImageUrl(opts.orgSlug, opts.slug, "dev");
+  const image = getInClusterImageUrl(opts.orgSlug, opts.slug, "dev");
 
   const envList: k8s.V1EnvVar[] = Object.entries(opts.envVars).map(([key, value]) => ({
     name: key,
@@ -185,7 +185,7 @@ export interface ProdDeploymentOptions {
 export function generateProdDeploymentSpec(opts: ProdDeploymentOptions): k8s.V1Deployment {
   const name = prodDeploymentName(opts.orgSlug, opts.slug);
   const labels = commonLabels(opts.orgSlug, opts.slug, "prod");
-  const image = getImageUrl(opts.orgSlug, opts.slug, "prod", `v${opts.version}`);
+  const image = getInClusterImageUrl(opts.orgSlug, opts.slug, "prod", `v${opts.version}`);
 
   const envList: k8s.V1EnvVar[] = Object.entries(opts.envVars).map(([key, value]) => ({
     name: key,

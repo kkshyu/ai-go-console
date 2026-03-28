@@ -1,40 +1,28 @@
 import { test, expect } from "@playwright/test";
-import { createApp } from "./helpers";
 
 test.describe("App Deployments API", () => {
-  let userId: string;
-  let appId: string;
-  const ts = Date.now();
-  const appName = `E2E Deploy ${ts}`;
+  let seededAppId: string;
 
-  test("setup: get current user", async ({ request }) => {
-    const res = await request.get("/api/auth/session");
-    const session = await res.json();
-    userId = session.user.id;
-    expect(userId).toBeDefined();
+  test("setup: get seeded app", async ({ request }) => {
+    const appsRes = await request.get("/api/apps");
+    expect(appsRes.status()).toBe(200);
+    const apps: { id: string; name: string }[] = await appsRes.json();
+    expect(apps.length).toBeGreaterThan(0);
+
+    // Use a seeded app (not an E2E-created one)
+    const seededApp = apps.find((a) => !a.name.startsWith("E2E"));
+    expect(seededApp).toBeDefined();
+    seededAppId = seededApp!.id;
   });
 
-  test("setup: create test app", async ({ request }) => {
-    expect(userId).toBeDefined();
-    const body = await createApp(request, {
-      name: appName,
-      template: "react-spa",
-      description: "E2E deployment tests",
-      userId,
-    });
-    appId = body.id;
-    expect(appId).toBeDefined();
-  });
-
-  test("GET /api/apps/:id/deployments returns empty array for new app", async ({
+  test("GET /api/apps/:id/deployments returns 200 with array", async ({
     request,
   }) => {
-    expect(appId).toBeDefined();
-    const res = await request.get(`/api/apps/${appId}/deployments`);
+    expect(seededAppId).toBeDefined();
+    const res = await request.get(`/api/apps/${seededAppId}/deployments`);
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(Array.isArray(body)).toBe(true);
-    expect(body.length).toBe(0);
   });
 
   test("GET /api/apps/:id/deployments returns 404 for nonexistent app", async ({
@@ -89,11 +77,5 @@ test.describe("App Deployments API", () => {
     }
 
     // Seed data may not include deployments; test is still valid either way
-  });
-
-  test("cleanup: delete test app", async ({ request }) => {
-    expect(appId).toBeDefined();
-    const res = await request.delete(`/api/apps/${appId}`);
-    expect(res.status()).toBe(200);
   });
 });

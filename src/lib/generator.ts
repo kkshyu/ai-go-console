@@ -59,9 +59,49 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
   // Render all template files in memory
   const renderedFiles = await renderTemplateFiles(tmpl.directory, context);
 
-  // Merge custom files from developer agent (overwrite template files if same path)
+  // Merge custom files from developer agent / import
   if (options.files && options.files.length > 0) {
+    // If custom files include a package.json, merge it with the template's version
+    const customPkgFile = options.files.find((f) => f.path === "package.json");
+    const templatePkgIdx = renderedFiles.findIndex((f) => f.path === "package.json");
+
+    if (customPkgFile && templatePkgIdx >= 0) {
+      try {
+        const templatePkg = JSON.parse(renderedFiles[templatePkgIdx].content);
+        const customPkg = JSON.parse(customPkgFile.content);
+
+        // Merge: custom dependencies take priority, but preserve template scripts
+        const merged = { ...templatePkg };
+
+        // Use custom name/description if present
+        if (customPkg.name) merged.name = customPkg.name;
+        if (customPkg.description) merged.description = customPkg.description;
+
+        // Merge scripts: template scripts as base, custom scripts override
+        merged.scripts = { ...templatePkg.scripts, ...customPkg.scripts };
+
+        // Merge dependencies: custom deps take priority
+        merged.dependencies = {
+          ...templatePkg.dependencies,
+          ...customPkg.dependencies,
+        };
+
+        // Merge devDependencies: custom devDeps take priority
+        merged.devDependencies = {
+          ...templatePkg.devDependencies,
+          ...customPkg.devDependencies,
+        };
+
+        renderedFiles[templatePkgIdx].content = JSON.stringify(merged, null, 2);
+      } catch {
+        // If JSON parsing fails, just use the custom package.json as-is
+        renderedFiles[templatePkgIdx] = customPkgFile;
+      }
+    }
+
+    // Merge all other files (overwrite template files if same path)
     for (const file of options.files) {
+      if (file.path === "package.json") continue; // Already handled above
       const existingIdx = renderedFiles.findIndex((f) => f.path === file.path);
       if (existingIdx >= 0) {
         renderedFiles[existingIdx] = file;

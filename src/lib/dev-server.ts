@@ -10,16 +10,23 @@ export async function startDevServer(
   _template: string,
   port: number
 ): Promise<{ pid: number; port: number }> {
-  // Stop existing server if running
-  await stopDevServer(orgSlug, slug);
+  const status = await sandbox.getDevContainerStatus(orgSlug, slug);
 
-  // Inject console bridge script into the container
-  await sandbox.injectConsoleBridge(orgSlug, slug);
+  if (status === "running") {
+    // Pod is already running (created by generateApp) — just inject console bridge
+    await sandbox.injectConsoleBridge(orgSlug, slug);
+    return { pid: 0, port };
+  }
 
-  // Start the container (dev server CMD runs automatically)
-  await sandbox.startDevContainer(orgSlug, slug);
+  // Pod exists but not running — start it
+  if (status !== "not_found") {
+    await sandbox.startDevContainer(orgSlug, slug);
+    await sandbox.injectConsoleBridge(orgSlug, slug);
+    return { pid: 0, port };
+  }
 
-  return { pid: 0, port };
+  // Pod not found — cannot start
+  throw new Error(`Dev container for ${slug} not found. Run generateApp first.`);
 }
 
 /**

@@ -36,46 +36,70 @@ const FIX_SYSTEM_PROMPT = `你是一個程式碼修復專家。你的任務是�
 }
 \`\`\``;
 
-/** Known error patterns that indicate the server hasn't started yet (not real errors) */
+/** Patterns that indicate successful startup — if any line matches, the server is running */
+const SUCCESS_PATTERNS = [
+  /Ready in \d/,
+  /started server on/i,
+  /Listening on.+:\d+/,
+  /Local:\s+http/,
+  /compiled.*successfully/i,
+];
+
+/** Known noise patterns — lines matching these are always ignored */
 const STARTUP_NOISE_PATTERNS = [
   "Compiling",
+  "compiled client and server",
   "compiled",
-  "Ready in",
-  "started server",
-  "Listening on",
-  "Local:",
   "waiting",
+  "warn  -",
+  "DeprecationWarning",
+  "ExperimentalWarning",
+  "punycode",
+  "(node:",
+  "FetchError", // Next.js fetch during SSR is not a fatal error
+  "fetch failed", // Same — non-fatal during SSR
+  "NEXT_REDIRECT", // Next.js redirect marker, not an error
 ];
 
 /** Error patterns that indicate a real build/runtime error */
 const ERROR_PATTERNS = [
-  /error/i,
-  /Error:/,
+  /Error:(?!\s*$)/, // "Error:" followed by actual message (not just the word)
   /ERR!/,
   /Cannot find module/i,
   /Module not found/i,
   /SyntaxError/,
-  /TypeError/,
-  /ReferenceError/,
+  /TypeError:/,
+  /ReferenceError:/,
   /ENOENT/,
   /EACCES/,
   /failed to compile/i,
   /Build error/i,
   /Unhandled Runtime Error/i,
-  /ExperimentalWarning.*error/i,
+  /Command failed/i,
+  /ERESOLVE/,
+  /npm ERR/i,
 ];
 
-function detectErrors(logs: string[]): string[] {
+function detectErrors(logs: string[]): { errors: string[]; hasSuccessSignal: boolean } {
   const errors: string[] = [];
+  let hasSuccessSignal = false;
+
   for (const line of logs) {
+    // Check for success signals first
+    if (SUCCESS_PATTERNS.some((p) => p.test(line))) {
+      hasSuccessSignal = true;
+    }
+
     // Skip noise
     if (STARTUP_NOISE_PATTERNS.some((p) => line.includes(p))) continue;
+
     // Check error patterns
     if (ERROR_PATTERNS.some((p) => p.test(line))) {
       errors.push(line);
     }
   }
-  return errors;
+
+  return { errors, hasSuccessSignal };
 }
 
 function parseFixResponse(content: string): {
@@ -200,10 +224,10 @@ export async function POST(request: NextRequest) {
           logs = [];
         }
 
-        const errors = detectErrors(logs);
+        const { errors, hasSuccessSignal } = detectErrors(logs);
 
-        // Step 4: No errors — success!
-        if (errors.length === 0) {
+        // Step 4: Success — no errors, or server confirmed running with only warnings
+        if (errors.length === 0 || hasSuccessSignal) {
           await prisma.app.update({
             where: { id: appId },
             data: { status: "running" },

@@ -32,6 +32,7 @@ const K8S_PROD_NAMESPACE = process.env.K8S_PROD_NAMESPACE || "aigo-prod";
 const K8S_SYSTEM_NAMESPACE = process.env.K8S_SYSTEM_NAMESPACE || "aigo-system";
 const K8S_WORKER_NAMESPACE = process.env.K8S_WORKER_NAMESPACE || "aigo-workers";
 const REGISTRY_URL = process.env.REGISTRY_URL || "localhost:5111";
+const IN_CLUSTER_REGISTRY_URL = process.env.IN_CLUSTER_REGISTRY_URL || "k3d-aigo-registry:5000";
 
 export const config = {
   devNamespace: K8S_DEV_NAMESPACE,
@@ -39,6 +40,7 @@ export const config = {
   systemNamespace: K8S_SYSTEM_NAMESPACE,
   workerNamespace: K8S_WORKER_NAMESPACE,
   registryUrl: REGISTRY_URL,
+  inClusterRegistryUrl: IN_CLUSTER_REGISTRY_URL,
 } as const;
 
 // ── KubeConfig Loader ────────────────────────────────────────────────────────

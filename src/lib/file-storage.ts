@@ -1,76 +1,53 @@
 /**
  * File Storage Utilities
  *
- * Read/write files to the disk-storage Docker volume via `docker cp` and `docker exec`.
- * The disk-storage container provides persistent shared storage at /data/storage.
+ * Read/write files to local filesystem storage.
+ * Uses a configurable base directory (defaults to .data/storage in project root).
  */
 
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { writeFile, mkdir, rm } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { writeFile, readFile, mkdir, access } from "node:fs/promises";
+import { join, dirname } from "node:path";
 
-const execFileAsync = promisify(execFile);
-const STORAGE_CONTAINER = "aigo-disk-storage";
+/** Base directory for file storage — local filesystem */
+const STORAGE_BASE = process.env.FILE_STORAGE_PATH || join(process.cwd(), ".data", "storage");
 
 /**
- * Write a file (Buffer) to disk-storage.
- * @param storagePath Path within the storage container (e.g., /data/storage/org/chat-files/abc/file.png)
+ * Resolve a storage path to an absolute local filesystem path.
+ * Strips the legacy /data/storage prefix if present for backward compatibility.
+ */
+function resolveLocalPath(storagePath: string): string {
+  const relative = storagePath.replace(/^\/data\/storage\//, "");
+  return join(STORAGE_BASE, relative);
+}
+
+/**
+ * Write a file (Buffer) to storage.
+ * @param storagePath Logical storage path (e.g., orgSlug/chat-files/abc/file.png)
  * @param data File content as Buffer
  */
 export async function writeFileToStorage(storagePath: string, data: Buffer): Promise<void> {
-  // Create parent directory in container
-  const dir = storagePath.substring(0, storagePath.lastIndexOf("/"));
-  await execFileAsync("docker", [
-    "exec", STORAGE_CONTAINER, "mkdir", "-p", dir,
-  ]);
-
-  // Write to temp file, then docker cp into container
-  const tempDir = join(tmpdir(), `aigo-upload-${Date.now()}`);
-  const tempFile = join(tempDir, "upload");
-  await mkdir(tempDir, { recursive: true });
-
-  try {
-    await writeFile(tempFile, data);
-    await execFileAsync("docker", [
-      "cp", tempFile, `${STORAGE_CONTAINER}:${storagePath}`,
-    ]);
-  } finally {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => {});
-  }
+  const localPath = resolveLocalPath(storagePath);
+  await mkdir(dirname(localPath), { recursive: true });
+  await writeFile(localPath, data);
 }
 
 /**
- * Read a file from disk-storage.
- * @param storagePath Path within the storage container
+ * Read a file from storage.
+ * @param storagePath Logical storage path
  * @returns File content as Buffer
  */
 export async function readFileFromStorage(storagePath: string): Promise<Buffer> {
-  const tempDir = join(tmpdir(), `aigo-read-${Date.now()}`);
-  const tempFile = join(tempDir, "download");
-  await mkdir(tempDir, { recursive: true });
-
-  try {
-    await execFileAsync("docker", [
-      "cp", `${STORAGE_CONTAINER}:${storagePath}`, tempFile,
-    ]);
-
-    const { readFile } = await import("fs/promises");
-    return await readFile(tempFile);
-  } finally {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => {});
-  }
+  const localPath = resolveLocalPath(storagePath);
+  return readFile(localPath);
 }
 
 /**
- * Check if a file exists in disk-storage.
+ * Check if a file exists in storage.
  */
 export async function fileExistsInStorage(storagePath: string): Promise<boolean> {
   try {
-    await execFileAsync("docker", [
-      "exec", STORAGE_CONTAINER, "test", "-f", storagePath,
-    ]);
+    const localPath = resolveLocalPath(storagePath);
+    await access(localPath);
     return true;
   } catch {
     return false;
