@@ -17,8 +17,8 @@ bash scripts/setup.sh
 | 步驟 | 指令 | 說明 |
 |------|------|------|
 | 1. 環境變數 | `ln -s /path/to/main/.env.local .env.local` | Worktree 需 symlink 主專案的 .env.local |
-| 2. Docker 服務 | `docker compose up -d` | 啟動 PostgreSQL (5432)、builtin-postgres (5434)、disk-storage、caddy |
-| 3. 等待 DB | `docker exec aigo-postgres pg_isready -U aigo` | 確認 PostgreSQL 已就緒 |
+| 2. 基礎服務 | `docker compose up -d` 或 `bash scripts/k3d-setup.sh` | 若有 k3d 則用 k8s，否則用 Docker Compose |
+| 3. 等待 DB | Docker: `docker exec aigo-postgres pg_isready -U aigo`；k3d: `kubectl port-forward svc/postgres 5432:5432 -n aigo-system &` | 確認 PostgreSQL 可連線 |
 | 4. 安裝依賴 | `pnpm install` | 必須使用 pnpm，不可用 npm/yarn |
 | 5. DB 遷移 | `npx prisma migrate deploy` | 套用 schema 至資料庫 |
 | 6. Prisma Client | `npx prisma generate` | 產生 Prisma Client |
@@ -30,7 +30,10 @@ bash scripts/setup.sh
 | 問題 | 解法 |
 |------|------|
 | `.env.local` 不存在 | 從主專案 `ln -s` 建立 symlink |
-| PostgreSQL 連不上 | `docker compose up -d postgres` 並等待就緒 |
+| PostgreSQL 連不上 (Docker) | `docker compose up -d postgres` 並等待就緒 |
+| PostgreSQL 連不上 (k3d) | `kubectl port-forward svc/postgres 5432:5432 -n aigo-system &` |
+| k3d 叢集未啟動 | `k3d cluster start aigo` |
+| Pod 未就緒 | `kubectl get pods -n aigo-system` 查看狀態 |
 | Prisma Client 錯誤 | `npx prisma generate` |
 | Seed 重複執行失敗 | 可忽略，或 `npx prisma migrate reset --force` 重置 |
 | Port 3000 被佔用 | launch.json 已設定 `autoPort: true`，會自動換 port |
