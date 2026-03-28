@@ -44,6 +44,7 @@ export interface ChatPanelProps {
   generatingText?: string;
   totalTokensLabel?: string;
   externalLoading?: boolean;
+  autoSend?: boolean;
 }
 
 export function ChatPanel({
@@ -58,6 +59,7 @@ export function ChatPanel({
   generatingText,
   totalTokensLabel,
   externalLoading = false,
+  autoSend = false,
 }: ChatPanelProps) {
   const t = useTranslations("chat");
   const resolvedPlaceholder = placeholder ?? t("placeholder");
@@ -103,23 +105,9 @@ export function ChatPanel({
     }
   }, [modelMenuOpen]);
 
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!input.trim() || isLoading || externalLoading) return;
-
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        role: "user",
-        content: input.trim(),
-      };
-
-      const newMessages = [...messages, userMessage];
-      setMessages(newMessages);
-      setInput("");
+  const sendMessages = useCallback(
+    async (messagesToSend: Message[]) => {
       setIsLoading(true);
-
-      onUserMessage?.(userMessage.content);
 
       const assistantId = (Date.now() + 1).toString();
       setMessages((prev) => [
@@ -132,7 +120,7 @@ export function ChatPanel({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            messages: newMessages.map((m) => ({
+            messages: messagesToSend.map((m) => ({
               role: m.role,
               content: m.content,
             })),
@@ -229,19 +217,63 @@ export function ChatPanel({
       }
     },
     [
-      input,
-      isLoading,
-      externalLoading,
-      messages,
       selectedModel,
       extraRequestBody,
-      onUserMessage,
       onAssistantResponse,
       onAssistantComplete,
       onTokenUsageChange,
       t,
     ]
   );
+
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!input.trim() || isLoading || externalLoading) return;
+
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: input.trim(),
+      };
+
+      const newMessages = [...messages, userMessage];
+      setMessages(newMessages);
+      setInput("");
+
+      onUserMessage?.(userMessage.content);
+
+      await sendMessages(newMessages);
+    },
+    [
+      input,
+      isLoading,
+      externalLoading,
+      messages,
+      onUserMessage,
+      sendMessages,
+    ]
+  );
+
+  // Auto-send: when initialMessages end with a user message, trigger API call automatically
+  const autoSentRef = useRef(false);
+  useEffect(() => {
+    if (
+      autoSend &&
+      !autoSentRef.current &&
+      initialMessages.length > 0 &&
+      initialMessages[initialMessages.length - 1].role === "user"
+    ) {
+      // Defer to survive React strict mode cleanup-then-remount cycle
+      const timer = setTimeout(() => {
+        if (autoSentRef.current) return;
+        autoSentRef.current = true;
+        onUserMessage?.(initialMessages[initialMessages.length - 1].content);
+        sendMessages(initialMessages);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [autoSend, initialMessages, sendMessages, onUserMessage]);
 
   const totalTokens = Object.values(tokenUsage).reduce(
     (sum, u) => sum + u.totalTokens,
