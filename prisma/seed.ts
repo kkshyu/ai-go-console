@@ -46,7 +46,7 @@ const ALL_SERVICE_TYPES: ServiceType[] = [
   "auth0", "firebase_auth", "line_login",
   "supabase", "hasura",
   "line_bot", "whatsapp", "discord", "telegram",
-  "built_in_pg", "built_in_disk",
+  "built_in_pg", "built_in_disk", "built_in_real_estate",
   "openai", "gemini", "claude", "openrouter",
 ];
 
@@ -146,6 +146,24 @@ async function main() {
         configEncrypted: diskCfg.ciphertext,
         iv: diskCfg.iv,
         authTag: diskCfg.authTag,
+        organizationId: org.id,
+      },
+    });
+
+    const realEstateCfg = encrypt(JSON.stringify({
+      apiBaseUrl: `/api/platform/real-estate/${org.slug}`,
+    }));
+
+    await prisma.service.upsert({
+      where: { id: `builtin-real-estate-${org.slug}` },
+      update: {},
+      create: {
+        id: `builtin-real-estate-${org.slug}`,
+        name: "Built-in Real Estate",
+        type: ServiceType.built_in_real_estate,
+        configEncrypted: realEstateCfg.ciphertext,
+        iv: realEstateCfg.iv,
+        authTag: realEstateCfg.authTag,
         organizationId: org.id,
       },
     });

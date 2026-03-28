@@ -226,6 +226,7 @@ const testers: Record<ServiceType, ServiceTester> = {
     return { success: true, message: "Built-in PostgreSQL connection OK" };
   },
   built_in_disk: configOnlyTester("Built-in Disk Storage", ["basePath"]),
+  built_in_real_estate: configOnlyTester("Built-in Real Estate", ["apiBaseUrl"]),
 
   // --- platform ---
   supabase: async (config, endpointUrl) => {

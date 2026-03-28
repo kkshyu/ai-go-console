@@ -70,6 +70,20 @@ async function createOrganizationWithDefaults(name: string) {
     },
   });
 
+  const realEstateConfig = encrypt(JSON.stringify({
+    apiBaseUrl: `/api/platform/real-estate/${orgSlug}`,
+  }));
+  await prisma.service.create({
+    data: {
+      name: "Built-in Real Estate",
+      type: "built_in_real_estate" as ServiceType,
+      configEncrypted: realEstateConfig.ciphertext,
+      iv: realEstateConfig.iv,
+      authTag: realEstateConfig.authTag,
+      organizationId: org.id,
+    },
+  });
+
   return org;
 }
 

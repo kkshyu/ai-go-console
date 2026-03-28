@@ -49,6 +49,7 @@ export const ALL_SERVICE_TYPES: ServiceType[] = [
   // built-in
   "built_in_pg",
   "built_in_disk",
+  "built_in_real_estate",
   // ai_model
   "openai",
   "gemini",
@@ -85,6 +86,7 @@ export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
   // built-in
   built_in_pg: ServiceCategory.database,
   built_in_disk: ServiceCategory.storage,
+  built_in_real_estate: ServiceCategory.platform,
   openai: ServiceCategory.ai_model,
   gemini: ServiceCategory.ai_model,
   claude: ServiceCategory.ai_model,
@@ -98,7 +100,7 @@ export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
   [ServiceCategory.email]: ["sendgrid", "ses", "mailgun"],
   [ServiceCategory.sms]: ["twilio", "vonage", "aws_sns"],
   [ServiceCategory.auth]: ["auth0", "firebase_auth", "line_login"],
-  [ServiceCategory.platform]: ["supabase", "hasura"],
+  [ServiceCategory.platform]: ["supabase", "hasura", "built_in_real_estate"],
   [ServiceCategory.chat]: ["line_bot", "whatsapp", "discord", "telegram"],
   [ServiceCategory.ai_model]: ["openai", "gemini", "claude", "openrouter"],
 };
@@ -106,6 +108,7 @@ export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
 export const BUILT_IN_SERVICE_TYPES: ReadonlySet<ServiceType> = new Set([
   "built_in_pg",
   "built_in_disk",
+  "built_in_real_estate",
 ]);
 
 export function isBuiltInServiceType(type: ServiceType): boolean {
@@ -257,6 +260,7 @@ export const SERVICE_TYPE_CONFIG_FIELDS: Record<ServiceType, ConfigFieldDef[]> =
   // built-in (auto-configured by platform)
   built_in_pg: [],
   built_in_disk: [],
+  built_in_real_estate: [],
   // --- ai_model ---
   openai: [
     { key: "apiKey", type: "password", placeholder: "sk-..." },
@@ -305,6 +309,7 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   telegram: "Telegram",
   built_in_pg: "Built-in PostgreSQL",
   built_in_disk: "Built-in Disk Storage",
+  built_in_real_estate: "Built-in Real Estate",
   openai: "OpenAI",
   gemini: "Google Gemini",
   claude: "Claude (Anthropic)",
@@ -369,6 +374,7 @@ export const SERVICE_TYPE_HTTP_MODE: Record<ServiceType, HttpMode> = {
   // built-in
   built_in_pg: "proxy",
   built_in_disk: "sdk",
+  built_in_real_estate: "fixed",
   // ai_model — fixed well-known API URLs
   openai: "fixed",
   gemini: "fixed",
