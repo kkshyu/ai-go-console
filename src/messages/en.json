@@ -271,6 +271,26 @@
       "linebot-booking": {
         "name": "LINE Booking Bot",
         "description": "Online slot lookup, booking confirmation notifications, and reschedule/cancel handling"
+      },
+      "realestate-listing": {
+        "name": "Property Listing Manager",
+        "description": "Manage property listings, track rental/sale status, and maintain owner information"
+      },
+      "realestate-client-matching": {
+        "name": "Client Matching System",
+        "description": "Register buyer/renter requirements, match properties by criteria, and track viewing feedback"
+      },
+      "realestate-commission": {
+        "name": "Commission Tracker",
+        "description": "Calculate deal commissions, manage agent share ratios, and track payment status"
+      },
+      "realestate-owner-negotiation": {
+        "name": "Owner Negotiation Manager",
+        "description": "Track owner meetings, compare asking price vs market value, and manage listing progress"
+      },
+      "linebot-property-inquiry": {
+        "name": "LINE Property Inquiry Bot",
+        "description": "Property search notifications, viewing appointments, and agent contact features"
       }
     },
     "presetCategories": {
@@ -281,7 +301,8 @@
       "marketing": "Marketing",
       "pm": "Project Mgmt",
       "it": "IT",
-      "ops": "Operations"
+      "ops": "Operations",
+      "realestate": "Real Estate"
     }
   },
   "services": {

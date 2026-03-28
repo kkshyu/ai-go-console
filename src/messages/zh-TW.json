@@ -271,6 +271,26 @@
       "linebot-booking": {
         "name": "LINE 預約機器人",
         "description": "線上預約時段查詢、預約確認通知與取消改期處理"
+      },
+      "realestate-listing": {
+        "name": "物件管理系統",
+        "description": "房屋物件刊登管理、租售狀態追蹤與屋主資訊維護"
+      },
+      "realestate-client-matching": {
+        "name": "客戶配對系統",
+        "description": "買租屋需求登記、物件條件配對與看屋回饋紀錄"
+      },
+      "realestate-commission": {
+        "name": "佣金追蹤系統",
+        "description": "成交佣金計算、個人分潤比例管理與撥款狀態追蹤"
+      },
+      "realestate-owner-negotiation": {
+        "name": "業主開發管理",
+        "description": "業主洽談紀錄、開價與行情比較、委託進度追蹤與跟進排程"
+      },
+      "linebot-property-inquiry": {
+        "name": "LINE 房屋諮詢機器人",
+        "description": "物件查詢推播、看屋預約與經紀人聯絡功能"
       }
     },
     "presetCategories": {
@@ -281,7 +301,8 @@
       "marketing": "行銷",
       "pm": "專案管理",
       "it": "資訊",
-      "ops": "營運"
+      "ops": "營運",
+      "realestate": "房仲"
     }
   },
   "services": {
