@@ -46,6 +46,7 @@ import {
 } from "../services/parallel-merge";
 import { validatePMAction } from "../services/llm-output-validator";
 import { actorLog } from "./logger";
+import { pruneMessages } from "../ai/token-budget";
 import type { BackgroundActorSystem } from "./background-system";
 
 /** Maximum number of agent interactions per request. */
@@ -521,8 +522,12 @@ export class PMActor extends Actor {
       // Signal thinking
       await sendEvent({ thinking: true, agentRole: "pm" });
 
+      // Prune messages to fit within token budget before sending to LLM
+      const TOKEN_BUDGET = 80_000; // Reserve ~20k for system prompt + response
+      const prunedMessages = pruneMessages(this.messages, TOKEN_BUDGET);
+
       // Build chat messages with agent annotations
-      const chatMessages: ChatMessage[] = this.messages.map((m) => {
+      const chatMessages: ChatMessage[] = prunedMessages.map((m) => {
         if (m.role === "assistant" && m.agentRole && m.agentRole !== "pm") {
           return {
             role: m.role,
