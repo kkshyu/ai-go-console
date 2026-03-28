@@ -5,7 +5,8 @@
  * for the in-memory actor system used within SSE request lifecycle.
  */
 
-import type { AgentRole } from "../agents/types";
+import type { AgentRole, BackgroundAgentRole } from "../agents/types";
+import type { TokenUsage } from "../ai";
 
 // ---- Message Protocol ----
 
@@ -100,6 +101,71 @@ export interface ErrorPayload {
   agentRole: AgentRole;
   error: string;
   recoverable: boolean;
+}
+
+// ---- Background Actor Types ----
+
+export type BackgroundMessageType =
+  | "embed_request"
+  | "embed_result"
+  | "retrieve_request"
+  | "retrieve_result"
+  | "summarize_request"
+  | "summarize_result";
+
+export interface BackgroundMessage {
+  id: string;
+  type: BackgroundMessageType;
+  requestId: string;        // unique per request-response pair
+  payload: unknown;
+  timestamp: number;
+}
+
+export interface EmbedRequestPayload {
+  sourceType: "artifact" | "agent_output";
+  sourceId: string;
+  pipelineId: string;
+  agentRole: string;
+  content: string;
+}
+
+export interface EmbedResultPayload {
+  sourceId: string;
+  chunksStored: number;
+  success: boolean;
+}
+
+export interface RetrieveRequestPayload {
+  pipelineId: string;
+  query: string;
+  maxChars?: number;
+  sourceType?: string;
+}
+
+export interface RetrieveResultPayload {
+  context: string;
+  chunks: Array<{ content: string; similarity: number; agentRole: string }>;
+}
+
+export interface SummarizeRequestPayload {
+  content: string;
+  agentRole: string;
+  locale: string;
+}
+
+export interface SummarizeResultPayload {
+  content: string;
+  usage: TokenUsage | null;
+}
+
+export interface ActorStats {
+  role: BackgroundAgentRole;
+  totalProcessed: number;
+  totalFailed: number;
+  consecutiveFailures: number;
+  lastActivityAt: number;
+  restartCount: number;
+  isHealthy: boolean;
 }
 
 // ---- Helper ----

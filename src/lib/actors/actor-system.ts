@@ -77,10 +77,8 @@ export class ActorSystem {
 
     await actor.onStart();
 
-    // Monitor non-PM actors for heartbeat
-    if (actor.role !== "pm") {
-      this.heartbeat.startMonitoring(actor.id);
-    }
+    // Monitor all request-scoped actors (including PM) for heartbeat
+    this.heartbeat.startMonitoring(actor.id);
   }
 
   /** Stop a specific actor. */
@@ -132,16 +130,6 @@ export class ActorSystem {
     for (const [id, actor] of this.actors) {
       if (id !== message.from) {
         actor.send({ ...message, to: id });
-      }
-    }
-  }
-
-  /** Send heartbeat pings to all specialist actors. */
-  pingAll(fromId: string): void {
-    for (const [id, actor] of this.actors) {
-      if (id !== fromId && actor.role !== "pm") {
-        const ping = createMessage("heartbeat_ping", fromId, id, {});
-        this.send(ping);
       }
     }
   }

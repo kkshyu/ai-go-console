@@ -28,14 +28,23 @@ import {
 import type { AgentRole, OrchestrationState, AgentMessage as AgentMsg } from "../agents/types";
 import { createInitialOrchestrationState } from "../agents/types";
 import {
-  parsePMAction,
   stateForDispatch,
   stateForAgentComplete,
   stateForComplete,
 } from "../agents/orchestrator";
 import { createSpecialistActor, type SpecialistConfig } from "./specialist-actors";
-import { writeFiles } from "../docker-sandbox";
-import { prisma } from "../db";
+import { executeFileOperations } from "../services/file-operations";
+import {
+  extractServicesFromContent,
+  getAuthorizedServiceIds,
+  bindServicesToApp,
+} from "../services/service-authorization";
+import {
+  mergeParallelOutputs,
+  mergeResultToContent,
+  type MergeResult,
+} from "../services/parallel-merge";
+import { validatePMAction } from "../services/llm-output-validator";
 
 /** Maximum number of agent interactions per request. */
 const MAX_INTERACTIONS = 20;
@@ -76,6 +85,7 @@ export interface PMActorConfig {
   saveArtifact: (agentRole: AgentRole, content: string, actorId?: string, taskId?: string) => Promise<void>;
   system: ActorSystem;
   pmPrompt: string;
+  locale?: string;
   appSlug?: string;
   appId?: string;
   userId?: string;
@@ -95,6 +105,11 @@ export class PMActor extends Actor {
 
   // Timer tracking for GC
   private activeTimers: Set<ReturnType<typeof setInterval>> = new Set();
+  // Abort controller for lifecycle management
+  private abortController = new AbortController();
+  // Request-level timeout (5 minutes max per orchestration)
+  private requestTimeout: ReturnType<typeof setTimeout> | null = null;
+  private static readonly REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 
   constructor(config: PMActorConfig, initialState?: OrchestrationState) {
     super("pm-0", "pm");
@@ -103,18 +118,46 @@ export class PMActor extends Actor {
   }
 
   async onStart(): Promise<void> {
-    // PM is ready
+    // Start request-level timeout
+    this.requestTimeout = setTimeout(() => {
+      console.warn("[PMActor] Request timeout reached, aborting");
+      this.abortController.abort();
+      this.orchState = { ...this.orchState, status: "error" };
+      this.config.sendEvent({ error: "Request timeout reached" }).catch(() => {});
+      this.config.system.signalCompletion(this.orchState);
+    }, PMActor.REQUEST_TIMEOUT_MS);
   }
 
   onStop(): void {
+    // Clear all timers
     for (const timer of this.activeTimers) {
       clearInterval(timer);
     }
     this.activeTimers.clear();
+
+    // Clear request timeout
+    if (this.requestTimeout) {
+      clearTimeout(this.requestTimeout);
+      this.requestTimeout = null;
+    }
+
+    // Abort any in-flight operations
+    this.abortController.abort();
+
+    // Reject pending parallel results
+    this.pendingParallelResults.clear();
+    this.expectedParallelCount = 0;
+  }
+
+  /** Check if the orchestration has been aborted. */
+  private get isAborted(): boolean {
+    return this.abortController.signal.aborted;
   }
 
   async onRestart(error: Error): Promise<void> {
     console.warn(`[PMActor] Restarting after error: ${error.message}`);
+    // Reset abort controller on restart
+    this.abortController = new AbortController();
   }
 
   async onReceive(message: ActorMessage): Promise<ActorMessage | null> {
@@ -161,10 +204,10 @@ export class PMActor extends Actor {
     await saveArtifact(payload.agentRole, payload.content);
 
     // Directly write files to Docker container if applicable
-    await this.executeFileOperations(payload.content);
+    await this.doFileOperations(payload.content);
 
     // Bind services selected by architect or required by developer
-    await this.bindServicesIfNeeded(payload.content);
+    await this.doServiceBinding(payload.content);
 
     // Update state
     this.orchState = stateForAgentComplete(
@@ -247,6 +290,13 @@ export class PMActor extends Actor {
     const { sendEvent, saveArtifact, system } = this.config;
 
     while (this.interactionCount < MAX_INTERACTIONS) {
+      // Check abort before each iteration
+      if (this.isAborted) {
+        this.orchState = { ...this.orchState, status: "error" };
+        system.signalCompletion(this.orchState);
+        return;
+      }
+
       this.interactionCount++;
 
       // Send PM agent metadata
@@ -319,8 +369,12 @@ export class PMActor extends Actor {
       // Save PM artifact
       await saveArtifact("pm", result.content);
 
-      // Parse PM action
-      const pmAction = parsePMAction(result.content);
+      // Parse and validate PM action
+      const validated = validatePMAction(result.content);
+      const pmAction = "action" in validated ? validated.action : null;
+      if ("error" in validated) {
+        console.warn(`[PMActor] PM action validation: ${validated.error}`);
+      }
 
       // ---- Handle dispatch ----
       if (pmAction?.action === "dispatch") {
@@ -453,6 +507,7 @@ export class PMActor extends Actor {
       serviceInstances: this.config.serviceInstances,
       appContext: this.config.appContext,
       sendEvent: this.config.sendEvent,
+      locale: this.config.locale,
     };
 
     // Create and spawn specialist actor
@@ -515,6 +570,7 @@ export class PMActor extends Actor {
       serviceInstances: this.config.serviceInstances,
       appContext: this.config.appContext,
       sendEvent: this.config.sendEvent,
+      locale: this.config.locale,
     };
 
     // Spawn all developers and dispatch tasks concurrently
@@ -561,8 +617,19 @@ export class PMActor extends Actor {
   private async mergeAndContinue(): Promise<void> {
     const { sendEvent, saveArtifact } = this.config;
 
-    // Merge all developer outputs
-    const mergedContent = this.mergeParallelResults();
+    // Merge all developer outputs (with conflict detection)
+    const { content: mergedContent, mergeResult } = this.mergeParallelResults();
+
+    // Report conflicts via SSE if any
+    if (mergeResult.conflicts.length > 0) {
+      await sendEvent({
+        mergeConflicts: mergeResult.conflicts.map((c) => ({
+          path: c.path,
+          sources: c.sources.map((s) => s.taskId),
+        })),
+        agentRole: "developer",
+      });
+    }
 
     // Update state for each completed developer
     for (const [, result] of this.pendingParallelResults) {
@@ -581,7 +648,7 @@ export class PMActor extends Actor {
     });
 
     // Translate merged result
-    const translated = await translateForUser(mergedContent, "developer");
+    const translated = await translateForUser(mergedContent, "developer", this.config.locale);
     const displayContent = translated.content || stripJsonBlocks(mergedContent) || "所有開發者已完成工作。";
     await sendEvent({ content: displayContent, agentRole: "developer" });
     if (translated.usage) {
@@ -599,10 +666,10 @@ export class PMActor extends Actor {
     await saveArtifact("developer", mergedContent);
 
     // Directly write merged files to Docker container
-    await this.executeFileOperations(mergedContent);
+    await this.doFileOperations(mergedContent);
 
     // Bind services from merged results
-    await this.bindServicesIfNeeded(mergedContent);
+    await this.doServiceBinding(mergedContent);
 
     // Reset parallel tracking
     this.pendingParallelResults.clear();
@@ -613,68 +680,22 @@ export class PMActor extends Actor {
     await this.runPMLoop();
   }
 
-  private mergeParallelResults(): string {
-    // Merge file outputs from all developers
-    const allFiles: Array<{ path: string; content: string }> = [];
-    let mergedAction = "create_app";
-    let mergedName = "";
-    let mergedTemplate = "";
-    let mergedDescription = "";
-    const mergedServices: Array<{ instanceId: string; name: string; type: string }> = [];
-    const mergedPackages: string[] = [];
+  private mergeParallelResults(): { content: string; mergeResult: MergeResult } {
+    const outputs = Array.from(this.pendingParallelResults.entries()).map(
+      ([taskId, result]) => ({ taskId, content: result.content }),
+    );
 
-    for (const [, result] of this.pendingParallelResults) {
-      try {
-        const jsonMatch = result.content.match(/```json\s*\n([\s\S]*?)\n```/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[1]);
-          if (parsed.files) {
-            for (const file of parsed.files) {
-              // Later developer wins on path conflict
-              const existingIdx = allFiles.findIndex((f) => f.path === file.path);
-              if (existingIdx >= 0) {
-                allFiles[existingIdx] = file;
-              } else {
-                allFiles.push(file);
-              }
-            }
-          }
-          if (parsed.action) mergedAction = parsed.action;
-          if (parsed.name) mergedName = parsed.name;
-          if (parsed.template) mergedTemplate = parsed.template;
-          if (parsed.description) mergedDescription = parsed.description;
-          if (parsed.requiredServices) {
-            for (const s of parsed.requiredServices) {
-              if (!mergedServices.find((ms) => ms.instanceId === s.instanceId)) {
-                mergedServices.push(s);
-              }
-            }
-          }
-          if (parsed.npmPackages) {
-            for (const p of parsed.npmPackages) {
-              if (!mergedPackages.includes(p)) {
-                mergedPackages.push(p);
-              }
-            }
-          }
-        }
-      } catch {
-        // Skip malformed results
-      }
+    const mergeResult = mergeParallelOutputs(outputs);
+
+    // Log conflicts if any
+    if (mergeResult.conflicts.length > 0) {
+      console.warn(
+        `[PMActor] Parallel merge conflicts detected: ${mergeResult.conflicts.map((c) => c.path).join(", ")}`,
+      );
     }
 
-    const merged = {
-      action: mergedAction,
-      name: mergedName,
-      template: mergedTemplate,
-      description: mergedDescription,
-      requiredServices: mergedServices,
-      npmPackages: mergedPackages,
-      files: allFiles,
-      _mergedFrom: Array.from(this.pendingParallelResults.keys()),
-    };
-
-    return `\`\`\`json\n${JSON.stringify(merged, null, 2)}\n\`\`\``;
+    const content = mergeResultToContent(mergeResult);
+    return { content, mergeResult };
   }
 
   // ---- Docker File Operations ----
@@ -682,136 +703,66 @@ export class PMActor extends Actor {
   /**
    * Parse agent output and write files directly to the Docker container.
    */
-  private async executeFileOperations(content: string): Promise<void> {
+  private async doFileOperations(content: string): Promise<void> {
     if (!this.config.appSlug) return;
 
     try {
-      const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
-      if (!jsonMatch) return;
-
-      const parsed = JSON.parse(jsonMatch[1]);
-      if (
-        parsed.files &&
-        Array.isArray(parsed.files) &&
-        parsed.files.length > 0 &&
-        (parsed.action === "modify_files" ||
-          parsed.action === "create_app" ||
-          parsed.action === "update_app")
-      ) {
-        await writeFiles(this.config.orgSlug || "default", this.config.appSlug, parsed.files);
+      const result = await executeFileOperations(
+        content,
+        this.config.orgSlug || "default",
+        this.config.appSlug,
+      );
+      if (result) {
         await this.config.sendEvent({
           filesWritten: {
-            count: parsed.files.length,
-            paths: parsed.files.map((f: { path: string }) => f.path),
+            count: result.filesWritten,
+            paths: result.paths,
           },
         });
       }
     } catch (err) {
       console.warn(
-        `[PMActor] Failed to write files to container: ${err instanceof Error ? err.message : "Unknown error"}`
+        `[PMActor] Failed to write files: ${err instanceof Error ? err.message : "Unknown error"}`,
       );
     }
   }
 
-  // ---- Service Binding ----
+  // ---- Service Binding (delegated to service-authorization module) ----
 
-  /**
-   * Parse agent output for service requirements and bind authorized services to the app.
-   * Validates each service against the user's authorized instances.
-   * Sends an error event if any required service is not authorized.
-   */
-  private async bindServicesIfNeeded(content: string): Promise<void> {
+  private async doServiceBinding(content: string): Promise<void> {
     if (!this.config.appId) return;
 
     try {
-      const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
-      if (!jsonMatch) return;
-
-      const parsed = JSON.parse(jsonMatch[1]);
-
-      // Extract services from architect_design or developer create_app/modify_files
-      let services: Array<{ instanceId: string; name: string; type: string }> = [];
-      if (parsed.action === "architect_design" && parsed.design?.services) {
-        services = parsed.design.services;
-      } else if (parsed.requiredServices) {
-        services = parsed.requiredServices;
-      }
-
+      const services = extractServicesFromContent(content);
       if (services.length === 0) return;
 
-      const serviceIds = services.map((s) => s.instanceId).filter(Boolean);
-      if (serviceIds.length === 0) return;
+      const authorizedIds = await getAuthorizedServiceIds(
+        this.config.userId,
+        this.config.serviceInstances,
+      );
 
-      // Validate services exist and are authorized for this user
-      let authorizedServiceIds: Set<string>;
+      const result = await bindServicesToApp(
+        this.config.appId,
+        services,
+        authorizedIds,
+      );
 
-      if (this.config.userId) {
-        // Check user authorization
-        const user = await prisma.user.findUnique({
-          where: { id: this.config.userId },
-          select: { role: true, organizationId: true },
-        });
-
-        if (user?.role === "admin") {
-          // Admin can use all org services
-          const orgServices = await prisma.service.findMany({
-            where: { organizationId: user.organizationId! },
-            select: { id: true },
-          });
-          authorizedServiceIds = new Set(orgServices.map((s) => s.id));
-        } else {
-          // Non-admin: only allowed instances
-          const allowed = await prisma.userAllowedServiceInstance.findMany({
-            where: { userId: this.config.userId },
-            select: { serviceId: true },
-          });
-          authorizedServiceIds = new Set(allowed.map((a) => a.serviceId));
-        }
-      } else {
-        // Fallback: use serviceInstances from config
-        authorizedServiceIds = new Set(this.config.serviceInstances.map((s) => s.id));
-      }
-
-      // Check for unauthorized services
-      const unauthorized = services.filter((s) => s.instanceId && !authorizedServiceIds.has(s.instanceId));
-      if (unauthorized.length > 0) {
-        const names = unauthorized.map((s) => `${s.name} (${s.type})`).join(", ");
+      if (result.unauthorized && result.unauthorized.length > 0) {
         await this.config.sendEvent({
-          pmMessage: `無法完成：您未被授權使用以下服務：${names}。請聯繫管理員取得授權。`,
+          pmMessage: `無法完成：您未被授權使用以下服務：${result.unauthorized.join(", ")}。請聯繫管理員取得授權。`,
           agentRole: "pm",
         });
         return;
       }
 
-      // Bind authorized services to the app (skip already-bound ones)
-      const existingBindings = await prisma.appService.findMany({
-        where: { appId: this.config.appId },
-        select: { serviceId: true },
-      });
-      const existingIds = new Set(existingBindings.map((b) => b.serviceId));
-      const newServiceIds = serviceIds.filter((id) => !existingIds.has(id));
-
-      if (newServiceIds.length > 0) {
-        await prisma.appService.createMany({
-          data: newServiceIds.map((svcId, index) => ({
-            appId: this.config.appId!,
-            serviceId: svcId,
-            envVarPrefix: existingBindings.length + index === 0 ? "SVC" : `SVC${existingBindings.length + index}`,
-          })),
-          skipDuplicates: true,
-        });
-
-        const boundNames = services
-          .filter((s) => newServiceIds.includes(s.instanceId))
-          .map((s) => s.name)
-          .join(", ");
+      if (result.bound > 0) {
         await this.config.sendEvent({
-          servicesBound: { count: newServiceIds.length, names: boundNames },
+          servicesBound: { count: result.bound, names: result.names.join(", ") },
         });
       }
     } catch (err) {
       console.warn(
-        `[PMActor] Failed to bind services: ${err instanceof Error ? err.message : "Unknown error"}`
+        `[PMActor] Failed to bind services: ${err instanceof Error ? err.message : "Unknown error"}`,
       );
     }
   }
@@ -827,7 +778,7 @@ export class PMActor extends Actor {
 
     await sendEvent({ translating: true, agentRole: "pm" });
 
-    const translated = await translateForUser(content, "pm");
+    const translated = await translateForUser(content, "pm", this.config.locale);
     const displayContent =
       translated.content ||
       stripJsonBlocks(content) ||

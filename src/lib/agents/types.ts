@@ -7,6 +7,9 @@
 
 export type AgentRole = "pm" | "architect" | "developer" | "reviewer" | "devops";
 
+/** Background agent roles — persist across requests, managed by BackgroundActorSystem */
+export type BackgroundAgentRole = "embedding" | "retrieval" | "summarizer";
+
 export type TaskStatus = "idle" | "running" | "completed" | "error";
 
 /** A single task dispatched by PM to an agent */
@@ -78,6 +81,38 @@ export const AGENT_DEFINITIONS: Record<AgentRole, AgentMeta> = {
     icon: "Rocket",
     color: "text-rose-500",
     description: "DevOps — handles deployment and infrastructure",
+  },
+};
+
+export interface BackgroundAgentMeta {
+  role: BackgroundAgentRole;
+  label: string;
+  icon: string;
+  color: string;
+  description: string;
+}
+
+export const BACKGROUND_AGENT_DEFINITIONS: Record<BackgroundAgentRole, BackgroundAgentMeta> = {
+  embedding: {
+    role: "embedding",
+    label: "Embedding",
+    icon: "Database",
+    color: "text-cyan-500",
+    description: "Embedding — generates and stores vector embeddings for content chunks",
+  },
+  retrieval: {
+    role: "retrieval",
+    label: "Retrieval",
+    icon: "Search",
+    color: "text-teal-500",
+    description: "Retrieval — searches vector store for relevant context",
+  },
+  summarizer: {
+    role: "summarizer",
+    label: "Summarizer",
+    icon: "FileText",
+    color: "text-indigo-500",
+    description: "Summarizer — translates and summarizes agent output for users",
   },
 };
 

@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { cookies } from "next/headers";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, getOrgSlug } from "@/lib/db";
@@ -62,7 +63,40 @@ function extractJsonContent(content: string): unknown | null {
 /**
  * Load persisted artifacts for a pipeline and format as minimal context.
  */
-async function loadArtifactContext(pipelineId: string): Promise<string> {
+/**
+ * Load artifact context using RAG (vector similarity search) when available,
+ * falling back to full concatenation with truncation.
+ */
+async function loadArtifactContext(
+  pipelineId: string,
+  queryText?: string,
+  maxChars: number = 8000,
+): Promise<string> {
+  // Try RAG approach if query text is provided
+  if (queryText) {
+    try {
+      const { backgroundSystem } = await import("@/lib/actors/background-system");
+      if (backgroundSystem.initialized) {
+        const result = await backgroundSystem.request<{
+          context: string;
+          chunks: Array<{ content: string; similarity: number; agentRole: string }>;
+        }>(
+          "retrieval",
+          "retrieve_request",
+          { pipelineId, query: queryText, maxChars },
+          10_000, // 10s timeout
+        );
+
+        if (result.context && result.chunks.length > 0) {
+          return result.context;
+        }
+      }
+    } catch (err) {
+      console.warn(`[loadArtifactContext] RAG failed, falling back: ${err}`);
+    }
+  }
+
+  // Fallback: original concatenation approach with truncation
   const artifacts = await prisma.agentArtifact.findMany({
     where: { pipelineId },
     orderBy: { createdAt: "asc" },
@@ -71,11 +105,17 @@ async function loadArtifactContext(pipelineId: string): Promise<string> {
 
   if (artifacts.length === 0) return "";
 
-  const parts = artifacts.map(
-    (a) => `[${a.agentRole.toUpperCase()} ${a.type}]: ${JSON.stringify(a.content)}`
-  );
+  let context = "\n\nArtifacts from this pipeline:\n";
+  let charCount = context.length;
 
-  return `\n\nArtifacts from this pipeline:\n${parts.join("\n")}`;
+  for (const a of artifacts) {
+    const entry = `[${a.agentRole.toUpperCase()} ${a.type}]: ${JSON.stringify(a.content)}\n`;
+    if (charCount + entry.length > maxChars) break;
+    context += entry;
+    charCount += entry.length;
+  }
+
+  return context;
 }
 
 export async function POST(request: NextRequest) {
@@ -100,6 +140,10 @@ export async function POST(request: NextRequest) {
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  // Read locale from cookie for agent translation output
+  const cookieStore = await cookies();
+  const locale = cookieStore.get("locale")?.value || "zh-TW";
 
   // Get allowed services and actual service instances for the user's org
   let allowedServices: string[] = [];
@@ -203,9 +247,10 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Load persisted artifacts for context
+  // Load persisted artifacts for context (use last user message as RAG query)
+  const lastUserMessage = messages.filter((m) => m.role === "user").pop()?.content || "";
   const artifactContext = pipelineId
-    ? await loadArtifactContext(pipelineId)
+    ? await loadArtifactContext(pipelineId, lastUserMessage)
     : "";
 
   // Build PM prompt
@@ -241,7 +286,7 @@ export async function POST(request: NextRequest) {
     const jsonContent = extractJsonContent(content);
     if (!jsonContent) return;
 
-    await prisma.agentArtifact.create({
+    const artifact = await prisma.agentArtifact.create({
       data: {
         pipelineId,
         agentRole,
@@ -251,11 +296,35 @@ export async function POST(request: NextRequest) {
         ...(taskId && { taskId }),
       },
     });
+
+    // Fire-and-forget: generate embeddings for this artifact in the background
+    try {
+      const { backgroundSystem } = await import("@/lib/actors/background-system");
+      if (backgroundSystem.initialized) {
+        backgroundSystem.fireAndForget("embedding", "embed_request", {
+          sourceType: "artifact",
+          sourceId: artifact.id,
+          pipelineId,
+          agentRole,
+          content,
+        });
+      }
+    } catch {
+      // Embedding is optional — don't fail the save
+    }
   };
 
   // Start actor system in background
   (async () => {
     try {
+      // 0. Ensure background actor system is initialized (Embedding, Retrieval, Summarizer)
+      try {
+        const { ensureBackgroundSystem } = await import("@/lib/actors/background-system");
+        await ensureBackgroundSystem();
+      } catch (err) {
+        console.warn("[multi-agent] Background system init failed (RAG will be unavailable):", err);
+      }
+
       // 1. Create actor system with supervisor strategy
       const system = new ActorSystem(sendEvent);
 
@@ -267,6 +336,7 @@ export async function POST(request: NextRequest) {
           serviceInstances,
           appContext,
           sendEvent,
+          locale,
         })
       );
 
@@ -281,6 +351,7 @@ export async function POST(request: NextRequest) {
         saveArtifact,
         system,
         pmPrompt,
+        locale,
         appSlug,
         appId,
         userId: session?.user?.id,
