@@ -111,7 +111,9 @@ export class PostProcessor {
    * Run all post-processing steps for agent output.
    */
   async process(content: string): Promise<void> {
-    await this.executeFileOperations(content);
-    await this.bindServices(content);
+    await Promise.all([
+      this.executeFileOperations(content),
+      this.bindServices(content),
+    ]);
   }
 }

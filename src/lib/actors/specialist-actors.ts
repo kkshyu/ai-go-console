@@ -30,6 +30,10 @@ import {
   buildReviewerPrompt,
   buildDevOpsPrompt,
   buildAppDevDeveloperPrompt,
+  buildUXDesignerPrompt,
+  buildTesterPrompt,
+  buildDBMigratorPrompt,
+  buildDocWriterPrompt,
 } from "../agents/prompts";
 import { actorLog } from "./logger";
 import type { BackgroundActorSystem } from "./background-system";
@@ -76,6 +80,34 @@ const PROGRESS_MESSAGES: Record<string, string[]> = {
     "正在準備啟動應用程式...",
     "正在進行最終檢查...",
     "部署設定即將完成...",
+  ],
+  ux_designer: [
+    "正在分析視覺需求...",
+    "正在設計色彩系統...",
+    "正在規劃版面架構...",
+    "正在制定設計規範...",
+    "設計系統即將完成...",
+  ],
+  tester: [
+    "正在分析程式碼結構...",
+    "正在撰寫單元測試...",
+    "正在撰寫整合測試...",
+    "正在規劃端對端測試...",
+    "測試檔案即將完成...",
+  ],
+  db_migrator: [
+    "正在分析資料模型...",
+    "正在設計資料庫結構...",
+    "正在產生遷移腳本...",
+    "正在準備種子資料...",
+    "資料庫遷移即將完成...",
+  ],
+  doc_writer: [
+    "正在整理專案資訊...",
+    "正在撰寫 README...",
+    "正在產生 API 文件...",
+    "正在撰寫架構文件...",
+    "文件撰寫即將完成...",
   ],
 };
 
@@ -672,6 +704,58 @@ export class DevOpsActor extends BaseSpecialistActor {
   }
 }
 
+// ---- UX Designer Actor ----
+
+export class UXDesignerActor extends BaseSpecialistActor {
+  constructor(id: string, config: SpecialistConfig) {
+    super(id, "ux_designer", config);
+  }
+
+  protected buildPrompt(task: string): string {
+    const base = buildUXDesignerPrompt();
+    return `${base}${this.buildPeerDiscussionSection()}\n\n--- TASK FROM PM ---\n${task}`;
+  }
+}
+
+// ---- Tester Actor ----
+
+export class TesterActor extends BaseSpecialistActor {
+  constructor(id: string, config: SpecialistConfig) {
+    super(id, "tester", config);
+  }
+
+  protected buildPrompt(task: string): string {
+    const base = buildTesterPrompt();
+    return `${base}${this.buildPeerDiscussionSection()}\n\n--- TASK FROM PM ---\n${task}`;
+  }
+}
+
+// ---- DB Migrator Actor ----
+
+export class DBMigratorActor extends BaseSpecialistActor {
+  constructor(id: string, config: SpecialistConfig) {
+    super(id, "db_migrator", config);
+  }
+
+  protected buildPrompt(task: string): string {
+    const base = buildDBMigratorPrompt();
+    return `${base}${this.buildPeerDiscussionSection()}\n\n--- TASK FROM PM ---\n${task}`;
+  }
+}
+
+// ---- Doc Writer Actor ----
+
+export class DocWriterActor extends BaseSpecialistActor {
+  constructor(id: string, config: SpecialistConfig) {
+    super(id, "doc_writer", config);
+  }
+
+  protected buildPrompt(task: string): string {
+    const base = buildDocWriterPrompt();
+    return `${base}${this.buildPeerDiscussionSection()}\n\n--- TASK FROM PM ---\n${task}`;
+  }
+}
+
 // ---- Factory ----
 
 export function createSpecialistActor(
@@ -689,6 +773,14 @@ export function createSpecialistActor(
       return new ReviewerActor(id, config);
     case "devops":
       return new DevOpsActor(id, config);
+    case "ux_designer":
+      return new UXDesignerActor(id, config);
+    case "tester":
+      return new TesterActor(id, config);
+    case "db_migrator":
+      return new DBMigratorActor(id, config);
+    case "doc_writer":
+      return new DocWriterActor(id, config);
     default:
       throw new Error(`Cannot create specialist actor for role: ${role}`);
   }

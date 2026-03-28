@@ -7,6 +7,10 @@ import {
   ShieldCheck,
   Rocket,
   Bot,
+  Palette,
+  FlaskConical,
+  Database,
+  BookOpen,
 } from "lucide-react";
 import type { AgentRole } from "@/lib/agents/types";
 import { AGENT_DEFINITIONS } from "@/lib/agents/types";
@@ -17,6 +21,10 @@ const AGENT_ICONS: Record<AgentRole, React.ComponentType<{ className?: string }>
   developer: Code2,
   reviewer: ShieldCheck,
   devops: Rocket,
+  ux_designer: Palette,
+  tester: FlaskConical,
+  db_migrator: Database,
+  doc_writer: BookOpen,
 };
 
 const AGENT_BG: Record<AgentRole, string> = {
@@ -25,6 +33,10 @@ const AGENT_BG: Record<AgentRole, string> = {
   developer: "bg-green-500",
   reviewer: "bg-amber-500",
   devops: "bg-rose-500",
+  ux_designer: "bg-fuchsia-500",
+  tester: "bg-sky-500",
+  db_migrator: "bg-emerald-500",
+  doc_writer: "bg-orange-500",
 };
 
 interface AgentAvatarProps {

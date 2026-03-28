@@ -5,10 +5,10 @@
  * specialized agents (Architect, Developer, Reviewer, DevOps) as needed.
  */
 
-export type AgentRole = "pm" | "architect" | "developer" | "reviewer" | "devops";
+export type AgentRole = "pm" | "architect" | "developer" | "reviewer" | "devops" | "ux_designer" | "tester" | "db_migrator" | "doc_writer";
 
 /** Background agent roles — persist across requests, managed by BackgroundActorSystem */
-export type BackgroundAgentRole = "embedding" | "retrieval" | "summarizer" | "file_processor" | "file_analyzer";
+export type BackgroundAgentRole = "embedding" | "retrieval" | "summarizer" | "file_processor" | "file_analyzer" | "code_validator" | "dependency_resolver" | "template_cache" | "progress_tracker";
 
 export type TaskStatus = "idle" | "running" | "completed" | "error";
 
@@ -82,6 +82,34 @@ export const AGENT_DEFINITIONS: Record<AgentRole, AgentMeta> = {
     color: "text-rose-500",
     description: "DevOps — handles deployment and infrastructure",
   },
+  ux_designer: {
+    role: "ux_designer",
+    label: "UX Designer",
+    icon: "Palette",
+    color: "text-fuchsia-500",
+    description: "UX Designer — creates design tokens, color palette, typography, and component hierarchy",
+  },
+  tester: {
+    role: "tester",
+    label: "Tester",
+    icon: "FlaskConical",
+    color: "text-sky-500",
+    description: "Tester — generates unit tests, integration tests, and E2E smoke tests",
+  },
+  db_migrator: {
+    role: "db_migrator",
+    label: "DB Migrator",
+    icon: "Database",
+    color: "text-emerald-500",
+    description: "DB Migrator — generates database schema, migration scripts, and seed data",
+  },
+  doc_writer: {
+    role: "doc_writer",
+    label: "Doc Writer",
+    icon: "BookOpen",
+    color: "text-orange-500",
+    description: "Doc Writer — generates README, API documentation, and architecture docs",
+  },
 };
 
 export interface BackgroundAgentMeta {
@@ -127,6 +155,34 @@ export const BACKGROUND_AGENT_DEFINITIONS: Record<BackgroundAgentRole, Backgroun
     icon: "FileBarChart",
     color: "text-pink-500",
     description: "File Analyzer — generates summaries and analysis of uploaded files",
+  },
+  code_validator: {
+    role: "code_validator",
+    label: "Code Validator",
+    icon: "CheckCircle",
+    color: "text-lime-500",
+    description: "Code Validator — AST-based syntax and import validation (no LLM)",
+  },
+  dependency_resolver: {
+    role: "dependency_resolver",
+    label: "Dep Resolver",
+    icon: "Package",
+    color: "text-violet-500",
+    description: "Dependency Resolver — validates npm package existence and version compatibility",
+  },
+  template_cache: {
+    role: "template_cache",
+    label: "Template Cache",
+    icon: "Layers",
+    color: "text-slate-500",
+    description: "Template Cache — provides pre-built template structures and boilerplate",
+  },
+  progress_tracker: {
+    role: "progress_tracker",
+    label: "Progress Tracker",
+    icon: "BarChart3",
+    color: "text-yellow-500",
+    description: "Progress Tracker — aggregates pipeline progress across all agents",
   },
 };
 
@@ -175,4 +231,32 @@ export interface PMDispatchParallelAction {
   }>;
 }
 
-export type PMAction = PMDispatchAction | PMRespondAction | PMCompleteAction | PMDispatchParallelAction;
+export interface PMExecuteDAGAction {
+  action: "execute_dag";
+  dag: ExecutionDAG;
+}
+
+export type PMAction = PMDispatchAction | PMRespondAction | PMCompleteAction | PMDispatchParallelAction | PMExecuteDAGAction;
+
+// ---- DAG Execution Types ----
+
+export interface DAGNode {
+  id: string;                    // e.g. "architect-0", "ux-0"
+  role: AgentRole;               // agent role
+  task: string;                  // task description
+  dependsOn: string[];           // IDs of prerequisite nodes
+  timeout?: number;              // per-node timeout in ms
+  retryPolicy?: {
+    maxRetries: number;
+    strategy: "retry" | "skip" | "escalate";
+  };
+}
+
+export interface ExecutionDAG {
+  nodes: DAGNode[];
+  metadata: {
+    phases: string[][];          // topological layers
+    parallelismDegree: number;   // max concurrent agents
+    estimatedDuration: number;
+  };
+}
