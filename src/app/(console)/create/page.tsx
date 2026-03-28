@@ -16,15 +16,14 @@ import {
   ClipboardList,
   Monitor,
   Package,
-  Zap,
-  MessageSquare,
-  Search,
   Home,
+  Sparkles,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  Send,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { ChatPanel } from "@/components/chat/chat-panel";
-
-type CreateMode = "quick" | "chat";
 
 interface ServiceRef {
   instanceId?: string;
@@ -111,15 +110,28 @@ const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>
 
 const CATEGORIES = ["finance", "legal", "sales", "hr", "marketing", "pm", "it", "ops", "realestate"];
 
+// Featured presets to show on the homepage (one per category for variety)
+const FEATURED_PRESET_IDS = [
+  "sales-crm",
+  "finance-expense-report",
+  "hr-leave-system",
+  "pm-task-board",
+  "marketing-campaign",
+  "legal-contract-manager",
+  "it-helpdesk",
+  "ops-inventory",
+];
+
 export default function CreateAppPage() {
   const t = useTranslations("create");
   const router = useRouter();
 
-  const [mode, setMode] = useState<CreateMode>("quick");
+  const [showChat, setShowChat] = useState(false);
+  const [showAllTemplates, setShowAllTemplates] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [creatingPreset, setCreatingPreset] = useState<string | null>(null);
   const [presetError, setPresetError] = useState<string | null>(null);
+  const [inputValue, setInputValue] = useState("");
 
   // Chat mode state
   const [creatingApp, setCreatingApp] = useState(false);
@@ -140,7 +152,6 @@ export default function CreateAppPage() {
         }
       })
       .catch(() => {});
-    // Also fetch service instances to resolve types to IDs
     fetch("/api/services")
       .then((r) => r.json())
       .then((services) => {
@@ -157,7 +168,6 @@ export default function CreateAppPage() {
 
   const handleCreateApp = useCallback(
     async (action: CreateAppAction) => {
-      // Resolve required services: check authorization and map types to instance IDs
       let serviceIds: string[] | undefined;
       if (action.requiredServices && action.requiredServices.length > 0) {
         const getServiceType = (s: string | ServiceRef): string =>
@@ -173,7 +183,6 @@ export default function CreateAppPage() {
           return;
         }
 
-        // Resolve service types to instance IDs (prefer matching by instanceId if provided)
         const resolvedIds: string[] = [];
         const missingTypes: string[] = [];
         for (const svc of action.requiredServices) {
@@ -199,7 +208,6 @@ export default function CreateAppPage() {
       setCreatingApp(true);
       setServiceWarning(null);
       try {
-        // Test service connections before creating the app
         if (serviceIds && serviceIds.length > 0) {
           const testResults = await Promise.all(
             serviceIds.map(async (svcId: string) => {
@@ -240,7 +248,6 @@ export default function CreateAppPage() {
         });
         if (!res.ok) throw new Error("Failed to create app");
         const app = await res.json();
-        // Save creation chat messages to the app
         for (const msg of chatMessagesRef.current) {
           await fetch(`/api/apps/${app.id}/chat`, {
             method: "POST",
@@ -248,7 +255,6 @@ export default function CreateAppPage() {
             body: JSON.stringify({ role: msg.role, content: msg.content }),
           }).catch(() => {});
         }
-        // Start dev server then navigate to app detail page with develop flag
         await fetch(`/api/apps/${app.id}/lifecycle`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -302,7 +308,6 @@ export default function CreateAppPage() {
           throw new Error(data.error || t("createFailed"));
         }
         const app = await res.json();
-        // Start the dev server inside the container
         await fetch(`/api/apps/${app.id}/lifecycle`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -317,147 +322,30 @@ export default function CreateAppPage() {
     [creatingPreset, t, router]
   );
 
+  const handleInputSubmit = () => {
+    if (!inputValue.trim()) return;
+    setShowChat(true);
+  };
+
+  const featuredPresets = APP_PRESETS.filter((p) => FEATURED_PRESET_IDS.includes(p.id));
+
   const filteredPresets = APP_PRESETS.filter((p) => {
     if (selectedCategory && p.category !== selectedCategory) return false;
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      const name = t(`presets.${p.id}.name`).toLowerCase();
-      const desc = t(`presets.${p.id}.description`).toLowerCase();
-      return name.includes(query) || desc.includes(query);
-    }
     return true;
   });
 
-  return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{t("title")}</h1>
-      </div>
-
-      {/* Mode Toggle */}
-      <div className="mb-6 grid grid-cols-2 gap-3 max-w-lg">
-        <button
-          onClick={() => setMode("quick")}
-          className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors ${
-            mode === "quick"
-              ? "border-primary bg-primary/5"
-              : "border-border hover:border-primary/40 hover:bg-accent"
-          }`}
-        >
-          <div className={`rounded-lg p-2 shrink-0 ${mode === "quick" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
-            <Zap className="h-4 w-4" />
-          </div>
-          <div>
-            <p className="font-semibold text-sm">{t("modeQuick")}</p>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{t("modeQuickDescription")}</p>
-          </div>
-        </button>
-
-        <button
-          onClick={() => setMode("chat")}
-          className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors ${
-            mode === "chat"
-              ? "border-primary bg-primary/5"
-              : "border-border hover:border-primary/40 hover:bg-accent"
-          }`}
-        >
-          <div className={`rounded-lg p-2 shrink-0 ${mode === "chat" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
-            <MessageSquare className="h-4 w-4" />
-          </div>
-          <div>
-            <p className="font-semibold text-sm">{t("modeChat")}</p>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{t("modeChatDescription")}</p>
-          </div>
-        </button>
-      </div>
-
-      {/* Quick Create Mode */}
-      {mode === "quick" && (
-        <div className="flex-1 overflow-y-auto space-y-4 pb-4">
-          {presetError && (
-            <div className="flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-700 dark:bg-red-950 dark:text-red-200">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              {presetError}
-            </div>
-          )}
-          <p className="text-sm text-muted-foreground">{t("quickCreate")}</p>
-
-          {/* Search */}
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder={t("searchPlaceholder")}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-
-          {/* Category Filter */}
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant={selectedCategory === null ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedCategory(null)}
-            >
-              {t("allCategories")}
-            </Button>
-            {CATEGORIES.map((cat) => {
-              const Icon = CATEGORY_ICONS[cat];
-              return (
-                <Button
-                  key={cat}
-                  variant={selectedCategory === cat ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {t(`presetCategories.${cat}`)}
-                </Button>
-              );
-            })}
-          </div>
-
-          {/* Preset Grid */}
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {filteredPresets.map((preset) => {
-              const Icon = CATEGORY_ICONS[preset.category];
-              const isCreating = creatingPreset === preset.id;
-              return (
-                <button
-                  key={preset.id}
-                  onClick={() => handlePresetCreate(preset)}
-                  disabled={!!creatingPreset}
-                  className="flex items-start gap-3 rounded-xl border bg-card p-4 text-left transition-colors hover:shadow-md hover:border-primary/40 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <div className="rounded-lg bg-muted p-2 shrink-0 mt-0.5">
-                    {isCreating ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Icon className="h-4 w-4" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm">{t(`presets.${preset.id}.name`)}</span>
-                      <Badge variant="outline" className="text-xs font-normal">
-                        {t(`presetCategories.${preset.category}`)}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-snug">
-                      {t(`presets.${preset.id}.description`)}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+  // When in full chat mode, show the chat interface
+  if (showChat) {
+    return (
+      <div className="flex h-[calc(100vh-7rem)] flex-col">
+        <div className="mb-4">
+          <button
+            onClick={() => setShowChat(false)}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            &larr; {t("backToHome")}
+          </button>
         </div>
-      )}
-
-      {/* Chat Mode */}
-      {mode === "chat" && (
         <div className="flex flex-1 min-h-0">
           <div className="flex flex-1 flex-col min-h-0 max-w-3xl">
             {serviceWarning && (
@@ -475,7 +363,216 @@ export default function CreateAppPage() {
               onAssistantResponse={handleAssistantResponse}
               onUserMessage={handleUserMessage}
               onAssistantComplete={handleAssistantComplete}
+              initialMessages={inputValue.trim() ? [{ id: "init-1", role: "user", content: inputValue.trim() }] : []}
             />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-[calc(100vh-7rem)] flex-col overflow-y-auto">
+      {/* Hero Section */}
+      <div className="flex flex-col items-center justify-center pt-8 pb-6 md:pt-16 md:pb-10">
+        <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
+          <Sparkles className="h-4 w-4" />
+          {t("heroBadge")}
+        </div>
+        <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-center max-w-2xl leading-tight">
+          {t("heroTitle")}
+        </h1>
+        <p className="mt-3 text-base md:text-lg text-muted-foreground text-center max-w-lg">
+          {t("heroSubtitle")}
+        </p>
+      </div>
+
+      {/* AI Input Box */}
+      <div className="mx-auto w-full max-w-2xl px-4 mb-10">
+        <div className="relative">
+          <div className="flex items-center gap-2 rounded-2xl border border-border/50 bg-card shadow-md hover:shadow-lg focus-within:shadow-lg transition-all p-2">
+            <input
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleInputSubmit();
+                }
+              }}
+              placeholder={t("heroInputPlaceholder")}
+              className="flex-1 bg-transparent border-0 outline-none px-3 py-2.5 text-base placeholder:text-muted-foreground/60"
+            />
+            <Button
+              size="icon"
+              className="h-10 w-10 rounded-xl shrink-0"
+              onClick={handleInputSubmit}
+              disabled={!inputValue.trim()}
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-3 justify-center">
+            {[t("suggestionCRM"), t("suggestionInvoice"), t("suggestionLeave")].map((suggestion) => (
+              <button
+                key={suggestion}
+                onClick={() => {
+                  setInputValue(suggestion);
+                  setShowChat(true);
+                }}
+                className="rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="mx-auto w-full max-w-4xl px-4 mb-6">
+        <div className="flex items-center gap-4">
+          <div className="flex-1 h-px bg-border" />
+          <span className="text-sm text-muted-foreground">{t("orChooseTemplate")}</span>
+          <div className="flex-1 h-px bg-border" />
+        </div>
+      </div>
+
+      {presetError && (
+        <div className="mx-auto max-w-4xl px-4 mb-4">
+          <div className="flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-700 dark:bg-red-950 dark:text-red-200">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {presetError}
+          </div>
+        </div>
+      )}
+
+      {/* Featured Templates */}
+      {!showAllTemplates && (
+        <div className="mx-auto w-full max-w-4xl px-4 pb-6">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {featuredPresets.map((preset) => {
+              const Icon = CATEGORY_ICONS[preset.category];
+              const isCreating = creatingPreset === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  onClick={() => handlePresetCreate(preset)}
+                  disabled={!!creatingPreset}
+                  className="group flex flex-col items-center gap-3 rounded-2xl border bg-card p-5 text-center transition-all hover:shadow-lg hover:border-primary/40 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <div className="rounded-xl bg-primary/10 p-3 group-hover:bg-primary/15 transition-colors">
+                    {isCreating ? (
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    ) : (
+                      <Icon className="h-5 w-5 text-primary" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">{t(`presets.${preset.id}.name`)}</p>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-snug">
+                      {t(`presets.${preset.id}.description`)}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex justify-center mt-6">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAllTemplates(true)}
+              className="rounded-full gap-2"
+            >
+              {t("viewAllTemplates")}
+              <ChevronDown className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* All Templates */}
+      {showAllTemplates && (
+        <div className="mx-auto w-full max-w-4xl px-4 pb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">{t("allTemplatesTitle")}</h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setShowAllTemplates(false);
+                setSelectedCategory(null);
+              }}
+              className="gap-1"
+            >
+              <ChevronUp className="h-3.5 w-3.5" />
+              {t("collapse")}
+            </Button>
+          </div>
+
+          {/* Category Filter */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            <Button
+              variant={selectedCategory === null ? "default" : "outline"}
+              size="sm"
+              className="rounded-full"
+              onClick={() => setSelectedCategory(null)}
+            >
+              {t("allCategories")}
+            </Button>
+            {CATEGORIES.map((cat) => {
+              const Icon = CATEGORY_ICONS[cat];
+              return (
+                <Button
+                  key={cat}
+                  variant={selectedCategory === cat ? "default" : "outline"}
+                  size="sm"
+                  className="rounded-full"
+                  onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {t(`presetCategories.${cat}`)}
+                </Button>
+              );
+            })}
+          </div>
+
+          {/* All Preset Grid */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredPresets.map((preset) => {
+              const Icon = CATEGORY_ICONS[preset.category];
+              const isCreating = creatingPreset === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  onClick={() => handlePresetCreate(preset)}
+                  disabled={!!creatingPreset}
+                  className="group flex items-start gap-3 rounded-xl border bg-card p-4 text-left transition-all hover:shadow-md hover:border-primary/40 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <div className="rounded-lg bg-primary/10 p-2 shrink-0 mt-0.5 group-hover:bg-primary/15 transition-colors">
+                    {isCreating ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    ) : (
+                      <Icon className="h-4 w-4 text-primary" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm">{t(`presets.${preset.id}.name`)}</span>
+                      <Badge variant="outline" className="text-xs font-normal">
+                        {t(`presetCategories.${preset.category}`)}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-snug">
+                      {t(`presets.${preset.id}.description`)}
+                    </p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

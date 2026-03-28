@@ -1,13 +1,88 @@
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <h1 className="text-4xl font-bold">{{name}}</h1>
-      {{#if description}}
-      <p className="mt-4 text-xl text-gray-600">{{description}}</p>
-      {{/if}}
-      <p className="mt-8 text-gray-500">
-        Edit <code className="font-mono bg-gray-100 px-2 py-1 rounded">src/app/page.tsx</code> to get started.
-      </p>
+    <main className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+      {/* Header */}
+      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+          <h1 className="text-xl font-bold text-gray-900">{{name}}</h1>
+          <nav className="flex gap-4 text-sm text-gray-600">
+            <a href="#features" className="hover:text-gray-900 transition-colors">功能</a>
+            <a href="#about" className="hover:text-gray-900 transition-colors">關於</a>
+            <a href="#contact" className="hover:text-gray-900 transition-colors">聯絡</a>
+          </nav>
+        </div>
+      </header>
+
+      {/* Hero */}
+      <section className="max-w-5xl mx-auto px-6 pt-20 pb-16 text-center">
+        <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-1.5 text-sm text-blue-700 font-medium mb-6">
+          ✨ 歡迎使用
+        </div>
+        <h2 className="text-4xl md:text-5xl font-bold text-gray-900 tracking-tight leading-tight">
+          {{name}}
+        </h2>
+        {{#if description}}
+        <p className="mt-4 text-lg text-gray-500 max-w-2xl mx-auto leading-relaxed">
+          {{description}}
+        </p>
+        {{/if}}
+        <div className="mt-8 flex gap-3 justify-center">
+          <a href="#features" className="px-6 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors">
+            了解更多
+          </a>
+          <a href="#contact" className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
+            聯絡我們
+          </a>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section id="features" className="max-w-5xl mx-auto px-6 py-16">
+        <h3 className="text-2xl font-bold text-gray-900 text-center mb-10">主要功能</h3>
+        <div className="grid md:grid-cols-3 gap-6">
+          {[
+            { icon: "📊", title: "資料管理", desc: "輕鬆管理您的資料，支援匯入匯出與即時搜尋" },
+            { icon: "⚡", title: "快速高效", desc: "現代化架構設計，提供流暢的使用體驗" },
+            { icon: "🔒", title: "安全可靠", desc: "採用業界標準的安全機制，保護您的重要資料" },
+          ].map((feature) => (
+            <div key={feature.title} className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div className="text-3xl mb-3">{feature.icon}</div>
+              <h4 className="text-base font-semibold text-gray-900 mb-2">{feature.title}</h4>
+              <p className="text-sm text-gray-500 leading-relaxed">{feature.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* About */}
+      <section id="about" className="bg-gray-50 border-y">
+        <div className="max-w-5xl mx-auto px-6 py-16 text-center">
+          <h3 className="text-2xl font-bold text-gray-900 mb-4">關於我們</h3>
+          <p className="text-gray-500 max-w-2xl mx-auto leading-relaxed">
+            {{#if description}}
+            {{description}}。我們致力於提供最佳的使用體驗，讓您的工作更有效率。
+            {{else}}
+            我們致力於提供最佳的使用體驗，讓您的工作更有效率。
+            {{/if}}
+          </p>
+        </div>
+      </section>
+
+      {/* Contact */}
+      <section id="contact" className="max-w-5xl mx-auto px-6 py-16 text-center">
+        <h3 className="text-2xl font-bold text-gray-900 mb-4">聯絡我們</h3>
+        <p className="text-gray-500 mb-6">有任何問題或建議，歡迎與我們聯繫</p>
+        <a href="mailto:contact@example.com" className="inline-flex px-6 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors">
+          寄送郵件
+        </a>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t bg-white">
+        <div className="max-w-5xl mx-auto px-6 py-8 text-center text-sm text-gray-400">
+          © 2024 {{name}}. All rights reserved.
+        </div>
+      </footer>
     </main>
   );
 }
