@@ -25,6 +25,9 @@ export interface StreamChatResult {
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "./models";
 export { AVAILABLE_MODELS, DEFAULT_MODEL };
 
+import { llmCircuitBreaker, CircuitOpenError } from "./circuit-breaker";
+export { getLLMCircuitState, CircuitOpenError } from "./circuit-breaker";
+
 /** Per-agent model mapping for production (NODE_ENV=production) */
 const PROD_AGENT_MODEL_MAP: Record<string, string> = {
   pm: "openai/gpt-4o",
@@ -237,6 +240,11 @@ export async function streamChat(
   systemPromptOverride?: string,
   abortSignal?: AbortSignal,
 ): Promise<StreamChatResult> {
+  // Circuit breaker: fail fast when the LLM provider is unhealthy
+  if (!llmCircuitBreaker.canRequest()) {
+    throw new CircuitOpenError();
+  }
+
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error("OPENROUTER_API_KEY is not set");
@@ -318,7 +326,14 @@ export async function streamChat(
       }
     }
 
+    llmCircuitBreaker.recordSuccess();
     return { content: fullContent, usage };
+  } catch (error) {
+    // Don't count CircuitOpenError itself as a failure (it's thrown before the request)
+    if (!(error instanceof CircuitOpenError)) {
+      llmCircuitBreaker.recordFailure();
+    }
+    throw error;
   } finally {
     clearTimeout(timeoutId);
   }
