@@ -353,7 +353,7 @@ export default function CreateAppPage() {
           </button>
         </div>
         <div className="flex flex-1 min-h-0 gap-4">
-          <div className="flex flex-1 flex-col min-h-0 max-w-3xl">
+          <div className="flex flex-1 flex-col min-h-0">
             {serviceWarning && (
               <div className="mb-3 flex items-center gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
