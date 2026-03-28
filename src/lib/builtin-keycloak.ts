@@ -13,8 +13,8 @@ export async function provisionKeycloakRealm(
   orgSlug: string
 ): Promise<{ url: string; realm: string; clientId: string; clientSecret: string }> {
   const url = process.env.PLATFORM_KEYCLOAK_URL || "http://localhost:8180";
-  const adminUser = process.env.PLATFORM_KEYCLOAK_ADMIN_USER || "admin";
-  const adminPassword = process.env.PLATFORM_KEYCLOAK_ADMIN_PASSWORD || "admin";
+  const _adminUser = process.env.PLATFORM_KEYCLOAK_ADMIN_USER || "admin";
+  const _adminPassword = process.env.PLATFORM_KEYCLOAK_ADMIN_PASSWORD || "admin";
 
   if (!url) {
     throw new Error(

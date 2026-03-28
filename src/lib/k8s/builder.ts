@@ -7,9 +7,8 @@
 
 import * as k8s from "@kubernetes/client-node";
 import { batchApi, coreApi, config } from "./client";
-import { mkdtemp, writeFile, rm, readdir, readFile, stat } from "fs/promises";
+import { writeFile } from "fs/promises";
 import { join } from "path";
-import { tmpdir } from "os";
 import { execFile } from "child_process";
 import { promisify } from "util";
 

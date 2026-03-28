@@ -9,7 +9,7 @@
  */
 
 import { prisma } from "@/lib/db";
-import { coreApi, appsApi, config, isK8sNotFound } from "./client";
+import { appsApi, config, isK8sNotFound } from "./client";
 import { devPodName, prodDeploymentName } from "./manifests";
 import { getPodStatus } from "./exec";
 

@@ -82,6 +82,7 @@ export function FileEditor({ appId, filePath, onBack, containerType = "dev" }: F
       })
       .catch(() => setError(t("failedToLoadFile")))
       .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- t is stable from next-intl
   }, [appId, filePath, containerType]);
 
   const handleSave = useCallback(async () => {

@@ -14,7 +14,6 @@ import {
 } from "./manifests";
 import { tagImage as tagRegistryImage, getImageUrl } from "./builder";
 import { isClusterAvailable } from "./client";
-import * as k8s from "@kubernetes/client-node";
 
 // ── Tag Image ────────────────────────────────────────────────────────────────
 
@@ -211,7 +210,6 @@ export async function getAppLogs(
   lines: number = 100,
 ): Promise<string> {
   const ns = config.prodNamespace;
-  const deployName = prodDeploymentName(orgSlug, slug);
 
   try {
     // Find pods by Deployment labels

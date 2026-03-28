@@ -17,7 +17,7 @@
  */
 
 import type { BackgroundAgentRole } from "../agents/types";
-import type { BackgroundMessage, ActorStats } from "./types";
+import type { BackgroundMessage } from "./types";
 import { enqueueTask, enqueueAndWait, getAllQueueStats } from "../queue";
 import type { QueueName, QueueStats } from "../queue/types";
 

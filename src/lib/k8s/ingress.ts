@@ -18,8 +18,6 @@ import {
 import {
   ingressRouteName,
   stripMiddlewareName,
-  devServiceName,
-  prodServiceName,
   generateDevIngressRouteSpec,
   generateProdIngressRouteSpec,
   generateStripPrefixMiddlewareSpec,

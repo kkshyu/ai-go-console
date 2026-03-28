@@ -75,12 +75,12 @@ export function ImportAppDialog({
   const [step, setStep] = useState<ImportStep>("upload");
   const [isDragging, setIsDragging] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
-  const [importSessionId, setImportSessionId] = useState<string | null>(null);
+  const [_importSessionId, setImportSessionId] = useState<string | null>(null);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [autostartEvents, setAutostartEvents] = useState<AutostartEvent[]>([]);
   const [fileCount, setFileCount] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
-  const [createdAppId, setCreatedAppId] = useState<string | null>(null);
+  const [_createdAppId, setCreatedAppId] = useState<string | null>(null);
   const folderInputRef = useCallback((node: HTMLInputElement | null) => {
     if (node) {
       node.setAttribute("webkitdirectory", "");
@@ -166,6 +166,7 @@ export function ImportAppDialog({
         setStep("error");
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startPolling is stable ref-based
     [t]
   );
 
@@ -324,6 +325,7 @@ export function ImportAppDialog({
       );
       setStep("error");
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- startAutostart is stable ref-based
   }, [analysis]);
 
   // Connect to autostart SSE

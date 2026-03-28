@@ -193,7 +193,7 @@ export class DAGExecutor {
    * Execute a single DAG node by spawning an agent and waiting for its result.
    */
   private async executeNode(node: DAGNode): Promise<NodeResult> {
-    const { system, sendEvent, saveArtifact, blackboard, traceId } = this.config;
+    const { system, sendEvent, blackboard, traceId } = this.config;
 
     try {
       // Build context from blackboard (results of dependent nodes)

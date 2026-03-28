@@ -13,8 +13,6 @@ import {
   copyBufferToPod,
   copyFromPod,
   readFileFromPod,
-  readDirectoryFromPod,
-  listFileTreeFromPod,
   installPackagesInPod,
   getPodStatus,
 } from "./exec";
@@ -23,15 +21,10 @@ import {
   devServiceName,
   generateDevPodSpec,
   generateDevServiceSpec,
-  type DevPodOptions,
 } from "./manifests";
 import { getImageUrl, getBaseImageUrl } from "./builder";
 import { getTemplate } from "@/lib/templates";
 import { CONSOLE_BRIDGE_SCRIPT } from "@/lib/console-bridge";
-import * as k8s from "@kubernetes/client-node";
-import { mkdtemp, rm } from "fs/promises";
-import { join } from "path";
-import { tmpdir } from "os";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

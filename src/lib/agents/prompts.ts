@@ -204,7 +204,7 @@ export function buildArchitectPrompt(
   // Separate working vs non-working for the prompt
   const okServices = serviceInstances?.filter((s) => s.status === "ok") ?? [];
   const failedServices = serviceInstances?.filter((s) => s.status === "failed") ?? [];
-  const untestedServices = serviceInstances?.filter((s) => s.status === "untested" || !s.status) ?? [];
+  const _untestedServices = serviceInstances?.filter((s) => s.status === "untested" || !s.status) ?? [];
 
   return `You are the Architect Agent in a multi-agent app creation system called AI Go.
 
