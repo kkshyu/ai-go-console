@@ -2,7 +2,7 @@ services:
   # ── Platform database ─────────────────────────────────────────────────
   # Console 自身的資料庫（Prisma / NextAuth 等）
   postgres:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg17
     container_name: aigo-postgres
     restart: unless-stopped
     ports:

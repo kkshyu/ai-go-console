@@ -20,7 +20,6 @@ interface FileAttachmentInputProps {
   disabled?: boolean;
   maxFiles?: number;
   maxSizeMB?: number;
-  pipelineId?: string;
 }
 
 function formatFileSize(bytes: number): string {
@@ -48,7 +47,6 @@ export function FileAttachmentInput({
   disabled = false,
   maxFiles = 5,
   maxSizeMB = 10,
-  pipelineId,
 }: FileAttachmentInputProps) {
   const t = useTranslations("chat");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -85,10 +83,6 @@ export function FileAttachmentInput({
       for (const file of valid) {
         formData.append("files", file);
       }
-      if (pipelineId) {
-        formData.append("pipelineId", pipelineId);
-      }
-
       try {
         const res = await fetch("/api/chat/files", {
           method: "POST",
@@ -119,7 +113,7 @@ export function FileAttachmentInput({
         onAttachmentsChange(attachments);
       }
     },
-    [attachments, onAttachmentsChange, maxFiles, maxSizeMB, pipelineId],
+    [attachments, onAttachmentsChange, maxFiles, maxSizeMB],
   );
 
   const handleFileSelect = useCallback(
