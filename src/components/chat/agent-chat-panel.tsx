@@ -3,16 +3,15 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Send, User, Loader2, MessageCircle } from "lucide-react";
-import { DEFAULT_MODEL } from "@/lib/ai";
+import { Send, User, Loader2, Zap, MessageCircle } from "lucide-react";
+import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/ai";
 import { FileAttachmentInput, type FileAttachment } from "@/components/chat/file-attachment-input";
 import {
   createInitialOrchestrationState,
 } from "@/lib/agents/types";
 import type { AgentRole, OrchestrationState } from "@/lib/agents/types";
-import { PipelineProgress } from "./pipeline-progress";
+import { PipelineProgress, type ActorStatusInfo } from "./pipeline-progress";
 import { MarkdownContent } from "@/components/chat/markdown-content";
 import { AgentAvatar } from "./agent-avatar";
 
@@ -23,6 +22,19 @@ export interface AgentMessage {
   agentRole?: AgentRole | null;
   fileIds?: string[];
   files?: FileAttachment[];
+}
+
+interface ModelTokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+function formatTokenCount(count: number): string {
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}k`;
+  }
+  return count.toString();
 }
 
 export interface AgentChatPanelProps {
@@ -36,6 +48,7 @@ export interface AgentChatPanelProps {
   placeholder?: string;
   emptyStateText?: string;
   generatingText?: string;
+  totalTokensLabel?: string;
   externalLoading?: boolean;
   pipelineId?: string;
   showProgress?: boolean;
@@ -55,6 +68,7 @@ export function AgentChatPanel({
   placeholder,
   emptyStateText,
   generatingText,
+  totalTokensLabel,
   externalLoading = false,
   pipelineId,
   showProgress = true,
@@ -65,17 +79,21 @@ export function AgentChatPanel({
   const resolvedPlaceholder = placeholder ?? t("placeholder");
   const resolvedEmptyStateText = emptyStateText ?? t("emptyState");
   const resolvedGeneratingText = generatingText ?? t("generating");
+  const resolvedTotalTokensLabel = totalTokensLabel ?? t("totalTokens");
   const [messages, setMessages] = useState<AgentMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedModel] = useState<string>(DEFAULT_MODEL);
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL);
+  const [tokenUsage, setTokenUsage] = useState<Record<string, ModelTokenUsage>>({});
   const [orchState, setOrchState] = useState<OrchestrationState>(
     createInitialOrchestrationState()
   );
   const [currentAgent, setCurrentAgent] = useState<AgentRole | null>(null);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
   const [statusMessage, setStatusMessage] = useState<string>("");
+  const [actorStatuses, setActorStatuses] = useState<ActorStatusInfo[]>([]);
+  const [restartEvent, setRestartEvent] = useState<{ actorId: string; role: string; restartCount: number } | null>(null);
   const [needsUserInput, setNeedsUserInput] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -88,6 +106,7 @@ export function AgentChatPanel({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
 
   const sendMessage = useCallback(
     async (messageContent: string, messageFileIds?: string[], messageFiles?: FileAttachment[]) => {
@@ -104,8 +123,8 @@ export function AgentChatPanel({
       setMessages(newMessages);
       setInput("");
       setAttachments([]);
-      setNeedsUserInput(false);
       setIsLoading(true);
+      setNeedsUserInput(false);
 
       onUserMessage?.(userMessage.content);
 
@@ -199,14 +218,20 @@ export function AgentChatPanel({
                   onOrchestrationUpdate?.(parsed.orchestrationState);
                 }
 
-                // PM needs user input — add as chat message + show prompt
+                // PM needs user input — show prompt
                 if (parsed.needsUserInput) {
                   setNeedsUserInput(true);
-                  const inputMsgId = (Date.now() + Math.random()).toString();
-                  setMessages((prev) => [
-                    ...prev,
-                    { id: inputMsgId, role: "assistant", content: parsed.needsUserInputMessage || "請問還有什麼需要補充的嗎？", agentRole: "pm" },
-                  ]);
+                }
+
+                // Update actor status to idle
+                if (parsed.agentRole && parsed.agentRole !== "pm") {
+                  setActorStatuses((prev) =>
+                    prev.map((a) =>
+                      a.role === parsed.agentRole
+                        ? { ...a, status: "idle" as const }
+                        : a
+                    )
+                  );
                 }
 
                 // Reset for next agent
@@ -221,6 +246,24 @@ export function AgentChatPanel({
                 setCurrentAgent(parsed.agentRole);
                 setOrchState(parsed.orchestrationState);
                 onOrchestrationUpdate?.(parsed.orchestrationState);
+                // Track active actor status
+                if (parsed.agentRole !== "pm") {
+                  setActorStatuses((prev) => {
+                    const actorId = `${parsed.agentRole}-0`;
+                    const existing = prev.findIndex((a) => a.actorId === actorId);
+                    const updated: ActorStatusInfo = {
+                      actorId,
+                      role: parsed.agentRole,
+                      status: "processing",
+                    };
+                    if (existing >= 0) {
+                      const next = [...prev];
+                      next[existing] = updated;
+                      return next;
+                    }
+                    return [...prev, updated];
+                  });
+                }
               }
 
               // Translated content (accumulated for rawContent, not shown in-place)
@@ -268,6 +311,35 @@ export function AgentChatPanel({
                 continue;
               }
 
+              // Actor restarted by supervisor
+              if (parsed.actorRestarted) {
+                setRestartEvent({
+                  actorId: parsed.actorRestarted.actorId,
+                  role: parsed.actorRestarted.role,
+                  restartCount: parsed.actorRestarted.restartCount,
+                });
+                // Update actor statuses
+                setActorStatuses((prev) => {
+                  const existing = prev.findIndex(
+                    (a) => a.actorId === parsed.actorRestarted.actorId
+                  );
+                  const updated: ActorStatusInfo = {
+                    actorId: parsed.actorRestarted.actorId,
+                    role: parsed.actorRestarted.role as AgentRole,
+                    status: "restarting",
+                    restartCount: parsed.actorRestarted.restartCount,
+                  };
+                  if (existing >= 0) {
+                    const next = [...prev];
+                    next[existing] = updated;
+                    return next;
+                  }
+                  return [...prev, updated];
+                });
+                // Clear restart event after 3 seconds
+                setTimeout(() => setRestartEvent(null), 3000);
+                continue;
+              }
 
               // Files written to Docker container by backend
               if (parsed.filesWritten) {
@@ -281,11 +353,32 @@ export function AgentChatPanel({
                 const errorMsgId = (Date.now() + Math.random()).toString();
                 setMessages((prev) => [
                   ...prev,
-                  { id: errorMsgId, role: "assistant", content: parsed.error, agentRole: "pm" },
+                  { id: errorMsgId, role: "assistant", content: `Error: ${parsed.error}`, agentRole: "pm" },
                 ]);
               }
 
-              // Token usage (ignored — not shown to users)
+              // Token usage
+              if (parsed.usage && parsed.model) {
+                setTokenUsage((prev) => {
+                  const existing = prev[parsed.model] || {
+                    promptTokens: 0,
+                    completionTokens: 0,
+                    totalTokens: 0,
+                  };
+                  return {
+                    ...prev,
+                    [parsed.model]: {
+                      promptTokens:
+                        existing.promptTokens + (parsed.usage.promptTokens || 0),
+                      completionTokens:
+                        existing.completionTokens +
+                        (parsed.usage.completionTokens || 0),
+                      totalTokens:
+                        existing.totalTokens + (parsed.usage.totalTokens || 0),
+                    },
+                  };
+                });
+              }
             } catch {}
           }
         }
@@ -307,6 +400,7 @@ export function AgentChatPanel({
         setCurrentAgent(null);
         setAgentPhase(null);
         setStatusMessage("");
+        setRestartEvent(null);
       }
     },
     [
@@ -345,6 +439,11 @@ export function AgentChatPanel({
       sendMessage(autoSendMessage);
     }
   }, [autoSendMessage, isLoading, externalLoading, sendMessage]);
+
+  const totalTokens = Object.values(tokenUsage).reduce(
+    (sum, u) => sum + u.totalTokens,
+    0
+  );
 
   const disabled = isLoading || externalLoading;
 
@@ -432,6 +531,17 @@ export function AgentChatPanel({
               )}
             </div>
           ))}
+          {/* PM status update as regular chat message */}
+          {(isLoading || externalLoading) && statusMessage && (
+            <div className="flex gap-3 justify-start">
+              <AgentAvatar agentRole="pm" />
+              <div className="max-w-[80%] flex flex-col gap-1">
+                <div className="rounded-lg px-4 py-2 text-sm bg-muted">
+                  {statusMessage}
+                </div>
+              </div>
+            </div>
+          )}
           {externalLoading && (
             <div className="flex gap-3">
               <AgentAvatar agentRole="pm" />
@@ -448,7 +558,7 @@ export function AgentChatPanel({
         {needsUserInput && !isLoading && !externalLoading && (
           <div className="mb-3 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-primary">
             <MessageCircle className="h-4 w-4 shrink-0" />
-            <span>{tAgents("roles.pm")}正在等待您的回覆，請在下方輸入訊息</span>
+            <span>PM 正在等待您的回覆，請在下方輸入訊息</span>
           </div>
         )}
 
@@ -462,7 +572,32 @@ export function AgentChatPanel({
               agentPhase={agentPhase}
               statusMessage={statusMessage}
               generatingText={resolvedGeneratingText}
+              actorStatuses={actorStatuses}
+              restartEvent={restartEvent}
             />
+          </div>
+        )}
+
+        {/* Token Usage Status Bar */}
+        {totalTokens > 0 && (
+          <div className="flex items-center gap-3 mb-2 px-2 py-1.5 rounded-md bg-muted/50 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <Zap className="h-3 w-3" />
+              <span>
+                {resolvedTotalTokensLabel}: {formatTokenCount(totalTokens)}
+              </span>
+            </div>
+            <div className="h-3 w-px bg-border" />
+            {Object.entries(tokenUsage).map(([modelId, usage]) => {
+              const label =
+                AVAILABLE_MODELS.find((m) => m.id === modelId)?.label ??
+                modelId.split("/").pop();
+              return (
+                <span key={modelId}>
+                  {label}: {formatTokenCount(usage.totalTokens)}
+                </span>
+              );
+            })}
           </div>
         )}
 
@@ -475,14 +610,28 @@ export function AgentChatPanel({
               disabled={disabled}
               pipelineId={pipelineId}
             />
-            <div className="flex gap-2">
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={resolvedPlaceholder}
-                disabled={disabled}
-                className="flex-1"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative flex flex-1 items-center rounded-md border bg-background focus-within:ring-1 focus-within:ring-ring">
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={resolvedPlaceholder}
+                  disabled={disabled}
+                  className="flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                />
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  disabled={disabled}
+                  className="h-full border-l bg-transparent px-2 py-2 text-xs text-muted-foreground outline-none cursor-pointer hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {AVAILABLE_MODELS.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <Button
                 type="submit"
                 size="icon"

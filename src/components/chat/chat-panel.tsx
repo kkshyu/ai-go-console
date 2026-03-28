@@ -3,9 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Send, Bot, User, Loader2, ChevronDown, Zap } from "lucide-react";
+import { Send, Bot, User, Loader2, Zap } from "lucide-react";
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/ai";
 import type { ChatMessageContent } from "@/lib/ai";
 import { MarkdownContent } from "@/components/chat/markdown-content";
@@ -75,12 +74,10 @@ export function ChatPanel({
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL);
-  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [tokenUsage, setTokenUsage] = useState<Record<string, ModelTokenUsage>>(
     {}
   );
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const modelMenuRef = useRef<HTMLDivElement>(null);
 
   // Sync initialMessages when they change (e.g. loaded from DB)
   useEffect(() => {
@@ -93,22 +90,6 @@ export function ChatPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Close model menu on outside click
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (
-        modelMenuRef.current &&
-        !modelMenuRef.current.contains(e.target as Node)
-      ) {
-        setModelMenuOpen(false);
-      }
-    }
-    if (modelMenuOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [modelMenuOpen]);
 
   const sendMessages = useCallback(
     async (messagesToSend: Message[]) => {
@@ -293,10 +274,6 @@ export function ChatPanel({
     0
   );
 
-  const selectedModelLabel =
-    AVAILABLE_MODELS.find((m) => m.id === selectedModel)?.label ??
-    selectedModel;
-
   const disabled = isLoading || externalLoading;
 
   return (
@@ -407,14 +384,28 @@ export function ChatPanel({
               onAttachmentsChange={setAttachments}
               disabled={disabled}
             />
-            <div className="flex gap-2">
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={resolvedPlaceholder}
-                disabled={disabled}
-                className="flex-1"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative flex flex-1 items-center rounded-md border bg-background focus-within:ring-1 focus-within:ring-ring">
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={resolvedPlaceholder}
+                  disabled={disabled}
+                  className="flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                />
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  disabled={disabled}
+                  className="h-full border-l bg-transparent px-2 py-2 text-xs text-muted-foreground outline-none cursor-pointer hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {AVAILABLE_MODELS.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <Button
                 type="submit"
                 size="icon"
@@ -422,40 +413,6 @@ export function ChatPanel({
               >
                 <Send className="h-4 w-4" />
               </Button>
-              <div className="relative" ref={modelMenuRef}>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-9 gap-1 text-xs whitespace-nowrap"
-                  onClick={() => setModelMenuOpen((v) => !v)}
-                  disabled={disabled}
-                >
-                  {selectedModelLabel}
-                  <ChevronDown className="h-3 w-3" />
-                </Button>
-                {modelMenuOpen && (
-                  <div className="absolute bottom-full right-0 mb-1 z-50 w-56 rounded-md border bg-popover p-1 shadow-md">
-                    {AVAILABLE_MODELS.map((model) => (
-                      <button
-                        key={model.id}
-                        type="button"
-                        className={`flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground ${
-                          selectedModel === model.id
-                            ? "bg-accent text-accent-foreground"
-                            : ""
-                        }`}
-                        onClick={() => {
-                          setSelectedModel(model.id);
-                          setModelMenuOpen(false);
-                        }}
-                      >
-                        {model.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
           </form>
         </div>
