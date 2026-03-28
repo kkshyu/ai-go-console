@@ -156,10 +156,22 @@ info "  等待 Redis..."
 kubectl wait --for=condition=ready pod -l app=redis \
   -n aigo-system --timeout=60s 2>/dev/null || warn "  Redis 尚未就緒，請稍後檢查"
 
-# 等待 Built-in PostgreSQL
-info "  等待 Built-in PostgreSQL..."
-kubectl wait --for=condition=ready pod -l app=builtin-postgres \
-  -n aigo-system --timeout=120s 2>/dev/null || warn "  Built-in PostgreSQL 尚未就緒，請稍後檢查"
+# 等待 Supabase 服務
+info "  等待 Supabase DB..."
+kubectl wait --for=condition=ready pod -l app=supabase-db \
+  -n aigo-system --timeout=120s 2>/dev/null || warn "  Supabase DB 尚未就緒，請稍後檢查"
+
+info "  等待 Supabase REST (PostgREST)..."
+kubectl wait --for=condition=available deployment/supabase-rest \
+  -n aigo-system --timeout=120s 2>/dev/null || warn "  Supabase REST 尚未就緒，請稍後檢查"
+
+info "  等待 Supabase Auth (GoTrue)..."
+kubectl wait --for=condition=available deployment/supabase-auth \
+  -n aigo-system --timeout=120s 2>/dev/null || warn "  Supabase Auth 尚未就緒，請稍後檢查"
+
+info "  等待 Supabase Kong (API Gateway)..."
+kubectl wait --for=condition=available deployment/supabase-kong \
+  -n aigo-system --timeout=120s 2>/dev/null || warn "  Supabase Kong 尚未就緒，請稍後檢查"
 
 echo ""
 echo -e "${GREEN}============================================${NC}"

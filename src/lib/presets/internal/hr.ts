@@ -614,6 +614,6 @@ export const INTERNAL_HR: PresetOverlay = {
     { path: "src/app/attendance/page.tsx", content: PAGE_ATTENDANCE },
   ],
   requiredServices: [
-    { category: "database", suggestedTypes: ["built_in_pg", "postgresql"], purpose: "儲存人事資料" },
+    { category: "database", suggestedTypes: ["built_in_supabase", "postgresql"], purpose: "儲存人事資料" },
   ],
 };

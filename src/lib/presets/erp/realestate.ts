@@ -509,7 +509,7 @@ export const ERP_REALESTATE: PresetOverlay = {
     { path: "src/lib/mock-data.ts", content: MOCK_DATA_FILE },
   ],
   requiredServices: [
-    { category: "database", suggestedTypes: ["built_in_pg", "postgresql"], purpose: "儲存物件與交易資料" },
+    { category: "database", suggestedTypes: ["built_in_supabase", "postgresql"], purpose: "儲存物件與交易資料" },
     { category: "industry", suggestedTypes: ["built_in_realestate"], purpose: "存取物件資料庫", optional: true },
   ],
 };

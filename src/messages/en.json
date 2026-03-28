@@ -515,8 +515,6 @@
       "whatsapp": "WhatsApp",
       "discord": "Discord",
       "telegram": "Telegram",
-      "built_in_pg": "Built-in PostgreSQL",
-      "built_in_disk": "Built-in Disk Storage",
       "built_in_real_estate": "Built-in Real Estate",
       "built_in_supabase": "Built-in Supabase",
       "built_in_restaurant": "Built-in Restaurant",

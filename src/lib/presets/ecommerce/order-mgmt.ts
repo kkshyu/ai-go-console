@@ -810,7 +810,7 @@ export default function CustomersPage() {
   requiredServices: [
     {
       category: "database",
-      suggestedTypes: ["built_in_pg", "postgresql"],
+      suggestedTypes: ["built_in_supabase", "postgresql"],
       purpose: "儲存訂單資料",
     },
     {

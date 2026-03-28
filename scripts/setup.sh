@@ -123,7 +123,7 @@ if [ "$SKIP_INFRA" = false ]; then
   # 停止已有的 port-forward
   pkill -f "kubectl port-forward.*postgres.*5432" 2>/dev/null || true
   pkill -f "kubectl port-forward.*redis.*6379" 2>/dev/null || true
-  pkill -f "kubectl port-forward.*builtin-postgres.*5434" 2>/dev/null || true
+  pkill -f "kubectl port-forward.*supabase-kong.*54321" 2>/dev/null || true
   sleep 1
 
   # PostgreSQL (平台資料庫)
@@ -154,21 +154,21 @@ if [ "$SKIP_INFRA" = false ]; then
 
   info "  Redis port-forward 已啟動 (PID: $REDIS_PF_PID, localhost:6379) ✓"
 
-  # Built-in PostgreSQL (組織資料庫)
-  kubectl wait --for=condition=ready pod -l app=builtin-postgres \
-    -n aigo-system --timeout=60s 2>/dev/null || error "Built-in PostgreSQL Pod 未就緒"
+  # Supabase Kong (API Gateway)
+  kubectl wait --for=condition=available deployment/supabase-kong \
+    -n aigo-system --timeout=60s 2>/dev/null || error "Supabase Kong Deployment 未就緒"
 
-  kubectl port-forward svc/builtin-postgres 5434:5432 -n aigo-system &>/dev/null &
-  BPG_PF_PID=$!
+  kubectl port-forward svc/supabase-kong 54321:8000 -n aigo-system &>/dev/null &
+  SB_PF_PID=$!
   sleep 2
 
-  if ! kill -0 $BPG_PF_PID 2>/dev/null; then
-    error "Built-in PostgreSQL port-forward 啟動失敗"
+  if ! kill -0 $SB_PF_PID 2>/dev/null; then
+    error "Supabase port-forward 啟動失敗"
   fi
 
-  info "  Built-in PostgreSQL port-forward 已啟動 (PID: $BPG_PF_PID, localhost:5434) ✓"
+  info "  Supabase port-forward 已啟動 (PID: $SB_PF_PID, localhost:54321) ✓"
 else
-  info "  使用既有的服務連線 (PostgreSQL:5432, Redis:6379, Built-in PG:5434)"
+  info "  使用既有的服務連線 (PostgreSQL:5432, Redis:6379, Supabase:54321)"
 fi
 
 # ── Step 5: 安裝依賴 ─────────────────────────────────────────────────────
@@ -237,7 +237,7 @@ if [ -n "${PF_PID:-}" ]; then
   echo "  Port-forward 背景執行中："
   echo "    PostgreSQL:       PID $PF_PID (localhost:5432)"
   [ -n "${REDIS_PF_PID:-}" ] && echo "    Redis:            PID $REDIS_PF_PID (localhost:6379)"
-  [ -n "${BPG_PF_PID:-}" ]   && echo "    Built-in PG:      PID $BPG_PF_PID (localhost:5434)"
-  echo "  停止全部: kill ${PF_PID} ${REDIS_PF_PID:-} ${BPG_PF_PID:-}"
+  [ -n "${SB_PF_PID:-}" ]    && echo "    Supabase:         PID $SB_PF_PID (localhost:54321)"
+  echo "  停止全部: kill ${PF_PID} ${REDIS_PF_PID:-} ${SB_PF_PID:-}"
   echo ""
 fi

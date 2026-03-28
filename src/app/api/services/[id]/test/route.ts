@@ -220,12 +220,6 @@ const testers: Record<ServiceType, ServiceTester> = {
   },
 
   // --- built-in ---
-  built_in_pg: async (config) => {
-    const driver = getDbDriver("built_in_pg");
-    await driver.testConnection(config);
-    return { success: true, message: "Built-in PostgreSQL connection OK" };
-  },
-  built_in_disk: configOnlyTester("Built-in Disk Storage", ["basePath"]),
   built_in_real_estate: configOnlyTester("Built-in Real Estate", ["apiBaseUrl"]),
   built_in_supabase: async (config, endpointUrl) => {
     const url = endpointUrl || config.projectUrl;

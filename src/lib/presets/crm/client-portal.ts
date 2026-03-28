@@ -598,7 +598,7 @@ export const CRM_CLIENT_PORTAL: PresetOverlay = {
     { path: "src/lib/mock-data.ts", content: MOCK_DATA_FILE },
   ],
   requiredServices: [
-    { category: "database", suggestedTypes: ["built_in_pg", "postgresql"], purpose: "\u5132\u5b58\u5de5\u55ae\u8207\u767c\u7968\u8cc7\u6599" },
-    { category: "storage", suggestedTypes: ["built_in_disk", "s3"], purpose: "\u6587\u4ef6\u5132\u5b58", optional: true },
+    { category: "database", suggestedTypes: ["built_in_supabase", "postgresql"], purpose: "\u5132\u5b58\u5de5\u55ae\u8207\u767c\u7968\u8cc7\u6599" },
+    { category: "storage", suggestedTypes: ["built_in_supabase", "s3"], purpose: "\u6587\u4ef6\u5132\u5b58", optional: true },
   ],
 };

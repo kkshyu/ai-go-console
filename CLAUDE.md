@@ -17,7 +17,7 @@ bash scripts/setup.sh
 | 步驟 | 指令 | 說明 |
 |------|------|------|
 | 1. 環境變數 | `ln -s /path/to/main/.env.local .env.local` | Worktree 需 symlink 主專案的 .env.local |
-| 2. 基礎服務 | `bash scripts/k3d-setup.sh` | 啟動 k3d 叢集（PostgreSQL, Redis, Traefik） |
+| 2. 基礎服務 | `bash scripts/k3d-setup.sh` | 啟動 k3d 叢集（PostgreSQL, Redis, Traefik, Supabase） |
 | 3. 等待 DB | `kubectl port-forward svc/postgres 5432:5432 -n aigo-system &` | 確認 PostgreSQL 可連線 |
 | 4. 安裝依賴 | `pnpm install` | 必須使用 pnpm，不可用 npm/yarn |
 | 5. DB 遷移 | `npx prisma migrate deploy` | 套用 schema 至資料庫 |
@@ -36,6 +36,7 @@ bash scripts/setup.sh
 | Prisma Client 錯誤 | `npx prisma generate` |
 | Seed 重複執行失敗 | 可忽略，或 `npx prisma migrate reset --force` 重置 |
 | Port 3000 被佔用 | launch.json 已設定 `autoPort: true`，會自動換 port |
+| Supabase 連不上 | `kubectl port-forward svc/supabase-kong 54321:8000 -n aigo-system &` |
 
 ---
 

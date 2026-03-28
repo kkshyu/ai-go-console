@@ -48,8 +48,6 @@ export const ALL_SERVICE_TYPES: ServiceType[] = [
   "discord",
   "telegram",
   // built-in
-  "built_in_pg",
-  "built_in_disk",
   "built_in_real_estate",
   "built_in_supabase",
   // built-in industry
@@ -120,8 +118,6 @@ export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
   discord: ServiceCategory.chat,
   telegram: ServiceCategory.chat,
   // built-in infra
-  built_in_pg: ServiceCategory.database,
-  built_in_disk: ServiceCategory.storage,
   built_in_real_estate: ServiceCategory.platform,
   built_in_supabase: ServiceCategory.platform,
   // built-in industry
@@ -148,8 +144,8 @@ export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
 };
 
 export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
-  [ServiceCategory.database]: ["postgresql", "mysql", "mongodb", "built_in_pg"],
-  [ServiceCategory.storage]: ["s3", "gcs", "azure_blob", "google_drive", "built_in_disk"],
+  [ServiceCategory.database]: ["postgresql", "mysql", "mongodb"],
+  [ServiceCategory.storage]: ["s3", "gcs", "azure_blob", "google_drive"],
   [ServiceCategory.payment]: ["stripe", "paypal", "ecpay"],
   [ServiceCategory.email]: ["sendgrid", "ses", "mailgun"],
   [ServiceCategory.sms]: ["twilio", "vonage", "aws_sns"],
@@ -161,8 +157,6 @@ export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
 };
 
 export const BUILT_IN_SERVICE_TYPES: ReadonlySet<ServiceType> = new Set([
-  "built_in_pg",
-  "built_in_disk",
   "built_in_real_estate",
   "built_in_supabase",
   ...INDUSTRY_SERVICE_TYPES,
@@ -178,7 +172,7 @@ export function isIndustryServiceType(type: ServiceType): boolean {
 
 /**
  * Get all compatible service types in the same category.
- * e.g. "postgresql" → ["postgresql", "mysql", "mongodb", "built_in_pg"]
+ * e.g. "postgresql" → ["postgresql", "mysql", "mongodb"]
  */
 export function getCompatibleServiceTypes(svcType: ServiceType): ServiceType[] {
   const category = SERVICE_TYPE_CATEGORY[svcType];
@@ -329,8 +323,6 @@ export const SERVICE_TYPE_CONFIG_FIELDS: Record<ServiceType, ConfigFieldDef[]> =
     { key: "botToken", type: "password", placeholder: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" },
   ],
   // built-in (auto-configured by platform)
-  built_in_pg: [],
-  built_in_disk: [],
   built_in_real_estate: [],
   built_in_supabase: [],
   // built-in industry (auto-configured by platform)
@@ -395,8 +387,6 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   whatsapp: "WhatsApp",
   discord: "Discord",
   telegram: "Telegram",
-  built_in_pg: "Built-in PostgreSQL",
-  built_in_disk: "Built-in Disk Storage",
   built_in_real_estate: "Built-in Real Estate",
   built_in_supabase: "Built-in Supabase",
   built_in_restaurant: "Built-in Restaurant",
@@ -477,8 +467,6 @@ export const SERVICE_TYPE_HTTP_MODE: Record<ServiceType, HttpMode> = {
   discord: "fixed",
   telegram: "fixed",
   // built-in infra
-  built_in_pg: "proxy",
-  built_in_disk: "sdk",
   built_in_real_estate: "fixed",
   built_in_supabase: "user-provided",
   // built-in industry — all accessed via proxy

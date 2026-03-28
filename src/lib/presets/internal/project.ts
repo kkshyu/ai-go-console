@@ -506,6 +506,6 @@ export const INTERNAL_PROJECT: PresetOverlay = {
     { path: "src/app/timeline/page.tsx", content: PAGE_TIMELINE },
   ],
   requiredServices: [
-    { category: "database", suggestedTypes: ["built_in_pg", "postgresql"], purpose: "儲存專案資料" },
+    { category: "database", suggestedTypes: ["built_in_supabase", "postgresql"], purpose: "儲存專案資料" },
   ],
 };

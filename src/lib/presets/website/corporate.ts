@@ -554,7 +554,7 @@ export const WEBSITE_CORPORATE: PresetOverlay = {
   requiredServices: [
     {
       category: "storage",
-      suggestedTypes: ["built_in_disk", "s3"],
+      suggestedTypes: ["built_in_supabase", "s3"],
       purpose: "圖片與資源儲存",
       optional: true,
     },

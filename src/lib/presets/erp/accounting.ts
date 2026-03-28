@@ -555,6 +555,6 @@ export const ERP_ACCOUNTING: PresetOverlay = {
     { path: "src/lib/mock-data.ts", content: MOCK_DATA_FILE },
   ],
   requiredServices: [
-    { category: "database", suggestedTypes: ["built_in_pg", "postgresql"], purpose: "儲存帳務資料" },
+    { category: "database", suggestedTypes: ["built_in_supabase", "postgresql"], purpose: "儲存帳務資料" },
   ],
 };
