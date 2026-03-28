@@ -26,7 +26,21 @@ export function Header({ userRole }: { userRole?: string }) {
         <Button variant="ghost" size="icon" onClick={switchLocale} title="Switch Language">
           <Globe className="h-5 w-5" />
         </Button>
-        <Button variant="ghost" size="icon" title={t("logout")}>
+        <Button
+          variant="ghost"
+          size="icon"
+          title={t("logout")}
+          onClick={async () => {
+            const res = await fetch("/api/auth/csrf");
+            const { csrfToken } = await res.json();
+            await fetch("/api/auth/signout", {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body: new URLSearchParams({ csrfToken, callbackUrl: "/login" }).toString(),
+            });
+            window.location.href = "/login";
+          }}
+        >
           <LogOut className="h-5 w-5" />
         </Button>
       </div>
