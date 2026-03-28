@@ -7,6 +7,11 @@
       "runtimeArgs": ["next", "dev", "--turbopack"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "background-worker",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:worker"]
     }
   ]
 }
