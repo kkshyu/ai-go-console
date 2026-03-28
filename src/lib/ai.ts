@@ -36,7 +36,7 @@ const PROD_AGENT_MODEL_MAP: Record<string, string> = {
 
 /** Per-agent model mapping for development (NODE_ENV=development) */
 const DEV_AGENT_MODEL_MAP: Record<string, string> = {
-  pm: "google/gemini-2.5-flash-preview",
+  pm: "google/gemini-2.5-flash",
   architect: "openai/gpt-4o",
   developer: "openai/gpt-4o",
   reviewer: "openai/gpt-4o-mini",
