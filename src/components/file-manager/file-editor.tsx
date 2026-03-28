@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslations } from "next-intl";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Save, RotateCw, Circle } from "lucide-react";
@@ -50,6 +51,8 @@ interface FileEditorProps {
 }
 
 export function FileEditor({ appId, filePath, onBack, containerType = "dev" }: FileEditorProps) {
+  const t = useTranslations("fileManager");
+  const tc = useTranslations("common");
   const [content, setContent] = useState<string | null>(null);
   const [savedContent, setSavedContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,7 +80,7 @@ export function FileEditor({ appId, filePath, onBack, containerType = "dev" }: F
           setSavedContent(data.content);
         }
       })
-      .catch(() => setError("Failed to load file"))
+      .catch(() => setError(t("failedToLoadFile")))
       .finally(() => setLoading(false));
   }, [appId, filePath, containerType]);
 
@@ -125,7 +128,7 @@ export function FileEditor({ appId, filePath, onBack, containerType = "dev" }: F
 
   const handleBack = () => {
     if (isDirty) {
-      const ok = window.confirm("You have unsaved changes. Are you sure you want to leave?");
+      const ok = window.confirm(t("unsavedChanges"));
       if (!ok) return;
     }
     onBack();
@@ -135,7 +138,7 @@ export function FileEditor({ appId, filePath, onBack, containerType = "dev" }: F
     return (
       <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         <RotateCw className="h-4 w-4 animate-spin mr-2" />
-        Loading...
+        {tc("loading")}
       </div>
     );
   }
@@ -146,7 +149,7 @@ export function FileEditor({ appId, filePath, onBack, containerType = "dev" }: F
         <p>{error}</p>
         <Button variant="ghost" size="sm" onClick={onBack}>
           <ArrowLeft className="h-3 w-3 mr-1" />
-          Back
+          {tc("back")}
         </Button>
       </div>
     );
@@ -164,10 +167,10 @@ export function FileEditor({ appId, filePath, onBack, containerType = "dev" }: F
           <Circle className="h-2 w-2 fill-orange-400 text-orange-400 shrink-0" />
         )}
         {saveStatus === "saved" && (
-          <span className="text-xs text-green-600">Saved</span>
+          <span className="text-xs text-green-600">{t("saved")}</span>
         )}
         {saveStatus === "error" && (
-          <span className="text-xs text-red-600">Save failed</span>
+          <span className="text-xs text-red-600">{t("saveFailed")}</span>
         )}
         <Button
           variant="ghost"
@@ -181,7 +184,7 @@ export function FileEditor({ appId, filePath, onBack, containerType = "dev" }: F
           ) : (
             <Save className="h-3 w-3 mr-1" />
           )}
-          {saving ? "Saving..." : "Save"}
+          {saving ? t("saving") : t("save")}
         </Button>
       </div>
 

@@ -13,7 +13,10 @@
     "search": "Search",
     "actions": "Actions",
     "back": "Back",
-    "submit": "Submit"
+    "submit": "Submit",
+    "switchLanguage": "Switch Language",
+    "confirmAction": "Are you sure?",
+    "refresh": "Refresh"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -98,7 +101,18 @@
     "devPort": "Dev",
     "prodPort": "Prod",
     "noApps": "No apps yet",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "buildCompleted": "Build completed",
+    "buildFailed": "Build failed: {error}",
+    "rollbackCompleted": "Rollback completed",
+    "rollbackFailed": "Rollback failed: {error}",
+    "slugUpdateFailed": "Failed to update slug",
+    "switchToTraefik": "Switch to Traefik proxy",
+    "switchToLocalhost": "Switch to localhost",
+    "openInBrowser": "Open in browser",
+    "appPreview": "App Preview",
+    "appPreviewFullscreen": "App Preview Fullscreen",
+    "productionPreview": "Production Preview"
   },
   "create": {
     "title": "Create App",
@@ -577,7 +591,8 @@
     "proxyNotDetected": "Traefik not detected. Start with: bash scripts/k3d-setup.sh",
     "productionEnv": "Production",
     "developmentEnv": "Development",
-    "appAccessPattern": "Apps accessible at: {url}/{appSlug}"
+    "appAccessPattern": "Apps accessible at: {url}/{appSlug}",
+    "slugUpdateFailed": "Failed to update slug"
   },
   "users": {
     "title": "User Management",
@@ -603,7 +618,8 @@
     "allOrgServices": "All organization services",
     "servicesUpdated": "Services updated",
     "setAdmin": "Set Admin",
-    "setUser": "Set User"
+    "setUser": "Set User",
+    "noUsers": "No users yet"
   },
   "auth": {
     "login": "Login",
@@ -616,7 +632,9 @@
     "loginTitle": "Login to AI Go",
     "registerTitle": "Register for AI Go",
     "noAccount": "Don't have an account?",
-    "hasAccount": "Already have an account?"
+    "hasAccount": "Already have an account?",
+    "registrationFailed": "Registration failed",
+    "unexpectedError": "An unexpected error occurred"
   },
   "settings": {
     "title": "Settings",
@@ -719,5 +737,22 @@
     "active": "Active",
     "pending": "Pending",
     "dnsInstructions": "Point your domain's DNS A record to the server IP"
+  },
+  "fileManager": {
+    "uploadFiles": "Upload Files",
+    "uploadFolder": "Upload Folder",
+    "refresh": "Refresh",
+    "dropFilesHere": "Drop files here to upload",
+    "uploading": "Uploading {done}/{total} files...",
+    "failedToLoadFile": "Failed to load file",
+    "unsavedChanges": "You have unsaved changes. Are you sure you want to leave?",
+    "emptyDirectory": "Empty directory",
+    "name": "Name",
+    "size": "Size",
+    "save": "Save",
+    "saving": "Saving...",
+    "saved": "Saved",
+    "saveFailed": "Save failed",
+    "back": "Back"
   }
 }

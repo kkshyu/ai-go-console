@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef, type DragEvent } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ArrowUp, Upload, FolderUp, RotateCw } from "lucide-react";
 import { FileList, type FileEntry } from "./file-list";
@@ -57,6 +58,7 @@ async function readEntryFiles(
 }
 
 export function FileManager({ appId, containerType = "dev" }: FileManagerProps) {
+  const t = useTranslations("fileManager");
   const [fileList, setFileList] = useState<FileEntry[]>([]);
   const [filePath, setFilePath] = useState("");
   const [fileLoading, setFileLoading] = useState(false);
@@ -259,7 +261,7 @@ export function FileManager({ appId, containerType = "dev" }: FileManagerProps) 
               className="h-6 w-6 shrink-0"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              title="Upload Files"
+              title={t("uploadFiles")}
             >
               <Upload className="h-3 w-3" />
             </Button>
@@ -269,7 +271,7 @@ export function FileManager({ appId, containerType = "dev" }: FileManagerProps) 
               className="h-6 w-6 shrink-0"
               onClick={() => folderInputRef.current?.click()}
               disabled={uploading}
-              title="Upload Folder"
+              title={t("uploadFolder")}
             >
               <FolderUp className="h-3 w-3" />
             </Button>
@@ -279,7 +281,7 @@ export function FileManager({ appId, containerType = "dev" }: FileManagerProps) 
               className="h-6 w-6 shrink-0"
               onClick={() => fetchFiles(filePath)}
               disabled={fileLoading}
-              title="Refresh"
+              title={t("refresh")}
             >
               <RotateCw className={`h-3 w-3 ${fileLoading ? "animate-spin" : ""}`} />
             </Button>
@@ -323,7 +325,7 @@ export function FileManager({ appId, containerType = "dev" }: FileManagerProps) 
         <div className="absolute inset-0 z-10 bg-primary/10 border-2 border-dashed border-primary rounded-lg flex items-center justify-center">
           <div className="flex flex-col items-center gap-2 text-primary">
             <Upload className="h-8 w-8" />
-            <span className="text-sm font-medium">Drop files here to upload</span>
+            <span className="text-sm font-medium">{t("dropFilesHere")}</span>
           </div>
         </div>
       )}

@@ -7,6 +7,7 @@ import { MobileSidebar } from "@/components/layout/mobile-sidebar";
 
 export function Header({ userRole }: { userRole?: string }) {
   const t = useTranslations("nav");
+  const tc = useTranslations("common");
 
   async function switchLocale() {
     const current = document.cookie
@@ -23,7 +24,7 @@ export function Header({ userRole }: { userRole?: string }) {
       <MobileSidebar userRole={userRole} />
       <div className="hidden md:block" />
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={switchLocale} title="Switch Language">
+        <Button variant="ghost" size="icon" onClick={switchLocale} title={tc("switchLanguage")}>
           <Globe className="h-5 w-5" />
         </Button>
         <Button

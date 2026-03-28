@@ -37,6 +37,7 @@ interface ProxyStatus {
 
 export default function OrganizationSettingsPage() {
   const t = useTranslations("organization");
+  const tc = useTranslations("common");
   const [org, setOrg] = useState<OrgData | null>(null);
   const [orgName, setOrgName] = useState("");
   const [orgSlug, setOrgSlug] = useState("");
@@ -107,7 +108,7 @@ export default function OrganizationSettingsPage() {
       setOrgSlug(updated.slug);
     } else {
       const data = await res.json();
-      setSlugError(data.error || "Failed to update slug");
+      setSlugError(data.error || t("slugUpdateFailed"));
     }
     setSavingSlug(false);
   }
@@ -152,7 +153,7 @@ export default function OrganizationSettingsPage() {
   if (!org) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
-        Loading...
+        {tc("loading")}
       </div>
     );
   }

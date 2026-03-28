@@ -35,7 +35,7 @@ export default function LoginPage() {
 
         if (!res.ok) {
           const data = await res.json();
-          setError(data.error || "Registration failed");
+          setError(data.error || t("registrationFailed"));
           setLoading(false);
           return;
         }
@@ -58,7 +58,7 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch {
-      setError("An unexpected error occurred");
+      setError(t("unexpectedError"));
     } finally {
       setLoading(false);
     }
