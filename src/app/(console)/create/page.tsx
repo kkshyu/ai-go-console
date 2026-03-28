@@ -363,6 +363,7 @@ export default function CreateAppPage() {
               onAssistantResponse={handleAssistantResponse}
               onUserMessage={handleUserMessage}
               onAssistantComplete={handleAssistantComplete}
+              autoSend={!!inputValue.trim()}
               initialMessages={inputValue.trim() ? [{ id: "init-1", role: "user", content: inputValue.trim() }] : []}
             />
           </div>
