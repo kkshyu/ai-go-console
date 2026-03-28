@@ -227,6 +227,21 @@ const testers: Record<ServiceType, ServiceTester> = {
   },
   built_in_disk: configOnlyTester("Built-in Disk Storage", ["basePath"]),
   built_in_real_estate: configOnlyTester("Built-in Real Estate", ["apiBaseUrl"]),
+  built_in_supabase: async (config, endpointUrl) => {
+    const url = endpointUrl || config.projectUrl;
+    if (!url) return { success: true, message: "Built-in Supabase configuration valid" };
+    const res = await fetch(`${url}/rest/v1/`, {
+      headers: {
+        apikey: config.apiKey || "",
+        Authorization: `Bearer ${config.apiKey || ""}`,
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok || res.status === 200) {
+      return { success: true, message: "Built-in Supabase connection OK" };
+    }
+    throw new Error(`Built-in Supabase returned ${res.status}`);
+  },
 
   // --- built-in industry (platform-managed, always available) ---
   built_in_restaurant: async () => ({ success: true, message: "Built-in Restaurant service OK" }),
