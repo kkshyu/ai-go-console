@@ -4,7 +4,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: minio-credentials
+  name: builtin-minio-credentials
   namespace: aigo-system
 type: Opaque
 stringData:
@@ -14,21 +14,21 @@ stringData:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: minio
+  name: builtin-minio
   namespace: aigo-system
   labels:
-    app: minio
+    app: builtin-minio
     aigo.dev/component: minio
 spec:
-  serviceName: minio
+  serviceName: builtin-minio
   replicas: 1
   selector:
     matchLabels:
-      app: minio
+      app: builtin-minio
   template:
     metadata:
       labels:
-        app: minio
+        app: builtin-minio
     spec:
       containers:
         - name: minio
@@ -43,12 +43,12 @@ spec:
             - name: MINIO_ROOT_USER
               valueFrom:
                 secretKeyRef:
-                  name: minio-credentials
+                  name: builtin-minio-credentials
                   key: MINIO_ROOT_USER
             - name: MINIO_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: minio-credentials
+                  name: builtin-minio-credentials
                   key: MINIO_ROOT_PASSWORD
           volumeMounts:
             - name: minio-data
@@ -78,10 +78,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: minio
+  name: builtin-minio
   namespace: aigo-system
   labels:
-    app: minio
+    app: builtin-minio
 spec:
   type: ClusterIP
   ports:
@@ -92,4 +92,4 @@ spec:
       port: 9001
       targetPort: 9001
   selector:
-    app: minio
+    app: builtin-minio

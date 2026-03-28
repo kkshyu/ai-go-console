@@ -158,54 +158,54 @@ kubectl wait --for=condition=ready pod -l app=redis \
 
 # 等待 Supabase 服務
 info "  等待 Supabase DB..."
-kubectl wait --for=condition=ready pod -l app=supabase-db \
+kubectl wait --for=condition=ready pod -l app=builtin-supabase-db \
   -n aigo-system --timeout=120s 2>/dev/null || warn "  Supabase DB 尚未就緒，請稍後檢查"
 
 info "  等待 Supabase REST (PostgREST)..."
-kubectl wait --for=condition=available deployment/supabase-rest \
+kubectl wait --for=condition=available deployment/builtin-supabase-rest \
   -n aigo-system --timeout=120s 2>/dev/null || warn "  Supabase REST 尚未就緒，請稍後檢查"
 
 info "  等待 Supabase Auth (GoTrue)..."
-kubectl wait --for=condition=available deployment/supabase-auth \
+kubectl wait --for=condition=available deployment/builtin-supabase-auth \
   -n aigo-system --timeout=120s 2>/dev/null || warn "  Supabase Auth 尚未就緒，請稍後檢查"
 
 info "  等待 Supabase Kong (API Gateway)..."
-kubectl wait --for=condition=available deployment/supabase-kong \
+kubectl wait --for=condition=available deployment/builtin-supabase-kong \
   -n aigo-system --timeout=120s 2>/dev/null || warn "  Supabase Kong 尚未就緒，請稍後檢查"
 
 # 等待 Keycloak
 info "  等待 Keycloak..."
-kubectl wait --for=condition=available deployment/keycloak \
+kubectl wait --for=condition=available deployment/builtin-keycloak \
   -n aigo-system --timeout=180s 2>/dev/null || warn "  Keycloak 尚未就緒，請稍後檢查"
 
 # 等待 MinIO
 info "  等待 MinIO..."
-kubectl wait --for=condition=ready pod -l app=minio \
+kubectl wait --for=condition=ready pod -l app=builtin-minio \
   -n aigo-system --timeout=120s 2>/dev/null || warn "  MinIO 尚未就緒，請稍後檢查"
 
 # 等待 n8n
 info "  等待 n8n..."
-kubectl wait --for=condition=ready pod -l app=n8n \
+kubectl wait --for=condition=ready pod -l app=builtin-n8n \
   -n aigo-system --timeout=120s 2>/dev/null || warn "  n8n 尚未就緒，請稍後檢查"
 
 # 等待 Qdrant
 info "  等待 Qdrant..."
-kubectl wait --for=condition=ready pod -l app=qdrant \
+kubectl wait --for=condition=ready pod -l app=builtin-qdrant \
   -n aigo-system --timeout=120s 2>/dev/null || warn "  Qdrant 尚未就緒，請稍後檢查"
 
 # 等待 Meilisearch
 info "  等待 Meilisearch..."
-kubectl wait --for=condition=ready pod -l app=meilisearch \
+kubectl wait --for=condition=ready pod -l app=builtin-meilisearch \
   -n aigo-system --timeout=120s 2>/dev/null || warn "  Meilisearch 尚未就緒，請稍後檢查"
 
 # 等待 PostHog
 info "  等待 PostHog..."
-kubectl wait --for=condition=available deployment/posthog \
+kubectl wait --for=condition=available deployment/builtin-posthog \
   -n aigo-system --timeout=180s 2>/dev/null || warn "  PostHog 尚未就緒，請稍後檢查"
 
 # 等待 Metabase
 info "  等待 Metabase..."
-kubectl wait --for=condition=available deployment/metabase \
+kubectl wait --for=condition=available deployment/builtin-metabase \
   -n aigo-system --timeout=180s 2>/dev/null || warn "  Metabase 尚未就緒，請稍後檢查"
 
 echo ""

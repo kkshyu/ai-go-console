@@ -4,20 +4,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: metabase
+  name: builtin-metabase
   namespace: aigo-system
   labels:
-    app: metabase
+    app: builtin-metabase
     aigo.dev/component: metabase
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: metabase
+      app: builtin-metabase
   template:
     metadata:
       labels:
-        app: metabase
+        app: builtin-metabase
     spec:
       containers:
         - name: metabase
@@ -36,7 +36,7 @@ spec:
             - name: MB_DB_PASS
               value: "supabase_dev_password"
             - name: MB_DB_HOST
-              value: "supabase-db.aigo-system.svc.cluster.local"
+              value: "builtin-supabase-db.aigo-system.svc.cluster.local"
             - name: JAVA_TOOL_OPTIONS
               value: "-Xmx1g"
           resources:
@@ -56,14 +56,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: metabase
+  name: builtin-metabase
   namespace: aigo-system
   labels:
-    app: metabase
+    app: builtin-metabase
 spec:
   type: ClusterIP
   ports:
     - port: 3000
       targetPort: 3000
   selector:
-    app: metabase
+    app: builtin-metabase

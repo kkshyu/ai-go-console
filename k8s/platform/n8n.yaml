@@ -4,7 +4,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: n8n-credentials
+  name: builtin-n8n-credentials
   namespace: aigo-system
 type: Opaque
 stringData:
@@ -13,21 +13,21 @@ stringData:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: n8n
+  name: builtin-n8n
   namespace: aigo-system
   labels:
-    app: n8n
+    app: builtin-n8n
     aigo.dev/component: n8n
 spec:
-  serviceName: n8n
+  serviceName: builtin-n8n
   replicas: 1
   selector:
     matchLabels:
-      app: n8n
+      app: builtin-n8n
   template:
     metadata:
       labels:
-        app: n8n
+        app: builtin-n8n
     spec:
       containers:
         - name: n8n
@@ -40,11 +40,11 @@ spec:
             - name: N8N_PROTOCOL
               value: "http"
             - name: WEBHOOK_URL
-              value: "http://n8n.aigo-system.svc.cluster.local:5678/"
+              value: "http://builtin-n8n.aigo-system.svc.cluster.local:5678/"
             - name: N8N_ENCRYPTION_KEY
               valueFrom:
                 secretKeyRef:
-                  name: n8n-credentials
+                  name: builtin-n8n-credentials
                   key: N8N_ENCRYPTION_KEY
             - name: DB_TYPE
               value: "sqlite"
@@ -76,14 +76,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: n8n
+  name: builtin-n8n
   namespace: aigo-system
   labels:
-    app: n8n
+    app: builtin-n8n
 spec:
   type: ClusterIP
   ports:
     - port: 5678
       targetPort: 5678
   selector:
-    app: n8n
+    app: builtin-n8n

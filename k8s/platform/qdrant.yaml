@@ -4,21 +4,21 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: qdrant
+  name: builtin-qdrant
   namespace: aigo-system
   labels:
-    app: qdrant
+    app: builtin-qdrant
     aigo.dev/component: qdrant
 spec:
-  serviceName: qdrant
+  serviceName: builtin-qdrant
   replicas: 1
   selector:
     matchLabels:
-      app: qdrant
+      app: builtin-qdrant
   template:
     metadata:
       labels:
-        app: qdrant
+        app: builtin-qdrant
     spec:
       containers:
         - name: qdrant
@@ -56,10 +56,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: qdrant
+  name: builtin-qdrant
   namespace: aigo-system
   labels:
-    app: qdrant
+    app: builtin-qdrant
 spec:
   type: ClusterIP
   ports:
@@ -70,4 +70,4 @@ spec:
       port: 6334
       targetPort: 6334
   selector:
-    app: qdrant
+    app: builtin-qdrant

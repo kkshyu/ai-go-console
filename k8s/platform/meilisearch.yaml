@@ -4,7 +4,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: meilisearch-credentials
+  name: builtin-meilisearch-credentials
   namespace: aigo-system
 type: Opaque
 stringData:
@@ -13,21 +13,21 @@ stringData:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: meilisearch
+  name: builtin-meilisearch
   namespace: aigo-system
   labels:
-    app: meilisearch
+    app: builtin-meilisearch
     aigo.dev/component: meilisearch
 spec:
-  serviceName: meilisearch
+  serviceName: builtin-meilisearch
   replicas: 1
   selector:
     matchLabels:
-      app: meilisearch
+      app: builtin-meilisearch
   template:
     metadata:
       labels:
-        app: meilisearch
+        app: builtin-meilisearch
     spec:
       containers:
         - name: meilisearch
@@ -38,7 +38,7 @@ spec:
             - name: MEILI_MASTER_KEY
               valueFrom:
                 secretKeyRef:
-                  name: meilisearch-credentials
+                  name: builtin-meilisearch-credentials
                   key: MEILI_MASTER_KEY
             - name: MEILI_ENV
               value: "development"
@@ -70,14 +70,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: meilisearch
+  name: builtin-meilisearch
   namespace: aigo-system
   labels:
-    app: meilisearch
+    app: builtin-meilisearch
 spec:
   type: ClusterIP
   ports:
     - port: 7700
       targetPort: 7700
   selector:
-    app: meilisearch
+    app: builtin-meilisearch

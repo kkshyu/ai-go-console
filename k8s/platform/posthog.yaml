@@ -5,7 +5,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: posthog-credentials
+  name: builtin-posthog-credentials
   namespace: aigo-system
 type: Opaque
 stringData:
@@ -14,20 +14,20 @@ stringData:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: posthog
+  name: builtin-posthog
   namespace: aigo-system
   labels:
-    app: posthog
+    app: builtin-posthog
     aigo.dev/component: posthog
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: posthog
+      app: builtin-posthog
   template:
     metadata:
       labels:
-        app: posthog
+        app: builtin-posthog
     spec:
       containers:
         - name: posthog
@@ -64,14 +64,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: posthog
+  name: builtin-posthog
   namespace: aigo-system
   labels:
-    app: posthog
+    app: builtin-posthog
 spec:
   type: ClusterIP
   ports:
     - port: 8000
       targetPort: 8000
   selector:
-    app: posthog
+    app: builtin-posthog
