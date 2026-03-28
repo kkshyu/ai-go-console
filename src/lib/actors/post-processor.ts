@@ -21,7 +21,7 @@ export interface PostProcessorConfig {
   appId?: string;
   userId?: string;
   orgSlug?: string;
-  serviceInstances: Array<{ id: string; name: string; type: string }>;
+  serviceInstances: Array<{ id: string; name: string; type: string; status?: 'ok' | 'failed' | 'untested'; message?: string }>;
   sendEvent: (data: unknown) => Promise<void>;
   traceId?: string;
 }

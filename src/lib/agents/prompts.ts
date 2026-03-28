@@ -146,11 +146,25 @@ Guidelines:
 
 export function buildArchitectPrompt(
   allowedServices: string[],
-  serviceInstances?: Array<{ id: string; name: string; type: string }>
+  serviceInstances?: Array<{ id: string; name: string; type: string; status?: 'ok' | 'failed' | 'untested'; message?: string }>
 ): string {
+  const statusIcon = (s: string | undefined) => {
+    if (s === "ok") return "✅ OK";
+    if (s === "failed") return "❌ FAILED";
+    return "⚠️ UNTESTED";
+  };
+
   const instanceList = serviceInstances && serviceInstances.length > 0
-    ? serviceInstances.map((s) => `  - id: "${s.id}", name: "${s.name}", type: "${s.type}"`).join("\n")
+    ? serviceInstances.map((s) => {
+        const statusStr = s.status ? ` — ${statusIcon(s.status)}${s.status === "failed" && s.message ? ` (${s.message})` : ""}` : "";
+        return `  - id: "${s.id}", name: "${s.name}", type: "${s.type}"${statusStr}`;
+      }).join("\n")
     : "  (No service instances configured yet)";
+
+  // Separate working vs non-working for the prompt
+  const okServices = serviceInstances?.filter((s) => s.status === "ok") ?? [];
+  const failedServices = serviceInstances?.filter((s) => s.status === "failed") ?? [];
+  const untestedServices = serviceInstances?.filter((s) => s.status === "untested" || !s.status) ?? [];
 
   return `You are the Architect Agent in a multi-agent app creation system called AI Go.
 
@@ -205,16 +219,52 @@ Output your design as:
 \`\`\`
 ${FAILURE_CLAUSE}
 
-CRITICAL — Service instance validation:
-- You MUST ONLY select services from the "Available service INSTANCES" list above.
-- If the app requires a service type (e.g. database, payment) but NO matching instance exists in the list, you MUST report "status": "blocked" with a clear explanation of which service instances are missing.
-- NEVER fabricate or assume service instances that are not in the list.
-- Example blocked response when needed service is missing:
+SERVICE CONNECTIVITY STATUS:
+Each service instance above has been probed for connectivity before this task:
+- ✅ OK: Connectivity confirmed — PREFER these services.
+- ❌ FAILED: Service unreachable or authentication error — AVOID using these.
+- ⚠️ UNTESTED: Probe timed out or skipped — use with caution.
+${okServices.length > 0 ? `\nWorking services (${okServices.length}): ${okServices.map((s) => `${s.name} (${s.type})`).join(", ")}` : ""}
+${failedServices.length > 0 ? `\nFailed services (${failedServices.length}): ${failedServices.map((s) => `${s.name} (${s.type}): ${s.message || "unknown error"}`).join(", ")}` : ""}
+
+CRITICAL — Service selection strategy:
+1. ONLY use services with status ✅ OK. These are confirmed working right now.
+2. If the user's requirements need a service type where ALL instances are ❌ FAILED, report "status": "blocked" with a clear explanation.
+3. CREATIVE COMBINATION: Think creatively about how to combine the available WORKING services to fulfill the user's needs:
+   - If Stripe (payment) is down but PayPal is available and working, recommend PayPal instead.
+   - If PostgreSQL is down but Built-in Supabase is working, use Supabase for database needs.
+   - If a dedicated auth service is down, consider using Supabase Auth as an alternative.
+   - If no email service is working, suggest the app works without email for now with a TODO note.
+4. NEVER fabricate or assume service instances that are not in the list.
+5. Include a "serviceStatus" field in your design output summarizing which services are available and your substitution decisions.
+
+Example output with serviceStatus:
+\`\`\`json
+{
+  "action": "architect_design",
+  "design": {
+    "template": "nextjs-fullstack",
+    "services": [
+      { "instanceId": "svc-supabase", "name": "Built-in Supabase", "type": "built_in_supabase" }
+    ],
+    "serviceStatus": {
+      "available": ["built_in_supabase"],
+      "unavailable": ["stripe"],
+      "substitutions": [
+        { "needed": "stripe", "replacement": "built_in_supabase", "reason": "Stripe is currently unreachable; using Supabase for data storage, payment can be added later" }
+      ]
+    },
+    ...
+  }
+}
+\`\`\`
+
+Example blocked response when NO working service can fulfill a critical need:
 \`\`\`json
 {
   "status": "blocked",
-  "blockedReason": "此應用需要 Stripe 付款服務，但組織中尚未配置 Stripe 服務實例。請先在服務管理中新增 Stripe 服務。",
-  "missingServices": ["stripe"]
+  "blockedReason": "此應用需要資料庫服務，但所有資料庫服務實例（PostgreSQL, MySQL）目前都無法連線。請先檢查服務設定。",
+  "missingServices": ["postgresql", "mysql"]
 }
 \`\`\`
 
@@ -222,7 +272,7 @@ Guidelines:
 - Be concise. Your output will be rewritten by an output model for the user.
 - Choose the simplest template that meets requirements
 - ALWAYS reference service instances by their exact id and name from the available instances list
-- Only recommend service types from the available list above
+- Prioritize ✅ OK services; avoid ❌ FAILED services unless no alternative exists
 - npmPackages will be ACTUALLY INSTALLED into the generated app. List ALL necessary production dependencies (including @types packages for TypeScript). The template already includes base dependencies (react, next, express, etc.) — only list ADDITIONAL packages the app needs.
 - Developer Agent will follow your specs exactly and write the actual source code
 - Respond in the same language as the user`;
@@ -372,10 +422,19 @@ Guidelines:
 export function buildAppDevArchitectPrompt(
   appContext: string,
   allowedServices: string[],
-  serviceInstances?: Array<{ id: string; name: string; type: string }>
+  serviceInstances?: Array<{ id: string; name: string; type: string; status?: 'ok' | 'failed' | 'untested'; message?: string }>
 ): string {
+  const statusIcon = (s: string | undefined) => {
+    if (s === "ok") return "✅ OK";
+    if (s === "failed") return "❌ FAILED";
+    return "⚠️ UNTESTED";
+  };
+
   const instanceList = serviceInstances && serviceInstances.length > 0
-    ? serviceInstances.map((s) => `  - id: "${s.id}", name: "${s.name}", type: "${s.type}"`).join("\n")
+    ? serviceInstances.map((s) => {
+        const statusStr = s.status ? ` — ${statusIcon(s.status)}${s.status === "failed" && s.message ? ` (${s.message})` : ""}` : "";
+        return `  - id: "${s.id}", name: "${s.name}", type: "${s.type}"${statusStr}`;
+      }).join("\n")
     : "  (No service instances configured yet)";
 
   return `You are the Architect Agent in a multi-agent app development system called AI Go.

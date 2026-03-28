@@ -50,6 +50,8 @@ export interface ServiceInstance {
   id: string;
   name: string;
   type: string;
+  status: "ok" | "failed" | "untested";
+  message?: string;
 }
 
 // ---- Data Access Functions ----
@@ -77,6 +79,7 @@ export async function loadOrgServices(
       id: s.id,
       name: s.name,
       type: s.type,
+      status: "untested" as const,
     }));
   } else {
     const allowed = await prisma.userAllowedServiceInstance.findMany({
@@ -89,6 +92,7 @@ export async function loadOrgServices(
       id: a.service.id,
       name: a.service.name,
       type: a.service.type,
+      status: "untested" as const,
     }));
   }
 
@@ -384,6 +388,87 @@ export async function resolveMultiAgentContext(
     appId: req.appId,
     userId: req.userId,
   };
+}
+
+// ---- Service Probing ----
+
+/**
+ * Probe all service instances for connectivity and return enriched instances
+ * with status ("ok" | "failed" | "untested").
+ *
+ * Loads encrypted config from DB, runs testers in parallel, and optionally
+ * emits SSE progress events via `sendEvent`.
+ */
+export async function probeAndEnrichServices(
+  serviceInstances: ServiceInstance[],
+  organizationId?: string,
+  sendEvent?: (data: unknown) => Promise<void>,
+): Promise<ServiceInstance[]> {
+  if (serviceInstances.length === 0 || !organizationId) {
+    return serviceInstances;
+  }
+
+  const { probeAllServices } = await import("@/lib/services/service-tester");
+  const serviceIds = serviceInstances.map((s) => s.id);
+
+  // Load encrypted config for probing
+  const serviceRows = await prisma.service.findMany({
+    where: { id: { in: serviceIds } },
+    select: {
+      id: true,
+      type: true,
+      configEncrypted: true,
+      iv: true,
+      authTag: true,
+      endpointUrl: true,
+    },
+  });
+
+  // Emit probe-start event
+  if (sendEvent) {
+    await sendEvent({
+      serviceProbeStart: {
+        total: serviceRows.length,
+        services: serviceInstances.map((s) => ({ id: s.id, name: s.name, type: s.type })),
+      },
+    });
+  }
+
+  // Run all probes in parallel (8-second global timeout)
+  const probeResults = await probeAllServices(serviceRows, 8000);
+
+  // Build a lookup map from probe results
+  const probeMap = new Map(probeResults.map((r) => [r.serviceId, r]));
+
+  // Merge probe results into service instances
+  const enriched = serviceInstances.map((svc) => {
+    const probe = probeMap.get(svc.id);
+    return {
+      ...svc,
+      status: probe?.status ?? ("untested" as const),
+      message: probe?.message,
+    };
+  });
+
+  // Emit probe-complete event
+  if (sendEvent) {
+    const summary = {
+      total: enriched.length,
+      ok: enriched.filter((s) => s.status === "ok").length,
+      failed: enriched.filter((s) => s.status === "failed").length,
+      untested: enriched.filter((s) => s.status === "untested").length,
+      results: enriched.map((s) => ({
+        id: s.id,
+        name: s.name,
+        type: s.type,
+        status: s.status,
+        message: s.message,
+      })),
+    };
+    await sendEvent({ serviceProbeComplete: summary });
+  }
+
+  return enriched;
 }
 
 // ---- Private Helpers ----

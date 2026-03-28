@@ -34,6 +34,8 @@ export interface ServiceInstance {
   id: string;
   name: string;
   type: string;
+  status?: "ok" | "failed" | "untested";
+  message?: string;
 }
 
 export interface OrchestratorContext {
