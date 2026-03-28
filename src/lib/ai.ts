@@ -32,6 +32,43 @@ export const AVAILABLE_MODELS = [
 
 export const DEFAULT_MODEL = AVAILABLE_MODELS[0].id;
 
+/** Per-agent model mapping for production (NODE_ENV=production) */
+const PROD_AGENT_MODEL_MAP: Record<string, string> = {
+  pm: "openai/gpt-4o",
+  architect: "anthropic/claude-sonnet-4",
+  developer: "anthropic/claude-sonnet-4",
+  reviewer: "openai/gpt-4o-mini",
+  devops: "openai/gpt-4o-mini",
+};
+
+/** Per-agent model mapping for development (NODE_ENV=development) */
+const DEV_AGENT_MODEL_MAP: Record<string, string> = {
+  pm: "google/gemini-2.5-flash-preview",
+  architect: "openai/gpt-4o",
+  developer: "openai/gpt-4o",
+  reviewer: "openai/gpt-4o-mini",
+  devops: "openai/gpt-4o-mini",
+};
+
+/**
+ * Get the appropriate model for a given agent role.
+ * If the user explicitly selected a non-default model, that takes priority.
+ */
+export function getModelForAgent(agentRole: string, userModel?: string): string {
+  if (userModel && userModel !== DEFAULT_MODEL) return userModel;
+  const map = process.env.NODE_ENV === "production" ? PROD_AGENT_MODEL_MAP : DEV_AGENT_MODEL_MAP;
+  return map[agentRole] || DEFAULT_MODEL;
+}
+
+/**
+ * Get the output/translation model based on environment.
+ */
+export function getOutputModel(): string {
+  return process.env.NODE_ENV === "production"
+    ? "anthropic/claude-haiku-4.5"
+    : "openai/gpt-4o-mini";
+}
+
 export function buildSystemPrompt(allowedServices?: string[]): string {
   const serviceList = allowedServices && allowedServices.length > 0
     ? allowedServices.join(", ")
@@ -389,10 +426,11 @@ export async function translateDirect(
   const systemPrompt = buildTranslationSystemPrompt(languageName);
   const userMessage = buildTranslationUserMessage(agentRole, truncated, locale);
 
+  const outputModel = getOutputModel();
   try {
     return await chat(
       [{ role: "user", content: userMessage }],
-      OUTPUT_MODEL,
+      outputModel,
       undefined,
       systemPrompt,
     );
