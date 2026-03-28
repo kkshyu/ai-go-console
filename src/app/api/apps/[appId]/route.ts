@@ -67,6 +67,11 @@ export async function GET(
           service: { select: { id: true, name: true, type: true } },
         },
       },
+      user: {
+        select: {
+          organization: { select: { slug: true } },
+        },
+      },
     },
   });
 
@@ -74,7 +79,8 @@ export async function GET(
     return NextResponse.json({ error: "App not found" }, { status: 404 });
   }
 
-  return NextResponse.json(app);
+  const { user, ...rest } = app;
+  return NextResponse.json({ ...rest, orgSlug: user.organization.slug });
 }
 
 export async function DELETE(

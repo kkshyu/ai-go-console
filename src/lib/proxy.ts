@@ -1,20 +1,28 @@
 import { prisma } from "@/lib/db";
+import { execFile } from "child_process";
+import { promisify } from "util";
+
+const execFileAsync = promisify(execFile);
 
 const CADDY_ADMIN_URL = process.env.CADDY_ADMIN_URL || "http://localhost:2019";
+const CADDY_CONTAINER = process.env.CADDY_CONTAINER || "aigo-caddy";
 
-interface OrgApps {
+interface AppWithStatus {
   slug: string;
-  domains: string[];
-  apps: { slug: string; port: number }[];
+  port: number;
+  status: string;
 }
 
 /**
  * Sync all routes to Caddy.
- * Each org gets an automatic {org-slug}.localhost domain (local access)
- * plus any custom OrgDomain records (production access).
+ *
+ * Local access domains:
+ *   - dev-{org-slug}.localhost/{app-slug}  → developing apps (dev environment)
+ *   - {org-slug}.localhost/{app-slug}      → running apps (production environment)
+ *
+ * Custom domains (OrgDomain) only apply to running (production) apps.
  */
 export async function syncRoutes(): Promise<void> {
-  // Get all orgs that have running/developing apps
   const orgs = await prisma.organization.findMany({
     include: {
       domains: { where: { isActive: true } },
@@ -25,59 +33,62 @@ export async function syncRoutes(): Promise<void> {
               status: { in: ["running", "developing"] },
               port: { not: null },
             },
-            select: { slug: true, port: true },
+            select: { slug: true, port: true, status: true },
           },
         },
       },
     },
   });
 
-  const orgAppsList: OrgApps[] = orgs
-    .map((org) => {
-      const apps = org.users.flatMap((u) =>
-        u.apps.filter((a): a is { slug: string; port: number } => a.port !== null)
-      );
-      if (apps.length === 0) return null;
+  const routes: unknown[] = [];
+  const localhostDomains: string[] = [];
 
-      // Always include {org-slug}.localhost for local access
-      const domains = [`${org.slug}.localhost`];
-      // Add custom domains for production
+  for (const org of orgs) {
+    const allApps: AppWithStatus[] = org.users.flatMap((u) =>
+      u.apps.filter((a): a is AppWithStatus => a.port !== null)
+    );
+    if (allApps.length === 0) continue;
+
+    const devApps = allApps.filter((a) => a.status === "developing");
+    const prodApps = allApps.filter((a) => a.status === "running");
+
+    // Dev environment: dev-{org-slug}.localhost
+    if (devApps.length > 0) {
+      const devDomain = `dev-${org.slug}.localhost`;
+      localhostDomains.push(devDomain);
+
+      for (const app of devApps) {
+        routes.push({
+          match: [{ host: [devDomain], path: [`/${app.slug}`, `/${app.slug}/*`] }],
+          handle: [
+            { handler: "rewrite", strip_path_prefix: `/${app.slug}` },
+            { handler: "reverse_proxy", upstreams: [{ dial: `host.docker.internal:${app.port}` }] },
+          ],
+        });
+      }
+    }
+
+    // Production environment: {org-slug}.localhost + custom domains
+    if (prodApps.length > 0) {
+      const prodDomain = `prod-${org.slug}.localhost`;
+      localhostDomains.push(prodDomain);
+
+      const prodDomains = [prodDomain];
       for (const d of org.domains) {
-        domains.push(d.domain);
+        prodDomains.push(d.domain);
       }
 
-      return { slug: org.slug, domains, apps };
-    })
-    .filter((x): x is OrgApps => x !== null);
-
-  // Build Caddy routes
-  const routes: unknown[] = [];
-
-  for (const org of orgAppsList) {
-    for (const app of org.apps) {
-      routes.push({
-        match: [
-          {
-            host: org.domains,
-            path: [`/${app.slug}`, `/${app.slug}/*`],
-          },
-        ],
-        handle: [
-          {
-            handler: "rewrite",
-            strip_path_prefix: `/${app.slug}`,
-          },
-          {
-            handler: "reverse_proxy",
-            upstreams: [{ dial: `host.docker.internal:${app.port}` }],
-          },
-        ],
-      });
+      for (const app of prodApps) {
+        routes.push({
+          match: [{ host: prodDomains, path: [`/${app.slug}`, `/${app.slug}/*`] }],
+          handle: [
+            { handler: "rewrite", strip_path_prefix: `/${app.slug}` },
+            { handler: "reverse_proxy", upstreams: [{ dial: `host.docker.internal:${app.port}` }] },
+          ],
+        });
+      }
     }
   }
-
-  // Collect all localhost domains for internal TLS
-  const localhostDomains = orgAppsList.map((o) => `${o.slug}.localhost`);
 
   const caddyConfig = buildCaddyConfig(routes, localhostDomains);
   await pushCaddyConfig(caddyConfig);
@@ -129,10 +140,12 @@ export async function removeRoute(_slug: string): Promise<void> {
 }
 
 /**
- * Get the local access base URL for an organization
+ * Get the local access domain for an organization.
+ * Production: {org-slug}.localhost
+ * Development: dev-{org-slug}.localhost
  */
-export function getLocalDomain(orgSlug: string): string {
-  return `${orgSlug}.localhost`;
+export function getLocalDomain(orgSlug: string, env: "production" | "development" = "production"): string {
+  return env === "development" ? `dev-${orgSlug}.localhost` : `prod-${orgSlug}.localhost`;
 }
 
 /**
@@ -141,15 +154,21 @@ export function getLocalDomain(orgSlug: string): string {
 export async function getAppUrls(
   appSlug: string,
   orgSlug: string,
-  orgId: string
+  orgId: string,
+  appStatus?: string
 ): Promise<{ local: string; custom: string[] }> {
-  const domains = await prisma.orgDomain.findMany({
-    where: { organizationId: orgId, isActive: true },
-    select: { domain: true },
-  });
+  const isDev = appStatus === "developing";
+  const localDomain = getLocalDomain(orgSlug, isDev ? "development" : "production");
+
+  const domains = isDev
+    ? []
+    : await prisma.orgDomain.findMany({
+        where: { organizationId: orgId, isActive: true },
+        select: { domain: true },
+      });
 
   return {
-    local: `https://${orgSlug}.localhost/${appSlug}`,
+    local: `https://${localDomain}/${appSlug}`,
     custom: domains.map((d) => `https://${d.domain}/${appSlug}`),
   };
 }
@@ -166,19 +185,34 @@ export async function getProxyStatus(): Promise<{
 }
 
 async function pushCaddyConfig(config: unknown): Promise<void> {
+  // Caddy Admin API rejects requests from Docker host (remote_ip is Docker gateway,
+  // not localhost). Use `docker exec` to push config from inside the container.
+  // Pipe JSON via stdin to a shell script to avoid escaping issues with large payloads.
   try {
-    const response = await fetch(`${CADDY_ADMIN_URL}/load`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(config),
-    });
+    const configJson = JSON.stringify(config);
+    const child = require("child_process").spawn(
+      "docker",
+      [
+        "exec", "-i", CADDY_CONTAINER, "sh", "-c",
+        "wget -q -O- --post-file=- --header='Content-Type: application/json' http://127.0.0.1:2019/load",
+      ],
+      { stdio: ["pipe", "pipe", "pipe"] }
+    );
 
-    if (!response.ok) {
-      const text = await response.text();
-      console.error(`Caddy config push failed: ${response.status} ${text}`);
-    }
+    let stderr = "";
+    child.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+
+    await new Promise<void>((resolve, reject) => {
+      child.on("close", (code: number) => {
+        if (code === 0) resolve();
+        else reject(new Error(`Caddy config push exited ${code}: ${stderr}`));
+      });
+      child.on("error", reject);
+      child.stdin.write(configJson);
+      child.stdin.end();
+    });
   } catch (error) {
-    console.error("Failed to connect to Caddy Admin API:", error);
+    console.error("Failed to push config to Caddy:", error);
   }
 }
 
@@ -187,12 +221,18 @@ async function pushCaddyConfig(config: unknown): Promise<void> {
  */
 export async function isCaddyAvailable(): Promise<boolean> {
   try {
-    const response = await fetch(`${CADDY_ADMIN_URL}/config/`, {
-      method: "GET",
-      signal: AbortSignal.timeout(3000),
-    });
-    return response.ok;
+    await execFileAsync("docker", [
+      "exec",
+      CADDY_CONTAINER,
+      "wget",
+      "-q",
+      "-O-",
+      "--timeout=3",
+      "http://127.0.0.1:2019/config/",
+    ]);
+    return true;
   } catch {
+    // Container not running or Caddy not responding
     return false;
   }
 }

@@ -31,6 +31,8 @@ interface ProxyStatus {
   mode: string;
   localDomain: string;
   localUrl: string;
+  devDomain: string;
+  devUrl: string;
 }
 
 export default function OrganizationSettingsPage() {
@@ -244,24 +246,46 @@ export default function OrganizationSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           {proxyStatus?.available ? (
-            <>
-              <div className="flex items-center gap-2 rounded-lg border p-3 bg-muted/50">
-                <code className="flex-1 text-sm font-mono">
-                  {proxyStatus.localUrl}
-                </code>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleCopyUrl(proxyStatus.localUrl)}
-                >
-                  <Copy className="h-3.5 w-3.5 mr-1" />
-                  {copiedUrl === proxyStatus.localUrl ? t("copied") : t("copyUrl")}
-                </Button>
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">{t("productionEnv")}</p>
+                <div className="flex items-center gap-2 rounded-lg border p-3 bg-muted/50">
+                  <code className="flex-1 text-sm font-mono">
+                    {proxyStatus.localUrl}
+                  </code>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleCopyUrl(proxyStatus.localUrl)}
+                  >
+                    <Copy className="h-3.5 w-3.5 mr-1" />
+                    {copiedUrl === proxyStatus.localUrl ? t("copied") : t("copyUrl")}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t("appAccessPattern", { url: proxyStatus.localUrl, appSlug: "app-slug" })}
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {t("appAccessPattern", { url: proxyStatus.localUrl })}
-              </p>
-            </>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1">{t("developmentEnv")}</p>
+                <div className="flex items-center gap-2 rounded-lg border p-3 bg-muted/50">
+                  <code className="flex-1 text-sm font-mono">
+                    {proxyStatus.devUrl}
+                  </code>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleCopyUrl(proxyStatus.devUrl)}
+                  >
+                    <Copy className="h-3.5 w-3.5 mr-1" />
+                    {copiedUrl === proxyStatus.devUrl ? t("copied") : t("copyUrl")}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t("appAccessPattern", { url: proxyStatus.devUrl, appSlug: "app-slug" })}
+                </p>
+              </div>
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">
               {t("proxyNotDetected")}

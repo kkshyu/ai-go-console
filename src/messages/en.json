@@ -458,7 +458,9 @@
     "copied": "Copied!",
     "proxyConnected": "Caddy Connected",
     "proxyNotDetected": "Caddy not detected. Start with: docker compose up -d",
-    "appAccessPattern": "Apps accessible at: {url}/{app-slug}"
+    "productionEnv": "Production",
+    "developmentEnv": "Development",
+    "appAccessPattern": "Apps accessible at: {url}/{appSlug}"
   },
   "users": {
     "title": "User Management",

@@ -20,12 +20,15 @@ export async function GET() {
   }
 
   const available = await isCaddyAvailable();
-  const localDomain = getLocalDomain(org.slug);
+  const prodDomain = getLocalDomain(org.slug, "production");
+  const devDomain = getLocalDomain(org.slug, "development");
 
   return NextResponse.json({
     available,
     mode: "caddy",
-    localDomain,
-    localUrl: `https://${localDomain}`,
+    localDomain: prodDomain,
+    localUrl: `https://${prodDomain}`,
+    devDomain,
+    devUrl: `https://${devDomain}`,
   });
 }
