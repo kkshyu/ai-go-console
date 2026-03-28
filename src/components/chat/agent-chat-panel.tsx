@@ -5,13 +5,13 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Send, User, Loader2, ChevronDown, Zap, MessageCircle } from "lucide-react";
+import { Send, User, Loader2, ChevronDown, Zap } from "lucide-react";
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/ai";
 import {
   createInitialOrchestrationState,
 } from "@/lib/agents/types";
 import type { AgentRole, OrchestrationState } from "@/lib/agents/types";
-import { PipelineProgress, type ActorStatusInfo } from "./pipeline-progress";
+import { PipelineProgress } from "./pipeline-progress";
 import { MarkdownContent } from "@/components/chat/markdown-content";
 import { AgentAvatar } from "./agent-avatar";
 
@@ -90,9 +90,6 @@ export function AgentChatPanel({
   const [currentAgent, setCurrentAgent] = useState<AgentRole | null>(null);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
   const [statusMessage, setStatusMessage] = useState<string>("");
-  const [actorStatuses, setActorStatuses] = useState<ActorStatusInfo[]>([]);
-  const [restartEvent, setRestartEvent] = useState<{ actorId: string; role: string; restartCount: number } | null>(null);
-  const [needsUserInput, setNeedsUserInput] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
 
@@ -136,7 +133,6 @@ export function AgentChatPanel({
       setMessages(newMessages);
       setInput("");
       setIsLoading(true);
-      setNeedsUserInput(false);
 
       onUserMessage?.(userMessage.content);
 
@@ -229,20 +225,13 @@ export function AgentChatPanel({
                   onOrchestrationUpdate?.(parsed.orchestrationState);
                 }
 
-                // PM needs user input — show prompt
+                // PM needs user input — add as chat message
                 if (parsed.needsUserInput) {
-                  setNeedsUserInput(true);
-                }
-
-                // Update actor status to idle
-                if (parsed.agentRole && parsed.agentRole !== "pm") {
-                  setActorStatuses((prev) =>
-                    prev.map((a) =>
-                      a.role === parsed.agentRole
-                        ? { ...a, status: "idle" as const }
-                        : a
-                    )
-                  );
+                  const inputMsgId = (Date.now() + Math.random()).toString();
+                  setMessages((prev) => [
+                    ...prev,
+                    { id: inputMsgId, role: "assistant", content: parsed.needsUserInputMessage || "請問還有什麼需要補充的嗎？", agentRole: "pm" },
+                  ]);
                 }
 
                 // Reset for next agent
@@ -257,24 +246,6 @@ export function AgentChatPanel({
                 setCurrentAgent(parsed.agentRole);
                 setOrchState(parsed.orchestrationState);
                 onOrchestrationUpdate?.(parsed.orchestrationState);
-                // Track active actor status
-                if (parsed.agentRole !== "pm") {
-                  setActorStatuses((prev) => {
-                    const actorId = `${parsed.agentRole}-0`;
-                    const existing = prev.findIndex((a) => a.actorId === actorId);
-                    const updated: ActorStatusInfo = {
-                      actorId,
-                      role: parsed.agentRole,
-                      status: "processing",
-                    };
-                    if (existing >= 0) {
-                      const next = [...prev];
-                      next[existing] = updated;
-                      return next;
-                    }
-                    return [...prev, updated];
-                  });
-                }
               }
 
               // Translated content (accumulated for rawContent, not shown in-place)
@@ -322,35 +293,6 @@ export function AgentChatPanel({
                 continue;
               }
 
-              // Actor restarted by supervisor
-              if (parsed.actorRestarted) {
-                setRestartEvent({
-                  actorId: parsed.actorRestarted.actorId,
-                  role: parsed.actorRestarted.role,
-                  restartCount: parsed.actorRestarted.restartCount,
-                });
-                // Update actor statuses
-                setActorStatuses((prev) => {
-                  const existing = prev.findIndex(
-                    (a) => a.actorId === parsed.actorRestarted.actorId
-                  );
-                  const updated: ActorStatusInfo = {
-                    actorId: parsed.actorRestarted.actorId,
-                    role: parsed.actorRestarted.role as AgentRole,
-                    status: "restarting",
-                    restartCount: parsed.actorRestarted.restartCount,
-                  };
-                  if (existing >= 0) {
-                    const next = [...prev];
-                    next[existing] = updated;
-                    return next;
-                  }
-                  return [...prev, updated];
-                });
-                // Clear restart event after 3 seconds
-                setTimeout(() => setRestartEvent(null), 3000);
-                continue;
-              }
 
               // Files written to Docker container by backend
               if (parsed.filesWritten) {
@@ -411,7 +353,6 @@ export function AgentChatPanel({
         setCurrentAgent(null);
         setAgentPhase(null);
         setStatusMessage("");
-        setRestartEvent(null);
       }
     },
     [
@@ -527,17 +468,6 @@ export function AgentChatPanel({
               )}
             </div>
           ))}
-          {/* PM status update as regular chat message */}
-          {(isLoading || externalLoading) && statusMessage && (
-            <div className="flex gap-3 justify-start">
-              <AgentAvatar agentRole="pm" />
-              <div className="max-w-[80%] flex flex-col gap-1">
-                <div className="rounded-lg px-4 py-2 text-sm bg-muted">
-                  {statusMessage}
-                </div>
-              </div>
-            </div>
-          )}
           {externalLoading && (
             <div className="flex gap-3">
               <AgentAvatar agentRole="pm" />
@@ -550,14 +480,6 @@ export function AgentChatPanel({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* PM needs user input prompt */}
-        {needsUserInput && !isLoading && !externalLoading && (
-          <div className="mb-3 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-primary">
-            <MessageCircle className="h-4 w-4 shrink-0" />
-            <span>PM 正在等待您的回覆，請在下方輸入訊息</span>
-          </div>
-        )}
-
         {/* Agent Progress — below messages */}
         {showProgress && (
           <div className="mb-3">
@@ -568,8 +490,6 @@ export function AgentChatPanel({
               agentPhase={agentPhase}
               statusMessage={statusMessage}
               generatingText={resolvedGeneratingText}
-              actorStatuses={actorStatuses}
-              restartEvent={restartEvent}
             />
           </div>
         )}
