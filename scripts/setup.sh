@@ -96,16 +96,19 @@ else
   info "Step 3/7: 跳過基礎服務啟動 (--skip-infra)"
 fi
 
-# ── Step 4: 確認資料庫連線 ───────────────────────────────────────────────
-info "Step 4/7: 確認資料庫連線..."
+# ── Step 4: 確認服務連線（PostgreSQL, Redis, Built-in PostgreSQL）────────
+info "Step 4/7: 確認服務連線..."
 
 if [ "$SKIP_INFRA" = false ]; then
   kubectl config use-context k3d-aigo 2>/dev/null || error "無法切換至 k3d-aigo context"
 
   # 停止已有的 port-forward
   pkill -f "kubectl port-forward.*postgres.*5432" 2>/dev/null || true
+  pkill -f "kubectl port-forward.*redis.*6379" 2>/dev/null || true
+  pkill -f "kubectl port-forward.*builtin-postgres.*5434" 2>/dev/null || true
   sleep 1
 
+  # PostgreSQL (平台資料庫)
   kubectl wait --for=condition=ready pod -l app=postgres \
     -n aigo-system --timeout=60s 2>/dev/null || error "PostgreSQL Pod 未就緒"
 
@@ -118,8 +121,36 @@ if [ "$SKIP_INFRA" = false ]; then
   fi
 
   info "  PostgreSQL port-forward 已啟動 (PID: $PF_PID, localhost:5432) ✓"
+
+  # Redis (BullMQ 訊息佇列)
+  kubectl wait --for=condition=ready pod -l app=redis \
+    -n aigo-system --timeout=60s 2>/dev/null || error "Redis Pod 未就緒"
+
+  kubectl port-forward svc/redis 6379:6379 -n aigo-system &>/dev/null &
+  REDIS_PF_PID=$!
+  sleep 2
+
+  if ! kill -0 $REDIS_PF_PID 2>/dev/null; then
+    error "Redis port-forward 啟動失敗"
+  fi
+
+  info "  Redis port-forward 已啟動 (PID: $REDIS_PF_PID, localhost:6379) ✓"
+
+  # Built-in PostgreSQL (組織資料庫)
+  kubectl wait --for=condition=ready pod -l app=builtin-postgres \
+    -n aigo-system --timeout=60s 2>/dev/null || error "Built-in PostgreSQL Pod 未就緒"
+
+  kubectl port-forward svc/builtin-postgres 5434:5432 -n aigo-system &>/dev/null &
+  BPG_PF_PID=$!
+  sleep 2
+
+  if ! kill -0 $BPG_PF_PID 2>/dev/null; then
+    error "Built-in PostgreSQL port-forward 啟動失敗"
+  fi
+
+  info "  Built-in PostgreSQL port-forward 已啟動 (PID: $BPG_PF_PID, localhost:5434) ✓"
 else
-  info "  使用既有的資料庫連線 (localhost:5432)"
+  info "  使用既有的服務連線 (PostgreSQL:5432, Redis:6379, Built-in PG:5434)"
 fi
 
 # ── Step 5: 安裝依賴 ─────────────────────────────────────────────────────
@@ -184,7 +215,10 @@ echo "    kubectl get pods -n aigo-system   # 平台服務"
 echo "    kubectl get pods -n aigo-dev      # Dev 容器"
 echo ""
 if [ -n "${PF_PID:-}" ]; then
-  echo "  注意：PostgreSQL port-forward 在背景執行 (PID: $PF_PID)"
-  echo "  停止 port-forward: kill $PF_PID"
+  echo "  Port-forward 背景執行中："
+  echo "    PostgreSQL:       PID $PF_PID (localhost:5432)"
+  [ -n "${REDIS_PF_PID:-}" ] && echo "    Redis:            PID $REDIS_PF_PID (localhost:6379)"
+  [ -n "${BPG_PF_PID:-}" ]   && echo "    Built-in PG:      PID $BPG_PF_PID (localhost:5434)"
+  echo "  停止全部: kill ${PF_PID} ${REDIS_PF_PID:-} ${BPG_PF_PID:-}"
   echo ""
 fi

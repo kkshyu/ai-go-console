@@ -11,7 +11,7 @@
 - **樣式**: Tailwind CSS 4 + Radix UI
 - **國際化**: next-intl (繁體中文 / English)
 - **編輯器**: Monaco Editor
-- **容器**: Docker + Caddy 反向代理
+- **容器**: k3d/k8s + Traefik 反向代理
 - **測試**: Playwright (E2E)
 
 ## 系統需求
@@ -27,8 +27,8 @@
 # 安裝依賴
 pnpm install
 
-# 啟動基礎服務 (PostgreSQL, Caddy 等)
-docker compose up -d
+# 啟動基礎服務 (PostgreSQL, Redis, Traefik 等)
+bash scripts/setup.sh
 
 # 設定環境變數
 cp .env.example .env.local
@@ -138,7 +138,8 @@ pnpm test:e2e:ui      # E2E 測試 (含 UI)
 | postgres | 主資料庫 | 5432 |
 | builtin-postgres | 應用內建 PostgreSQL | 5434 |
 | disk-storage | 檔案儲存 | - |
-| caddy | 反向代理 / SSL | 80, 443 |
+| traefik | 反向代理 / SSL (Ingress Controller) | 80, 443 |
+| redis | 訊息佇列 (BullMQ) | 6379 |
 
 ## License
 

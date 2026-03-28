@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { isCaddyAvailable, getLocalDomain } from "@/lib/k8s/ingress";
+import { isTraefikAvailable, getLocalDomain } from "@/lib/k8s/ingress";
 import { prisma } from "@/lib/db";
 
 export async function GET() {
@@ -19,13 +19,13 @@ export async function GET() {
     return NextResponse.json({ error: "Organization not found" }, { status: 404 });
   }
 
-  const available = await isCaddyAvailable();
+  const available = await isTraefikAvailable();
   const prodDomain = getLocalDomain(org.slug, "production");
   const devDomain = getLocalDomain(org.slug, "development");
 
   return NextResponse.json({
     available,
-    mode: "caddy",
+    mode: "traefik",
     localDomain: prodDomain,
     localUrl: `https://${prodDomain}`,
     devDomain,

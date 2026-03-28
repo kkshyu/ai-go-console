@@ -119,6 +119,9 @@ kubectl apply -f "$PROJECT_DIR/k8s/traefik/"
 # 平台服務（PostgreSQL, Redis, Storage）
 kubectl apply -f "$PROJECT_DIR/k8s/platform/"
 
+# Background Workers
+kubectl apply -f "$PROJECT_DIR/k8s/workers/" 2>/dev/null || true
+
 # Network Policies
 kubectl apply -f "$PROJECT_DIR/k8s/network-policies/" 2>/dev/null || true
 
@@ -141,6 +144,11 @@ kubectl wait --for=condition=ready pod -l app=postgres \
 info "  等待 Redis..."
 kubectl wait --for=condition=ready pod -l app=redis \
   -n aigo-system --timeout=60s 2>/dev/null || warn "  Redis 尚未就緒，請稍後檢查"
+
+# 等待 Built-in PostgreSQL
+info "  等待 Built-in PostgreSQL..."
+kubectl wait --for=condition=ready pod -l app=builtin-postgres \
+  -n aigo-system --timeout=120s 2>/dev/null || warn "  Built-in PostgreSQL 尚未就緒，請稍後檢查"
 
 echo ""
 echo -e "${GREEN}============================================${NC}"

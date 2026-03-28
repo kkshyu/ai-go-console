@@ -11,8 +11,8 @@ Build a web-based console called "AI Go" that enables users to create, manage, a
 - **PostgreSQL** + **Prisma ORM** - production-grade DB with easy `prisma migrate dev` migrations
 - **Handlebars** - template rendering for app scaffolding
 - **Node.js crypto** (AES-256-GCM) - credential encryption
-- **Docker Compose** - per-app container lifecycle
-- **Caddy** (reverse proxy) - auto-TLS, custom domain binding for each app
+- **k3d/k8s** - per-app container lifecycle
+- **Traefik** (Ingress Controller) - auto-TLS, custom domain binding for each app
 - **OpenRouter** - AI provider for conversational app creation (access to multiple models)
 - **next-intl** - i18n for bilingual UI (繁體中文 + English)
 
@@ -49,7 +49,7 @@ ai-go-console/
 │   │   ├── generator.ts            # Template → app file generation
 │   │   ├── dev-server.ts            # Dev server process manager (start/stop/track)
 │   │   ├── docker.ts               # Docker build + compose exec helpers
-│   │   ├── proxy.ts                # Caddy reverse proxy management (add/remove routes)
+│   │   ├── k8s/                    # Kubernetes client, ingress, reconciler
 │   │   ├── ai.ts                   # OpenRouter client (OpenAI-compatible)
 │   │   └── templates/              # Template registry + definitions
 │   └── types/index.ts
@@ -58,9 +58,12 @@ ai-go-console/
 │   ├── node-api/
 │   └── nextjs-fullstack/
 ├── apps/                            # Generated apps (gitignored)
-├── caddy/
-│   └── Caddyfile                    # Base Caddy config (managed by console)
-└── docker-compose.yml               # PostgreSQL + Caddy reverse proxy
+├── k8s/                             # Kubernetes manifests
+│   ├── platform/                    # PostgreSQL, Redis, Built-in PG, Storage
+│   ├── traefik/                     # Traefik Ingress Controller
+│   ├── workers/                     # Background worker deployment
+│   └── network-policies/
+└── scripts/setup.sh                 # One-click setup (k3d cluster + services)
 ```
 
 ## Database Schema
@@ -113,15 +116,15 @@ Models in `prisma/schema.prisma`:
 - Apps are fully isolated — each app's docker-compose manages its own containers independently
 
 ### Phase 5: Reverse Proxy & Custom Domains
-- Set up Caddy as reverse proxy (runs in Docker alongside console)
+- Traefik Ingress Controller deployed via k3d/k8s
 - Custom domains stored in PostgreSQL (`app_domains` table) as the single source of truth
-- On app start/publish/domain change: `proxy.ts` reads all active domains from DB → regenerates Caddy config → reloads via Caddy Admin API
-- Default routing: `<slug>.localhost` → app's container port
-- Custom domain binding: user adds domain in app settings → saved to DB → Caddy config regenerated
-- `src/lib/proxy.ts` — reads domain→port mappings from DB, generates Caddyfile, pushes to Caddy
-- On console startup: sync all active domains from DB → ensure Caddy config is current
+- On app start/publish/domain change: `k8s/ingress.ts` syncs IngressRoute CRDs from DB state
+- Default routing: `dev-{org}.localhost/{slug}` (dev) / `prod-{org}.localhost/{slug}` (prod)
+- Custom domain binding: user adds domain in app settings → saved to DB → IngressRoute reconciled
+- `src/lib/k8s/ingress.ts` — manages Traefik IngressRoute + Middleware CRDs
+- On console startup: sync all active domains from DB → ensure IngressRoute resources are current
 - Console UI: domain management in app detail page (add/remove domains + DNS instructions)
-- Caddy handles TLS automatically for custom domains (Let's Encrypt)
+- Traefik handles TLS automatically for custom domains (Let's Encrypt)
 
 ### Phase 6: Authentication & Authorization
 - User model with two roles: **admin** and **user**

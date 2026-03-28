@@ -1,7 +1,6 @@
 /**
  * Kubernetes Ingress / Route Manager (Traefik)
  *
- * Drop-in replacement for proxy.ts.
  * Manages Traefik IngressRoute + Middleware CRDs for routing
  * dev and prod apps via host/path-based rules.
  */
@@ -39,7 +38,6 @@ interface AppWithStatus {
 /**
  * Sync all routes to Traefik IngressRoute CRDs.
  *
- * Replaces the Caddy-based syncRoutes() in proxy.ts.
  * Creates/updates/deletes IngressRoute + Middleware resources
  * based on the current database state.
  */
@@ -176,12 +174,6 @@ export async function getProxyStatus(): Promise<{
 export async function isTraefikAvailable(): Promise<boolean> {
   return isClusterAvailable();
 }
-
-/** @deprecated Use isTraefikAvailable() */
-export const isCaddyAvailable = isTraefikAvailable;
-
-/** @deprecated Use syncRoutes() */
-export const syncCaddyRoutes = syncRoutes;
 
 // ── Internal: Create IngressRoute + Middleware ───────────────────────────────
 

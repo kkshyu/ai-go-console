@@ -170,24 +170,24 @@ export default function AppDetailPage() {
   const [devRunning, setDevRunning] = useState(false);
   const hasPreview = app?.port && devRunning;
 
-  // URL mode: "local" = localhost:port, "caddy" = dev/prod-{org}.localhost/{slug}
-  const [previewUrlMode, setPreviewUrlMode] = useState<"local" | "caddy">("local");
-  const [deployUrlMode, setDeployUrlMode] = useState<"local" | "caddy">("local");
+  // URL mode: "local" = localhost:port, "proxy" = dev/prod-{org}.localhost/{slug}
+  const [previewUrlMode, setPreviewUrlMode] = useState<"local" | "proxy">("local");
+  const [deployUrlMode, setDeployUrlMode] = useState<"local" | "proxy">("local");
 
-  const devCaddyUrl = app?.orgSlug ? `https://dev-${app.orgSlug}.localhost/${app.slug}` : null;
-  const prodCaddyUrl = app?.orgSlug ? `https://prod-${app.orgSlug}.localhost/${app.slug}` : null;
+  const devProxyUrl = app?.orgSlug ? `https://dev-${app.orgSlug}.localhost/${app.slug}` : null;
+  const prodProxyUrl = app?.orgSlug ? `https://prod-${app.orgSlug}.localhost/${app.slug}` : null;
 
   const previewUrl = hasPreview
-    ? previewUrlMode === "caddy" && devCaddyUrl
-      ? devCaddyUrl
+    ? previewUrlMode === "proxy" && devProxyUrl
+      ? devProxyUrl
       : `http://localhost:${app.port}`
     : null;
 
   // Production is running if app status is "running"
   const isProdRunning = app?.status === "running";
   const prodUrl = isProdRunning && app?.prodPort
-    ? deployUrlMode === "caddy" && prodCaddyUrl
-      ? prodCaddyUrl
+    ? deployUrlMode === "proxy" && prodProxyUrl
+      ? prodProxyUrl
       : `http://localhost:${app.prodPort}`
     : null;
 
@@ -853,10 +853,10 @@ export default function AppDetailPage() {
                         size="icon"
                         className="h-5 w-5 shrink-0"
                         onClick={() => {
-                          setPreviewUrlMode((m) => m === "local" ? "caddy" : "local");
+                          setPreviewUrlMode((m) => m === "local" ? "proxy" : "local");
                           setIframeKey((k) => k + 1);
                         }}
-                        title={previewUrlMode === "local" ? "Switch to Caddy proxy" : "Switch to localhost"}
+                        title={previewUrlMode === "local" ? "Switch to Traefik proxy" : "Switch to localhost"}
                       >
                         <ArrowLeftRight className="h-3 w-3" />
                       </Button>
@@ -1054,8 +1054,8 @@ export default function AppDetailPage() {
                       variant="ghost"
                       size="icon"
                       className="h-5 w-5 shrink-0"
-                      onClick={() => setDeployUrlMode((m) => m === "local" ? "caddy" : "local")}
-                      title={deployUrlMode === "local" ? "Switch to Caddy proxy" : "Switch to localhost"}
+                      onClick={() => setDeployUrlMode((m) => m === "local" ? "proxy" : "local")}
+                      title={deployUrlMode === "local" ? "Switch to Traefik proxy" : "Switch to localhost"}
                     >
                       <ArrowLeftRight className="h-3 w-3" />
                     </Button>

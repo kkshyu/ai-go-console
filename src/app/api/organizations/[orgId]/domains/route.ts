@@ -60,7 +60,7 @@ export async function POST(
     },
   });
 
-  // Sync Caddy routes (non-blocking)
+  // Sync Traefik routes (non-blocking)
   syncRoutes().catch(() => {});
 
   return NextResponse.json(orgDomain, { status: 201 });
@@ -94,7 +94,7 @@ export async function DELETE(
 
   await prisma.orgDomain.delete({ where: { id: domainId } });
 
-  // Sync Caddy routes (non-blocking)
+  // Sync Traefik routes (non-blocking)
   syncRoutes().catch(() => {});
 
   return NextResponse.json({ success: true });
