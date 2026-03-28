@@ -33,9 +33,9 @@ export function extractJson<T = Record<string, unknown>>(
     }
   }
 
-  // Strategy 2: Raw JSON object
+  // Strategy 2: Raw JSON object or array
   const trimmed = content.trim();
-  if (trimmed.startsWith("{")) {
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     try {
       return JSON.parse(trimmed) as T;
     } catch {
@@ -49,8 +49,8 @@ export function extractJson<T = Record<string, unknown>>(
     }
   }
 
-  // Strategy 3: JSON within text
-  const jsonInText = content.match(/\{[\s\S]*\}/);
+  // Strategy 3: JSON within text (object or array)
+  const jsonInText = content.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
   if (jsonInText) {
     try {
       return JSON.parse(jsonInText[0]) as T;
@@ -58,6 +58,30 @@ export function extractJson<T = Record<string, unknown>>(
   }
 
   return null;
+}
+
+/**
+ * Extract ALL JSON blocks from LLM output.
+ * Returns an array of parsed objects from all ```json blocks.
+ */
+export function extractAllJson<T = Record<string, unknown>>(
+  content: string,
+): T[] {
+  if (!content) return [];
+
+  const results: T[] = [];
+  const codeBlockMatches = content.matchAll(/```(?:json)?\s*\n([\s\S]*?)\n```/g);
+
+  for (const match of codeBlockMatches) {
+    try {
+      results.push(JSON.parse(match[1]) as T);
+    } catch {
+      const fixed = attemptJsonFix(match[1]);
+      if (fixed) results.push(fixed as T);
+    }
+  }
+
+  return results;
 }
 
 // ---- PM Action Validation ----
@@ -257,8 +281,66 @@ function attemptJsonFix(jsonStr: string): Record<string, unknown> | null {
   try {
     return JSON.parse(fixed);
   } catch {
-    return null;
+    /* continue fixing */
   }
+
+  // Try replacing single quotes with double quotes
+  fixed = fixed.replace(/'/g, '"');
+  try {
+    return JSON.parse(fixed);
+  } catch {
+    /* continue */
+  }
+
+  // Try balancing brackets (truncated JSON)
+  const balanced = balanceBrackets(fixed);
+  if (balanced !== fixed) {
+    try {
+      return JSON.parse(balanced);
+    } catch {
+      /* give up */
+    }
+  }
+
+  return null;
+}
+
+/** Attempt to balance unclosed brackets in truncated JSON */
+function balanceBrackets(str: string): string {
+  const depth = { brace: 0, bracket: 0 };
+  let inString = false;
+  let escape = false;
+
+  for (const char of str) {
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (char === "\\") {
+      escape = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (char === "{") depth.brace++;
+    if (char === "}") depth.brace--;
+    if (char === "[") depth.bracket++;
+    if (char === "]") depth.bracket--;
+  }
+
+  let result = str;
+  while (depth.bracket > 0) {
+    result += "]";
+    depth.bracket--;
+  }
+  while (depth.brace > 0) {
+    result += "}";
+    depth.brace--;
+  }
+  return result;
 }
 
 /**
