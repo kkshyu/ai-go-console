@@ -125,54 +125,57 @@ async function main() {
 
   // ── 2b. Built-in services for each org ────────────────────────────────
 
-  for (const org of [acme, startup]) {
-    // Provision a real database & user on the shared PostgreSQL instance
-    const pgCreds = await provisionDatabase(org.slug);
+  if (process.env.PLATFORM_PG_ADMIN_URL) {
+    for (const org of [acme, startup]) {
+      // Provision a real database & user on the shared PostgreSQL instance
+      const pgCreds = await provisionDatabase(org.slug);
 
-    const pgCfg = encrypt(JSON.stringify({
-      host: process.env.PLATFORM_PG_HOST || "localhost",
-      port: process.env.PLATFORM_PG_PORT || "5432",
-      database: pgCreds.database,
-      username: pgCreds.username,
-      password: pgCreds.password,
-    }));
+      const pgCfg = encrypt(JSON.stringify({
+        host: process.env.PLATFORM_PG_HOST || "localhost",
+        port: process.env.PLATFORM_PG_PORT || "5432",
+        database: pgCreds.database,
+        username: pgCreds.username,
+        password: pgCreds.password,
+      }));
 
-    await prisma.service.upsert({
-      where: { id: `builtin-pg-${org.slug}` },
-      update: {
-        configEncrypted: pgCfg.ciphertext,
-        iv: pgCfg.iv,
-        authTag: pgCfg.authTag,
-      },
-      create: {
-        id: `builtin-pg-${org.slug}`,
-        name: "Built-in PostgreSQL",
-        type: ServiceType.built_in_pg,
-        configEncrypted: pgCfg.ciphertext,
-        iv: pgCfg.iv,
-        authTag: pgCfg.authTag,
-        organizationId: org.id,
-      },
-    });
+      await prisma.service.upsert({
+        where: { id: `builtin-pg-${org.slug}` },
+        update: {
+          configEncrypted: pgCfg.ciphertext,
+          iv: pgCfg.iv,
+          authTag: pgCfg.authTag,
+        },
+        create: {
+          id: `builtin-pg-${org.slug}`,
+          name: "Built-in PostgreSQL",
+          type: ServiceType.built_in_pg,
+          configEncrypted: pgCfg.ciphertext,
+          iv: pgCfg.iv,
+          authTag: pgCfg.authTag,
+          organizationId: org.id,
+        },
+      });
 
-    const diskCfg = encrypt(JSON.stringify({
-      basePath: `/data/storage/${org.slug}`,
-    }));
+      const diskCfg = encrypt(JSON.stringify({
+        basePath: `/data/storage/${org.slug}`,
+      }));
 
-    await prisma.service.upsert({
-      where: { id: `builtin-disk-${org.slug}` },
-      update: {},
-      create: {
-        id: `builtin-disk-${org.slug}`,
-        name: "Built-in Disk Storage",
-        type: ServiceType.built_in_disk,
-        configEncrypted: diskCfg.ciphertext,
-        iv: diskCfg.iv,
-        authTag: diskCfg.authTag,
-        organizationId: org.id,
-      },
-    });
-
+      await prisma.service.upsert({
+        where: { id: `builtin-disk-${org.slug}` },
+        update: {},
+        create: {
+          id: `builtin-disk-${org.slug}`,
+          name: "Built-in Disk Storage",
+          type: ServiceType.built_in_disk,
+          configEncrypted: diskCfg.ciphertext,
+          iv: diskCfg.iv,
+          authTag: diskCfg.authTag,
+          organizationId: org.id,
+        },
+      });
+    }
+  } else {
+    console.log("  ⚠ Skipping built-in PG/Disk (PLATFORM_PG_ADMIN_URL not set)");
   }
 
   // Industry built-in services for each org
