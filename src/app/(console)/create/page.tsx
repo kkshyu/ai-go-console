@@ -18,8 +18,6 @@ import {
   BarChart3,
   Sparkles,
   ArrowRight,
-  ChevronDown,
-  ChevronUp,
   Send,
 } from "lucide-react";
 import { ChatPanel } from "@/components/chat/chat-panel";
@@ -105,7 +103,7 @@ export default function CreateAppPage() {
   const router = useRouter();
 
   const [showChat, setShowChat] = useState(false);
-  const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [creatingPreset, setCreatingPreset] = useState<string | null>(null);
   const [presetError, setPresetError] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
@@ -299,8 +297,9 @@ export default function CreateAppPage() {
     setShowChat(true);
   };
 
-  const getPresetsForTemplate = (templateId: string) =>
-    APP_PRESETS.filter((p) => p.templateId === templateId);
+  const filteredPresets = selectedTemplate
+    ? APP_PRESETS.filter((p) => p.templateId === selectedTemplate)
+    : APP_PRESETS;
 
   // Chat mode
   if (showChat) {
@@ -426,88 +425,71 @@ export default function CreateAppPage() {
         </div>
       )}
 
-      {/* System Template Cards */}
-      <div className="mx-auto w-full max-w-4xl px-4 pb-8">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Category Filter */}
+      <div className="mx-auto w-full max-w-4xl px-4 mb-4">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant={selectedTemplate === null ? "default" : "outline"}
+            size="sm"
+            className="rounded-full"
+            onClick={() => setSelectedTemplate(null)}
+          >
+            {t("allCategories")}
+          </Button>
           {SYSTEM_TEMPLATES.map((tmplId) => {
             const Icon = TEMPLATE_ICONS[tmplId];
-            const isExpanded = expandedTemplate === tmplId;
-            const presets = getPresetsForTemplate(tmplId);
+            return (
+              <Button
+                key={tmplId}
+                variant={selectedTemplate === tmplId ? "default" : "outline"}
+                size="sm"
+                className="rounded-full gap-1.5"
+                onClick={() => setSelectedTemplate(selectedTemplate === tmplId ? null : tmplId)}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {t(`templates.${tmplId}.name`)}
+              </Button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Preset Cards */}
+      <div className="mx-auto w-full max-w-4xl px-4 pb-8">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredPresets.map((preset) => {
+            const Icon = TEMPLATE_ICONS[preset.templateId];
+            const isCreating = creatingPreset === preset.id;
             return (
               <button
-                key={tmplId}
-                onClick={() => setExpandedTemplate(isExpanded ? null : tmplId)}
-                className={`group flex flex-col items-center gap-3 rounded-2xl border p-5 text-center transition-all hover:shadow-lg hover:-translate-y-0.5 ${
-                  isExpanded
-                    ? "border-primary bg-primary/5 shadow-md"
-                    : "bg-card hover:border-primary/40"
-                }`}
+                key={preset.id}
+                onClick={() => handlePresetCreate(preset)}
+                disabled={!!creatingPreset}
+                className="group flex items-start gap-3 rounded-xl border bg-card p-4 text-left transition-all hover:shadow-md hover:border-primary/40 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <div className={`rounded-xl p-3 transition-colors ${
-                  isExpanded ? "bg-primary/15" : "bg-primary/10 group-hover:bg-primary/15"
-                }`}>
-                  <Icon className="h-5 w-5 text-primary" />
+                <div className="rounded-lg bg-primary/10 p-2 shrink-0 mt-0.5 group-hover:bg-primary/15 transition-colors">
+                  {isCreating ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  ) : (
+                    <Icon className="h-4 w-4 text-primary" />
+                  )}
                 </div>
-                <div>
-                  <p className="font-semibold text-sm">{t(`templates.${tmplId}.name`)}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {presets.length} {t("presetCount")}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-sm">{t(`presets.${preset.id}.name`)}</span>
+                    <Badge variant="outline" className="text-xs font-normal shrink-0">
+                      {t(`templates.${preset.templateId}.name`)}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-snug">
+                    {t(`presets.${preset.id}.description`)}
                   </p>
                 </div>
-                <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${
-                  isExpanded ? "rotate-180" : ""
-                }`} />
+                <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
               </button>
             );
           })}
         </div>
-
-        {/* Expanded Preset List */}
-        {expandedTemplate && (
-          <div className="mt-4 rounded-xl border bg-card p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-sm">
-                {t(`templates.${expandedTemplate}.name`)} — {t("choosePreset")}
-              </h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setExpandedTemplate(null)}
-                className="gap-1 h-7"
-              >
-                <ChevronUp className="h-3.5 w-3.5" />
-                {t("collapse")}
-              </Button>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {getPresetsForTemplate(expandedTemplate).map((preset) => {
-                const isCreating = creatingPreset === preset.id;
-                return (
-                  <button
-                    key={preset.id}
-                    onClick={() => handlePresetCreate(preset)}
-                    disabled={!!creatingPreset}
-                    className="group flex items-start gap-3 rounded-xl border bg-background p-4 text-left transition-all hover:shadow-md hover:border-primary/40 disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    <div className="rounded-lg bg-primary/10 p-2 shrink-0 mt-0.5 group-hover:bg-primary/15 transition-colors">
-                      {isCreating ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      ) : (
-                        <ArrowRight className="h-4 w-4 text-primary" />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <span className="font-medium text-sm">{t(`presets.${preset.id}.name`)}</span>
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-snug">
-                        {t(`presets.${preset.id}.description`)}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
