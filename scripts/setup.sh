@@ -65,18 +65,36 @@ fi
 info "  pnpm $(pnpm -v), node $(node -v), docker $(docker --version | awk '{print $3}' | tr -d ',')"
 info "  k3d $(k3d version | head -1 | awk '{print $3}'), kubectl $(kubectl version --client -o json 2>/dev/null | grep gitVersion | awk -F'\"' '{print $4}')"
 
-# ── Step 2: 確認 .env.local ──────────────────────────────────────────────
+# ── Step 2: 確認環境變數檔案 ─────────────────────────────────────────────
 info "Step 2/7: 確認環境變數..."
 
 # 找到 git 主專案根目錄（非 worktree）
 MAIN_PROJECT_DIR=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | sed 's|/.git$||')
 
+# .env（非機密預設值）— 若不存在則從 .env.example 複製
+if [ ! -f "$PROJECT_DIR/.env" ]; then
+  if [ -f "$PROJECT_DIR/.env.example" ]; then
+    # 從 .env.example 擷取非機密部分（到 Secrets 區段之前）
+    sed -n '/^# === Non-secret/,/^# === Secrets/{ /^# === Secrets/d; p; }' \
+      "$PROJECT_DIR/.env.example" > "$PROJECT_DIR/.env"
+    info "  已從 .env.example 建立 .env ✓"
+  elif [ -f "$MAIN_PROJECT_DIR/.env" ]; then
+    cp "$MAIN_PROJECT_DIR/.env" "$PROJECT_DIR/.env"
+    info "  已從主專案複製 .env ✓"
+  else
+    warn "  .env 不存在且無法自動建立，請從 .env.example 複製"
+  fi
+else
+  info "  .env 已存在 ✓"
+fi
+
+# .env.local（機密資訊）— worktree 使用 symlink
 if [ ! -f "$PROJECT_DIR/.env.local" ]; then
   if [ -f "$MAIN_PROJECT_DIR/.env.local" ]; then
     ln -s "$MAIN_PROJECT_DIR/.env.local" "$PROJECT_DIR/.env.local"
     info "  已建立 .env.local symbolic link -> $MAIN_PROJECT_DIR/.env.local"
   else
-    error ".env.local 不存在於主專案 ($MAIN_PROJECT_DIR)，請先建立。"
+    error ".env.local 不存在於主專案 ($MAIN_PROJECT_DIR)，請先建立。參考 .env.example"
   fi
 else
   info "  .env.local 已存在 ✓"
@@ -157,9 +175,10 @@ fi
 info "Step 5/7: 安裝 pnpm 依賴..."
 pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 
-# ── 載入 .env.local（Prisma CLI 僅讀 .env，需手動 export） ──────────────
-info "  載入 .env.local 環境變數..."
+# ── 載入環境變數（Prisma CLI 僅讀 .env，需手動 export） ──────────────────
+info "  載入環境變數..."
 set -a
+[ -f "$PROJECT_DIR/.env" ] && source "$PROJECT_DIR/.env"
 source "$PROJECT_DIR/.env.local"
 set +a
 
