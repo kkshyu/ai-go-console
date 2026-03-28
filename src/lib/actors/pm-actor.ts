@@ -51,8 +51,15 @@ import type { BackgroundActorSystem } from "./background-system";
 /** Maximum number of agent interactions per request. */
 const MAX_INTERACTIONS = 20;
 
-/** Delay before retrying after a rate limit error. */
-const RATE_LIMIT_BACKOFF_MS = 5_000;
+/** Exponential backoff with jitter for rate limits */
+const BACKOFF_BASE_MS = 2_000;
+const BACKOFF_CAP_MS = 30_000;
+
+function calculateBackoff(attempt: number): number {
+  const exponential = Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * Math.pow(2, attempt));
+  const jitter = exponential * (0.75 + Math.random() * 0.5); // ±25% jitter
+  return Math.round(jitter);
+}
 
 /** Worker status tracking interval */
 const STATUS_CHECK_INTERVAL_MS = 30_000;
@@ -95,6 +102,7 @@ interface WorkerStatus {
   dispatchedAt: number;
   lastHeartbeat: number;
   status: "running" | "completed" | "error";
+  retryCount: number;
 }
 
 export interface PMActorConfig {
@@ -266,6 +274,7 @@ export class PMActor extends Actor {
       dispatchedAt: Date.now(),
       lastHeartbeat: Date.now(),
       status: "running",
+      retryCount: 0,
     });
   }
 
@@ -446,9 +455,12 @@ export class PMActor extends Actor {
     // Deterministic recovery based on error type
     switch (payload.errorType) {
       case "rate_limit": {
-        actorLog("info", this.id, `Rate limit hit, backing off ${RATE_LIMIT_BACKOFF_MS}ms`, this.traceId);
+        const retryCount = workerStatus?.retryCount ?? 0;
+        const backoffMs = calculateBackoff(retryCount);
+        if (workerStatus) workerStatus.retryCount = retryCount + 1;
+        actorLog("info", this.id, `Rate limit hit, backing off ${backoffMs}ms (attempt ${retryCount + 1})`, this.traceId);
         await sendEvent({ statusUpdate: "遇到速率限制，稍後重試...", agentRole: "pm" });
-        await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_BACKOFF_MS));
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
         // Add a note to history and let PM loop retry
         this.messages.push({
           role: "assistant",
