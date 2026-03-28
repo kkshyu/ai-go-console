@@ -416,7 +416,9 @@
     "copied": "已複製！",
     "proxyConnected": "Caddy 已連線",
     "proxyNotDetected": "未偵測到 Caddy，請執行：docker compose up -d",
-    "appAccessPattern": "應用程式存取路徑：{url}/{app-slug}"
+    "productionEnv": "生產環境",
+    "developmentEnv": "開發環境",
+    "appAccessPattern": "應用程式存取路徑：{url}/{appSlug}"
   },
   "users": {
     "title": "使用者管理",

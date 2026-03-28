@@ -31,6 +31,7 @@ import {
   Undo2,
   Server,
   FolderOpen,
+  ArrowLeftRight,
 } from "lucide-react";
 import { AgentChatPanel, type AgentMessage } from "@/components/chat/agent-chat-panel";
 import { FileManager } from "@/components/file-manager/file-manager";
@@ -50,6 +51,7 @@ interface AppData {
   port: number | null;
   prodPort: number | null;
   services: AppService[];
+  orgSlug: string;
 }
 
 interface DeploymentData {
@@ -111,10 +113,27 @@ export default function AppDetailPage() {
   // Dev server is running if we have a port and it's in developing state
   const [devRunning, setDevRunning] = useState(false);
   const hasPreview = app?.port && devRunning;
-  const previewUrl = hasPreview ? `http://localhost:${app.port}` : null;
+
+  // URL mode: "local" = localhost:port, "caddy" = dev/prod-{org}.localhost/{slug}
+  const [previewUrlMode, setPreviewUrlMode] = useState<"local" | "caddy">("local");
+  const [deployUrlMode, setDeployUrlMode] = useState<"local" | "caddy">("local");
+
+  const devCaddyUrl = app?.orgSlug ? `https://dev-${app.orgSlug}.localhost/${app.slug}` : null;
+  const prodCaddyUrl = app?.orgSlug ? `https://prod-${app.orgSlug}.localhost/${app.slug}` : null;
+
+  const previewUrl = hasPreview
+    ? previewUrlMode === "caddy" && devCaddyUrl
+      ? devCaddyUrl
+      : `http://localhost:${app.port}`
+    : null;
 
   // Production is running if app status is "running"
   const isProdRunning = app?.status === "running";
+  const prodUrl = isProdRunning && app?.prodPort
+    ? deployUrlMode === "caddy" && prodCaddyUrl
+      ? prodCaddyUrl
+      : `http://localhost:${app.prodPort}`
+    : null;
 
   useEffect(() => {
     fetch(`/api/apps/${appId}`)
@@ -746,6 +765,18 @@ export default function AppDetailPage() {
                         variant="ghost"
                         size="icon"
                         className="h-5 w-5 shrink-0"
+                        onClick={() => {
+                          setPreviewUrlMode((m) => m === "local" ? "caddy" : "local");
+                          setIframeKey((k) => k + 1);
+                        }}
+                        title={previewUrlMode === "local" ? "Switch to Caddy proxy" : "Switch to localhost"}
+                      >
+                        <ArrowLeftRight className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 shrink-0"
                         onClick={() => setIframeKey((k) => k + 1)}
                         title="Refresh"
                       >
@@ -777,7 +808,7 @@ export default function AppDetailPage() {
                   </div>
                   <iframe
                     key={iframeKey}
-                    src={`http://localhost:${app.port}`}
+                    src={previewUrl || `http://localhost:${app.port}`}
                     className="flex-1 w-full border-0"
                     title="App Preview"
                   />
@@ -831,6 +862,33 @@ export default function AppDetailPage() {
                     <Play className="h-3 w-3" />
                     {t("start")}
                   </Button>
+                )}
+                {/* Prod address bar */}
+                {prodUrl && (
+                  <div className="flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 min-w-0 ml-auto">
+                    <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="text-xs font-mono text-muted-foreground truncate max-w-[200px]">
+                      {prodUrl}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 shrink-0"
+                      onClick={() => setDeployUrlMode((m) => m === "local" ? "caddy" : "local")}
+                      title={deployUrlMode === "local" ? "Switch to Caddy proxy" : "Switch to localhost"}
+                    >
+                      <ArrowLeftRight className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 shrink-0"
+                      onClick={() => window.open(prodUrl, "_blank")}
+                      title="Open in browser"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                    </Button>
+                  </div>
                 )}
               </div>
               {/* Deploy sub-tabs */}
@@ -987,7 +1045,7 @@ export default function AppDetailPage() {
               </Button>
             </div>
             <iframe
-              src={`http://localhost:${app.port}`}
+              src={previewUrl || `http://localhost:${app.port}`}
               className="flex-1 w-full border-0"
               title="App Preview Fullscreen"
             />
