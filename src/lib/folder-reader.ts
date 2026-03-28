@@ -44,6 +44,18 @@ export function shouldIncludeFile(relativePath: string): boolean {
 }
 
 /**
+ * Check whether a file should be included for import (allows binary files).
+ * Only filters by directory, not by extension — FileProcessorActor handles all types.
+ */
+export function shouldIncludeForImport(relativePath: string): boolean {
+  const segments = relativePath.split("/");
+  for (const seg of segments) {
+    if (SKIP_DIRS.has(seg)) return false;
+  }
+  return true;
+}
+
+/**
  * Check whether a directory entry should be traversed.
  */
 function shouldTraverseDir(name: string): boolean {

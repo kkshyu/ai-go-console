@@ -258,17 +258,20 @@ model ChatFile {
   fileType       String   @map("file_type") // "image" | "text" | "pdf" | "code" | "unknown"
   mimeType       String   @map("mime_type")
   sizeBytes      Int      @map("size_bytes")
-  storagePath    String   @map("storage_path")
-  extractedText  String?  @map("extracted_text") @db.Text
-  summary        String?  @db.Text
-  status         String   @default("uploaded") // "uploaded" | "processing" | "ready" | "error"
-  createdAt      DateTime @default(now()) @map("created_at")
+  storagePath      String   @map("storage_path")
+  extractedText    String?  @map("extracted_text") @db.Text
+  summary          String?  @db.Text
+  status           String   @default("uploaded") // "uploaded" | "processing" | "ready" | "error"
+  importSessionId  String?  @map("import_session_id")
+  relativePath     String?  @map("relative_path")
+  createdAt        DateTime @default(now()) @map("created_at")
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([organizationId])
+  @@index([importSessionId])
   @@map("chat_files")
 }
 

@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { chat, getModelForAgent } from "@/lib/ai";
+import { generateEmbedding } from "@/lib/embeddings";
+import { searchSimilarChunks, assembleContext } from "@/lib/vector-search";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
-/** Max number of files to accept */
-const MAX_FILES = 200;
-/** Max total content size in bytes (500KB) */
-const MAX_TOTAL_SIZE = 500 * 1024;
-/** Max individual file content size for the prompt (5KB) */
-const MAX_FILE_CONTENT = 5 * 1024;
+/** Max content size for priority files in the prompt (3KB each) */
+const MAX_PRIORITY_CONTENT = 3 * 1024;
 
-/** Priority files to include first in the prompt (order matters) */
+/** Priority files to fetch directly from extractedText */
 const PRIORITY_FILES = [
   "package.json",
   "tsconfig.json",
@@ -65,46 +64,6 @@ const ANALYSIS_SYSTEM_PROMPT = `你是一個程式碼分析助手。根據使用
 }
 \`\`\``;
 
-interface FileItem {
-  path: string;
-  content: string;
-}
-
-function buildFilePrompt(files: FileItem[]): string {
-  // Sort: priority files first, then by path
-  const priorityMap = new Map(PRIORITY_FILES.map((f, i) => [f, i]));
-  const sorted = [...files].sort((a, b) => {
-    const aIdx = priorityMap.get(a.path) ?? priorityMap.get(a.path.split("/").pop()!) ?? 999;
-    const bIdx = priorityMap.get(b.path) ?? priorityMap.get(b.path.split("/").pop()!) ?? 999;
-    if (aIdx !== bIdx) return aIdx - bIdx;
-    return a.path.localeCompare(b.path);
-  });
-
-  let totalSize = 0;
-  const parts: string[] = [];
-  parts.push(`Project contains ${files.length} files. Key files:\n`);
-
-  for (const file of sorted) {
-    const content =
-      file.content.length > MAX_FILE_CONTENT
-        ? file.content.slice(0, MAX_FILE_CONTENT) + "\n... (truncated)"
-        : file.content;
-
-    const entry = `--- ${file.path} ---\n${content}\n`;
-    if (totalSize + entry.length > MAX_TOTAL_SIZE) {
-      // Just list remaining files without content
-      const remaining = sorted.slice(sorted.indexOf(file));
-      parts.push(`\n--- Other files (${remaining.length} files, content omitted) ---`);
-      parts.push(remaining.map((f) => f.path).join("\n"));
-      break;
-    }
-    totalSize += entry.length;
-    parts.push(entry);
-  }
-
-  return parts.join("\n");
-}
-
 function parseAnalysisResponse(content: string): {
   name: string;
   slug: string;
@@ -112,7 +71,6 @@ function parseAnalysisResponse(content: string): {
   template: string;
   requiredServices: string[];
 } | null {
-  // Try to extract JSON from code block
   const jsonMatch = content.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   const jsonStr = jsonMatch ? jsonMatch[1] : content;
 
@@ -133,13 +91,21 @@ function parseAnalysisResponse(content: string): {
   }
 }
 
+/**
+ * POST /api/apps/import/analyze
+ *
+ * RAG-based project analysis. Instead of stuffing all file contents into one prompt,
+ * this endpoint:
+ * 1. Fetches priority files (package.json, etc.) directly from ChatFile.extractedText
+ * 2. Uses vector search to find relevant chunks across all uploaded files
+ * 3. Assembles a focused context and calls the LLM
+ */
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Rate limit: 5 analyze requests per user per minute
   const ip = getClientIp(request.headers);
   const rl = rateLimit(`import-analyze:${ip}`, 5, 60 * 1000);
   if (rl.limited) {
@@ -147,35 +113,124 @@ export async function POST(request: NextRequest) {
       { error: "Rate limit exceeded" },
       {
         status: 429,
-        headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+        headers: {
+          "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)),
+        },
       }
     );
   }
 
   const body = await request.json();
-  const { files } = body as { files?: FileItem[] };
+  const { importSessionId } = body as { importSessionId?: string };
 
-  if (!files || !Array.isArray(files) || files.length === 0) {
+  if (!importSessionId) {
     return NextResponse.json(
-      { error: "No files provided" },
+      { error: "importSessionId is required" },
       { status: 400 }
     );
   }
 
-  if (files.length > MAX_FILES) {
+  // Load all files for this session
+  const allFiles = await prisma.chatFile.findMany({
+    where: {
+      importSessionId,
+      userId: session.user.id,
+    },
+    select: {
+      id: true,
+      fileName: true,
+      relativePath: true,
+      extractedText: true,
+      summary: true,
+      status: true,
+    },
+  });
+
+  if (allFiles.length === 0) {
     return NextResponse.json(
-      { error: `Too many files (max ${MAX_FILES})` },
-      { status: 400 }
+      { error: "No files found for this import session" },
+      { status: 404 }
     );
   }
 
-  // Build the file prompt for LLM analysis
-  const filePrompt = buildFilePrompt(files);
+  // Build file tree listing
+  const fileTree = allFiles
+    .map((f) => f.relativePath || f.fileName)
+    .sort()
+    .join("\n");
+
+  // 1. Direct-fetch priority files
+  const priorityContents: string[] = [];
+  const prioritySet = new Set(PRIORITY_FILES);
+
+  for (const file of allFiles) {
+    const filePath = file.relativePath || file.fileName;
+    const baseName = filePath.split("/").pop() || "";
+
+    if (
+      (prioritySet.has(filePath) || prioritySet.has(baseName)) &&
+      file.extractedText
+    ) {
+      const content =
+        file.extractedText.length > MAX_PRIORITY_CONTENT
+          ? file.extractedText.slice(0, MAX_PRIORITY_CONTENT) + "\n... (truncated)"
+          : file.extractedText;
+      priorityContents.push(`--- ${filePath} ---\n${content}`);
+    }
+  }
+
+  // 2. RAG search for additional context
+  let ragContext = "";
+  try {
+    const queryEmbedding = await generateEmbedding(
+      "What is this project? What framework, dependencies, template, and services does it use? Detect package.json, configuration files, database schemas, API integrations."
+    );
+
+    if (queryEmbedding.length > 0) {
+      const results = await searchSimilarChunks(importSessionId, queryEmbedding, {
+        limit: 30,
+        minSimilarity: 0.2,
+      });
+      ragContext = assembleContext(results, 12000);
+    }
+  } catch (err) {
+    console.warn("[import/analyze] RAG search failed, proceeding with priority files only:", err);
+  }
+
+  // 3. Assemble prompt
+  const parts: string[] = [];
+  parts.push(`Project contains ${allFiles.length} files.\n`);
+  parts.push(`File tree:\n${fileTree}\n`);
+
+  if (priorityContents.length > 0) {
+    parts.push(`\nKey configuration files:\n${priorityContents.join("\n\n")}`);
+  }
+
+  if (ragContext) {
+    parts.push(`\nAdditional context from project files:${ragContext}`);
+  }
+
+  // Include summaries of non-priority files for broader understanding
+  const summaries = allFiles
+    .filter((f) => f.summary && f.summary.length > 0)
+    .map((f) => `- ${f.relativePath || f.fileName}: ${f.summary}`)
+    .slice(0, 50);
+
+  if (summaries.length > 0) {
+    parts.push(`\nFile summaries:\n${summaries.join("\n")}`);
+  }
+
+  const filePrompt = parts.join("\n");
 
   try {
     const model = getModelForAgent("architect");
     const result = await chat(
-      [{ role: "user", content: `分析以下專案資料夾，判斷應用類型和需要的服務：\n\n${filePrompt}` }],
+      [
+        {
+          role: "user",
+          content: `分析以下專案資料夾，判斷應用類型和需要的服務：\n\n${filePrompt}`,
+        },
+      ],
       model,
       undefined,
       ANALYSIS_SYSTEM_PROMPT
