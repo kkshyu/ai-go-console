@@ -18,6 +18,7 @@ import { ActorSystem } from "@/lib/actors/actor-system";
 import { PMActor, type PMActorConfig } from "@/lib/actors/pm-actor";
 import { createSpecialistActor } from "@/lib/actors/specialist-actors";
 import { generateTraceId } from "@/lib/actors/logger";
+import { actorSystemRegistry } from "@/lib/actors/registry";
 import type { AgentMessage } from "@/lib/agents/types";
 
 /**
@@ -339,6 +340,7 @@ export async function POST(request: NextRequest) {
   // Start actor system in background
   (async () => {
     let bgSystem: BackgroundActorSystem | undefined;
+    const traceId = generateTraceId();
     try {
       // 0. Ensure background actor system is initialized (Embedding, Retrieval, Summarizer)
       try {
@@ -349,8 +351,18 @@ export async function POST(request: NextRequest) {
       }
 
       // 1. Create actor system with supervisor strategy and trace ID
-      const traceId = generateTraceId();
       const system = new ActorSystem(sendEvent, undefined, traceId);
+
+      // Register with global registry for monitoring
+      actorSystemRegistry.register({
+        id: traceId,
+        system,
+        userId: session?.user?.id,
+        appId,
+        conversationId,
+        startedAt: Date.now(),
+        model: model || DEFAULT_MODEL,
+      });
 
       // 2. Set actor factory for restarts
       system.setActorFactory((role, index) =>
@@ -424,6 +436,8 @@ export async function POST(request: NextRequest) {
       const msg = error instanceof Error ? error.message : "Unknown error";
       await sendEvent({ error: msg });
     } finally {
+      // Unregister from monitoring registry
+      actorSystemRegistry.unregister(traceId);
       writer.close();
     }
   })();
