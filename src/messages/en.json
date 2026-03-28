@@ -577,7 +577,14 @@
     "totalTokens": "Tokens",
     "errorApi": "Chat API error",
     "errorNoResponse": "No response body",
-    "errorApiKey": "Sorry, I encountered an error. Please check your OpenRouter API key is configured."
+    "errorApiKey": "Sorry, I encountered an error. Please check your OpenRouter API key is configured.",
+    "attachFile": "Attach file",
+    "dropFilesHere": "Drop files here",
+    "fileTooLarge": "File too large (max {max}MB)",
+    "unsupportedType": "Unsupported file type",
+    "maxFilesReached": "Maximum {max} files",
+    "fileProcessing": "Processing file...",
+    "fileReady": "File ready"
   },
   "domains": {
     "title": "Custom Domains",

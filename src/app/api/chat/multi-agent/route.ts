@@ -222,13 +222,14 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Convert to AgentMessages
+  // Convert to AgentMessages (content must be string for actor system)
   const agentMessages: AgentMessage[] = messages.map((m) => ({
     role: m.role as "user" | "assistant",
-    content: m.content,
+    content: typeof m.content === "string" ? m.content : m.content.map((p) => p.type === "text" ? p.text : `[image]`).join("\n"),
     agentRole: (m as unknown as { agentRole?: string }).agentRole as
       | AgentMessage["agentRole"]
       | undefined,
+    fileIds: (m as unknown as { fileIds?: string[] }).fileIds,
   }));
 
   // Load orchestration state
@@ -249,10 +250,38 @@ export async function POST(request: NextRequest) {
   }
 
   // Load persisted artifacts for context (use last user message as RAG query)
-  const lastUserMessage = messages.filter((m) => m.role === "user").pop()?.content || "";
+  const lastUserMsg = messages.filter((m) => m.role === "user").pop();
+  const lastUserMessage = (typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "") || "";
   const artifactContext = pipelineId
     ? await loadArtifactContext(pipelineId, lastUserMessage)
     : "";
+
+  // Load file context from attached files
+  let fileContext = "";
+  const allFileIds = messages.flatMap((m) => (m as { fileIds?: string[] }).fileIds || []);
+  if (allFileIds.length > 0 && session?.user?.id) {
+    const chatFiles = await prisma.chatFile.findMany({
+      where: {
+        id: { in: allFileIds },
+        userId: session.user.id,
+      },
+      select: {
+        fileName: true,
+        fileType: true,
+        extractedText: true,
+        summary: true,
+        status: true,
+      },
+    });
+    if (chatFiles.length > 0) {
+      const fileParts = chatFiles.map((f) => {
+        const content = f.summary || f.extractedText;
+        if (!content) return `[File: ${f.fileName} — processing]`;
+        return `--- File: ${f.fileName} ---\n${content}\n--- End of ${f.fileName} ---`;
+      });
+      fileContext = `\n\n[Attached Files]\n${fileParts.join("\n\n")}`;
+    }
+  }
 
   // Build PM prompt
   const pmPrompt = appContext
@@ -349,6 +378,7 @@ export async function POST(request: NextRequest) {
         serviceInstances,
         appContext,
         artifactContext,
+        fileContext: fileContext || undefined,
         sendEvent,
         saveArtifact,
         system,
@@ -371,10 +401,12 @@ export async function POST(request: NextRequest) {
       const initialMsg = createMessage("task", "user", pmActor.id, {
         task: "Process user request",
         context: artifactContext,
+        fileContext: fileContext || undefined,
         messages: agentMessages.map((m) => ({
           role: m.role,
           content: m.content,
           agentRole: m.agentRole,
+          fileIds: m.fileIds,
         })),
       });
       system.send(initialMsg);

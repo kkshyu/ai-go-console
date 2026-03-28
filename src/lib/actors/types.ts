@@ -37,7 +37,8 @@ interface ActorMessageBase {
 export interface TaskPayload {
   task: string;
   context?: string;       // artifact context from previous agents
-  messages?: Array<{ role: string; content: string; agentRole?: string }>;
+  fileContext?: string;    // context from uploaded files
+  messages?: Array<{ role: string; content: string; agentRole?: string; fileIds?: string[] }>;
 }
 
 export interface TaskResultPayload {
@@ -179,7 +180,11 @@ export type BackgroundMessageType =
   | "retrieve_request"
   | "retrieve_result"
   | "summarize_request"
-  | "summarize_result";
+  | "summarize_result"
+  | "process_file"
+  | "process_file_result"
+  | "analyze_file"
+  | "analyze_file_result";
 
 export interface BackgroundMessage {
   id: string;
@@ -224,6 +229,34 @@ export interface SummarizeRequestPayload {
 export interface SummarizeResultPayload {
   content: string;
   usage: TokenUsage | null;
+}
+
+export interface ProcessFilePayload {
+  fileId: string;
+  storagePath: string;
+  mimeType: string;
+  fileName: string;
+  pipelineId?: string;
+}
+
+export interface ProcessFileResultPayload {
+  fileId: string;
+  extractedText: string;
+  success: boolean;
+}
+
+export interface AnalyzeFilePayload {
+  fileId: string;
+  storagePath: string;
+  mimeType: string;
+  fileName: string;
+  extractedText?: string;
+}
+
+export interface AnalyzeFileResultPayload {
+  fileId: string;
+  summary: string;
+  success: boolean;
 }
 
 export interface ActorStats {
