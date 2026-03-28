@@ -165,7 +165,10 @@ export function PRDPanel({
                     )}
 
                     {testResult && !testResult.success && (
-                      <p className="text-xs text-red-500">{testResult.message}</p>
+                      <div className="flex items-center gap-1.5 rounded-md bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 px-2 py-1.5 text-xs text-red-600 dark:text-red-400">
+                        <AlertTriangle className="h-3 w-3 shrink-0" />
+                        <span>{testResult.message}</span>
+                      </div>
                     )}
                   </div>
                 );
