@@ -102,17 +102,17 @@ async function reconcileProdApp(
   const deployName = prodDeploymentName(orgSlug, app.slug);
 
   try {
-    const { body } = await appsApi().readNamespacedDeployment(
-      deployName,
-      config.prodNamespace,
-    );
+    const deployment = await appsApi().readNamespacedDeployment({
+      name: deployName,
+      namespace: config.prodNamespace,
+    });
 
-    const replicas = body.spec?.replicas || 0;
-    const readyReplicas = body.status?.readyReplicas || 0;
+    const replicas = deployment.spec?.replicas || 0;
+    const readyReplicas = deployment.status?.readyReplicas || 0;
 
     if (replicas > 0 && readyReplicas === 0) {
       // Deployment exists but no ready replicas — might be crashing
-      const unavailableCondition = body.status?.conditions?.find(
+      const unavailableCondition = deployment.status?.conditions?.find(
         (c) => c.type === "Available" && c.status === "False",
       );
 

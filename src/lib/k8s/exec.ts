@@ -353,8 +353,8 @@ export async function getPodStatus(
   podName: string,
 ): Promise<PodStatus> {
   try {
-    const { body } = await coreApi().readNamespacedPodStatus(podName, namespace);
-    const phase = body.status?.phase;
+    const podStatus = await coreApi().readNamespacedPodStatus({ name: podName, namespace });
+    const phase = podStatus.status?.phase;
 
     switch (phase) {
       case "Running":

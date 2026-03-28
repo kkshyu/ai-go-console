@@ -19,7 +19,7 @@ export async function GET() {
   }
 
   try {
-    const { body: nodeList } = await coreApi().listNode();
+    const nodeList = await coreApi().listNode();
     const nodes = nodeList.items.map((node) => ({
       name: node.metadata?.name || "unknown",
       status: node.status?.conditions?.find((c) => c.type === "Ready")?.status === "True"
@@ -35,7 +35,7 @@ export async function GET() {
     const namespaceStats = [];
     for (const ns of ["aigo-dev", "aigo-prod", "aigo-workers", "aigo-system"]) {
       try {
-        const { body: podList } = await coreApi().listNamespacedPod(ns);
+        const podList = await coreApi().listNamespacedPod({ namespace: ns });
         const running = podList.items.filter(
           (p) => p.status?.phase === "Running",
         ).length;

@@ -106,17 +106,17 @@ export async function createDevContainer(
   }
 
   // Create Pod
-  await coreApi().createNamespacedPod(ns, podSpec);
+  await coreApi().createNamespacedPod({ namespace: ns, body: podSpec });
 
   // Create Service (if not exists)
   const svcName = devServiceName(orgSlug, slug);
   try {
-    await coreApi().readNamespacedService(svcName, ns);
+    await coreApi().readNamespacedService({ name: svcName, namespace: ns });
   } catch (err: unknown) {
     const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
     if (errStatus === 404) {
       const svcSpec = generateDevServiceSpec(orgSlug, slug, tmpl.internalDevPort);
-      await coreApi().createNamespacedService(ns, svcSpec);
+      await coreApi().createNamespacedService({ namespace: ns, body: svcSpec });
     }
   }
 
@@ -152,7 +152,7 @@ export async function stopDevContainer(orgSlug: string, slug: string): Promise<v
   const ns = config.devNamespace;
 
   try {
-    await coreApi().deleteNamespacedPod(podName, ns);
+    await coreApi().deleteNamespacedPod({ name: podName, namespace: ns });
   } catch (err: unknown) {
     const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
     if (errStatus !== 404) throw err;
@@ -169,7 +169,7 @@ export async function removeDevContainer(orgSlug: string, slug: string): Promise
 
   // Delete Pod
   try {
-    await coreApi().deleteNamespacedPod(podName, ns);
+    await coreApi().deleteNamespacedPod({ name: podName, namespace: ns });
   } catch (err: unknown) {
     const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
     if (errStatus !== 404) throw err;
@@ -177,7 +177,7 @@ export async function removeDevContainer(orgSlug: string, slug: string): Promise
 
   // Delete Service
   try {
-    await coreApi().deleteNamespacedService(svcName, ns);
+    await coreApi().deleteNamespacedService({ name: svcName, namespace: ns });
   } catch (err: unknown) {
     const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
     if (errStatus !== 404) throw err;
@@ -242,19 +242,13 @@ export async function getDevContainerLogs(
   const ns = config.devNamespace;
 
   try {
-    const { body } = await coreApi().readNamespacedPodLog(
-      podName,
-      ns,
-      "app",
-      undefined, // follow
-      undefined, // insecureSkipTLSVerifyBackend
-      undefined, // limitBytes
-      undefined, // pretty
-      undefined, // previous
-      undefined, // sinceSeconds
-      lines,     // tailLines
-    );
-    return typeof body === "string" ? body : String(body);
+    const logBody = await coreApi().readNamespacedPodLog({
+      name: podName,
+      namespace: ns,
+      container: "app",
+      tailLines: lines,
+    });
+    return typeof logBody === "string" ? logBody : String(logBody);
   } catch {
     return "No logs available";
   }

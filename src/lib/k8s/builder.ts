@@ -125,7 +125,7 @@ export async function buildImage(options: BuildOptions): Promise<string> {
   };
 
   // Create the Job
-  await batchApi().createNamespacedJob(namespace, jobSpec);
+  await batchApi().createNamespacedJob({ namespace, body: jobSpec });
 
   // Copy build context to the init container's volume
   // Since we can't directly copy to an emptyDir before the Pod starts,
@@ -150,7 +150,7 @@ export async function waitForBuild(
 
   while (Date.now() - startTime < BUILD_TIMEOUT_MS) {
     try {
-      const { body: job } = await batchApi().readNamespacedJob(jobName, namespace);
+      const job = await batchApi().readNamespacedJob({ name: jobName, namespace });
       const conditions = job.status?.conditions || [];
 
       const complete = conditions.find((c) => c.type === "Complete" && c.status === "True");
@@ -181,23 +181,19 @@ export async function waitForBuild(
 async function getBuildLogs(jobName: string, namespace: string): Promise<string> {
   try {
     // Find the pod created by the job
-    const { body: podList } = await coreApi().listNamespacedPod(
+    const podList = await coreApi().listNamespacedPod({
       namespace,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      `job-name=${jobName}`,
-    );
+      labelSelector: `job-name=${jobName}`,
+    });
 
     const pod = podList.items[0];
     if (!pod?.metadata?.name) return "(no logs available)";
 
-    const { body: logs } = await coreApi().readNamespacedPodLog(
-      pod.metadata.name,
+    const logs = await coreApi().readNamespacedPodLog({
+      name: pod.metadata.name,
       namespace,
-      "kaniko",
-    );
+      container: "kaniko",
+    });
 
     return typeof logs === "string" ? logs : String(logs);
   } catch {

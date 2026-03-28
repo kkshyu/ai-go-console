@@ -5,7 +5,7 @@
  * Manages production app containers as k8s Deployments in the aigo-prod namespace.
  */
 
-import { coreApi, appsApi, config } from "./client";
+import { coreApi, appsApi, config, strategicMergePatchOptions } from "./client";
 import {
   prodDeploymentName,
   prodServiceName,
@@ -54,23 +54,16 @@ export async function startApp(
 
   try {
     // Try to read existing deployment
-    await appsApi().readNamespacedDeployment(deployName, ns);
+    await appsApi().readNamespacedDeployment({ name: deployName, namespace: ns });
     // Exists — patch it (rolling update)
     await appsApi().patchNamespacedDeployment(
-      deployName,
-      ns,
-      deploySpec,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { headers: { "Content-Type": "application/strategic-merge-patch+json" } },
+      { name: deployName, namespace: ns, body: deploySpec },
+      strategicMergePatchOptions,
     );
   } catch (err: unknown) {
     const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
     if (errStatus === 404) {
-      await appsApi().createNamespacedDeployment(ns, deploySpec);
+      await appsApi().createNamespacedDeployment({ namespace: ns, body: deploySpec });
     } else {
       throw err;
     }
@@ -78,12 +71,12 @@ export async function startApp(
 
   // Create Service (if not exists)
   try {
-    await coreApi().readNamespacedService(svcName, ns);
+    await coreApi().readNamespacedService({ name: svcName, namespace: ns });
   } catch (err: unknown) {
     const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
     if (errStatus === 404) {
       const svcSpec = generateProdServiceSpec(orgSlug, slug, internalPort);
-      await coreApi().createNamespacedService(ns, svcSpec);
+      await coreApi().createNamespacedService({ namespace: ns, body: svcSpec });
     }
   }
 
@@ -126,15 +119,8 @@ export async function startAppFromImage(
   };
 
   await appsApi().patchNamespacedDeployment(
-    deployName,
-    ns,
-    patch,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    { headers: { "Content-Type": "application/strategic-merge-patch+json" } },
+    { name: deployName, namespace: ns, body: patch },
+    strategicMergePatchOptions,
   );
 
   return `Rolled back ${deployName} to v${version}`;
@@ -152,15 +138,8 @@ export async function stopApp(orgSlug: string, slug: string): Promise<string> {
 
   try {
     await appsApi().patchNamespacedDeployment(
-      deployName,
-      ns,
-      { spec: { replicas: 0 } },
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { headers: { "Content-Type": "application/strategic-merge-patch+json" } },
+      { name: deployName, namespace: ns, body: { spec: { replicas: 0 } } },
+      strategicMergePatchOptions,
     );
     return `Stopped ${deployName}`;
   } catch (err: unknown) {
@@ -193,15 +172,8 @@ export async function restartApp(orgSlug: string, slug: string): Promise<string>
   };
 
   await appsApi().patchNamespacedDeployment(
-    deployName,
-    ns,
-    patch,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    { headers: { "Content-Type": "application/strategic-merge-patch+json" } },
+    { name: deployName, namespace: ns, body: patch },
+    strategicMergePatchOptions,
   );
 
   return `Restarted ${deployName}`;
@@ -220,9 +192,9 @@ export async function getAppDockerStatus(
   const deployName = prodDeploymentName(orgSlug, slug);
 
   try {
-    const { body } = await appsApi().readNamespacedDeployment(deployName, ns);
-    const replicas = body.spec?.replicas || 0;
-    const readyReplicas = body.status?.readyReplicas || 0;
+    const deployment = await appsApi().readNamespacedDeployment({ name: deployName, namespace: ns });
+    const replicas = deployment.spec?.replicas || 0;
+    const readyReplicas = deployment.status?.readyReplicas || 0;
 
     if (replicas === 0) return "stopped";
     if (readyReplicas > 0) return "running";
@@ -247,32 +219,22 @@ export async function getAppLogs(
 
   try {
     // Find pods by Deployment labels
-    const { body: podList } = await coreApi().listNamespacedPod(
-      ns,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      `aigo.dev/org=${orgSlug},aigo.dev/app=${slug},aigo.dev/type=prod`,
-    );
+    const podList = await coreApi().listNamespacedPod({
+      namespace: ns,
+      labelSelector: `aigo.dev/org=${orgSlug},aigo.dev/app=${slug},aigo.dev/type=prod`,
+    });
 
     const pod = podList.items[0];
     if (!pod?.metadata?.name) return "No pods found";
 
-    const { body } = await coreApi().readNamespacedPodLog(
-      pod.metadata.name,
-      ns,
-      "app",
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      lines,
-    );
+    const logBody = await coreApi().readNamespacedPodLog({
+      name: pod.metadata.name,
+      namespace: ns,
+      container: "app",
+      tailLines: lines,
+    });
 
-    return typeof body === "string" ? body : String(body);
+    return typeof logBody === "string" ? logBody : String(logBody);
   } catch {
     return "No logs available";
   }
@@ -290,7 +252,7 @@ export async function removeApp(orgSlug: string, slug: string): Promise<void> {
 
   // Delete Deployment
   try {
-    await appsApi().deleteNamespacedDeployment(deployName, ns);
+    await appsApi().deleteNamespacedDeployment({ name: deployName, namespace: ns });
   } catch (err: unknown) {
     const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
     if (errStatus !== 404) throw err;
@@ -298,7 +260,7 @@ export async function removeApp(orgSlug: string, slug: string): Promise<void> {
 
   // Delete Service
   try {
-    await coreApi().deleteNamespacedService(svcName, ns);
+    await coreApi().deleteNamespacedService({ name: svcName, namespace: ns });
   } catch (err: unknown) {
     const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
     if (errStatus !== 404) throw err;

@@ -29,8 +29,8 @@ function roleToQueue(role: BackgroundAgentRole): QueueName {
     case "embedding": return "embedding";
     case "retrieval": return "retrieval";
     case "summarizer": return "summarizer";
-    case "file-processor": return "file-processing";
-    case "file-analyzer": return "file-analysis";
+    case "file_processor": return "file-processing";
+    case "file_analyzer": return "file-analysis";
     default: return role as QueueName;
   }
 }

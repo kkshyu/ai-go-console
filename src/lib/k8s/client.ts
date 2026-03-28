@@ -6,6 +6,24 @@
  */
 
 import * as k8s from "@kubernetes/client-node";
+import { setHeaderOptions } from "@kubernetes/client-node";
+
+// ── Patch Options Helper ─────────────────────────────────────────────────────
+
+/**
+ * In @kubernetes/client-node v1.x, patch methods default to application/json-patch+json.
+ * For strategic merge patch (plain object bodies), we need to override the Content-Type
+ * via middleware.
+ */
+export const strategicMergePatchOptions = setHeaderOptions(
+  "Content-Type",
+  "application/strategic-merge-patch+json",
+);
+
+export const mergePatchOptions = setHeaderOptions(
+  "Content-Type",
+  "application/merge-patch+json",
+);
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -137,22 +155,20 @@ export async function applyIngressRoute(
   };
 
   try {
-    await customApi().getNamespacedCustomObject(
-      TRAEFIK_GROUP, TRAEFIK_VERSION, namespace, "ingressroutes", name,
-    );
+    await customApi().getNamespacedCustomObject({
+      group: TRAEFIK_GROUP, version: TRAEFIK_VERSION, namespace, plural: "ingressroutes", name,
+    });
     // Exists — patch it
     await customApi().patchNamespacedCustomObject(
-      TRAEFIK_GROUP, TRAEFIK_VERSION, namespace, "ingressroutes", name,
-      body,
-      undefined, undefined, undefined,
-      { headers: { "Content-Type": "application/merge-patch+json" } },
+      { group: TRAEFIK_GROUP, version: TRAEFIK_VERSION, namespace, plural: "ingressroutes", name, body },
+      mergePatchOptions,
     );
   } catch (err: unknown) {
     const status = (err as { response?: { statusCode?: number } })?.response?.statusCode;
     if (status === 404) {
-      await customApi().createNamespacedCustomObject(
-        TRAEFIK_GROUP, TRAEFIK_VERSION, namespace, "ingressroutes", body,
-      );
+      await customApi().createNamespacedCustomObject({
+        group: TRAEFIK_GROUP, version: TRAEFIK_VERSION, namespace, plural: "ingressroutes", body,
+      });
     } else {
       throw err;
     }
@@ -165,9 +181,9 @@ export async function deleteIngressRoute(
   name: string,
 ): Promise<void> {
   try {
-    await customApi().deleteNamespacedCustomObject(
-      TRAEFIK_GROUP, TRAEFIK_VERSION, namespace, "ingressroutes", name,
-    );
+    await customApi().deleteNamespacedCustomObject({
+      group: TRAEFIK_GROUP, version: TRAEFIK_VERSION, namespace, plural: "ingressroutes", name,
+    });
   } catch (err: unknown) {
     const status = (err as { response?: { statusCode?: number } })?.response?.statusCode;
     if (status !== 404) throw err;
@@ -188,21 +204,19 @@ export async function applyMiddleware(
   };
 
   try {
-    await customApi().getNamespacedCustomObject(
-      TRAEFIK_GROUP, TRAEFIK_VERSION, namespace, "middlewares", name,
-    );
+    await customApi().getNamespacedCustomObject({
+      group: TRAEFIK_GROUP, version: TRAEFIK_VERSION, namespace, plural: "middlewares", name,
+    });
     await customApi().patchNamespacedCustomObject(
-      TRAEFIK_GROUP, TRAEFIK_VERSION, namespace, "middlewares", name,
-      body,
-      undefined, undefined, undefined,
-      { headers: { "Content-Type": "application/merge-patch+json" } },
+      { group: TRAEFIK_GROUP, version: TRAEFIK_VERSION, namespace, plural: "middlewares", name, body },
+      mergePatchOptions,
     );
   } catch (err: unknown) {
     const status = (err as { response?: { statusCode?: number } })?.response?.statusCode;
     if (status === 404) {
-      await customApi().createNamespacedCustomObject(
-        TRAEFIK_GROUP, TRAEFIK_VERSION, namespace, "middlewares", body,
-      );
+      await customApi().createNamespacedCustomObject({
+        group: TRAEFIK_GROUP, version: TRAEFIK_VERSION, namespace, plural: "middlewares", body,
+      });
     } else {
       throw err;
     }
@@ -215,9 +229,9 @@ export async function deleteMiddleware(
   name: string,
 ): Promise<void> {
   try {
-    await customApi().deleteNamespacedCustomObject(
-      TRAEFIK_GROUP, TRAEFIK_VERSION, namespace, "middlewares", name,
-    );
+    await customApi().deleteNamespacedCustomObject({
+      group: TRAEFIK_GROUP, version: TRAEFIK_VERSION, namespace, plural: "middlewares", name,
+    });
   } catch (err: unknown) {
     const status = (err as { response?: { statusCode?: number } })?.response?.statusCode;
     if (status !== 404) throw err;
@@ -228,9 +242,9 @@ export async function deleteMiddleware(
 export async function listIngressRoutes(
   namespace: string,
 ): Promise<Array<{ metadata: { name: string }; spec: Record<string, unknown> }>> {
-  const res = await customApi().listNamespacedCustomObject(
-    TRAEFIK_GROUP, TRAEFIK_VERSION, namespace, "ingressroutes",
-  );
+  const res = await customApi().listNamespacedCustomObject({
+    group: TRAEFIK_GROUP, version: TRAEFIK_VERSION, namespace, plural: "ingressroutes",
+  });
   const body = res as { items?: Array<{ metadata: { name: string }; spec: Record<string, unknown> }> };
   return body.items || [];
 }
