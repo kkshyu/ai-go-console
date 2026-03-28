@@ -175,4 +175,17 @@ export interface PMDispatchParallelAction {
   }>;
 }
 
-export type PMAction = PMDispatchAction | PMRespondAction | PMCompleteAction | PMDispatchParallelAction;
+export interface PMUpdatePRDAction {
+  action: "update_prd";
+  prd: {
+    appName: string;
+    description: string;
+    targetUsers: string;
+    features: string[];
+    dataNeeds: string[];
+    integrations: string[];
+    requiredServices: string[];
+  };
+}
+
+export type PMAction = PMDispatchAction | PMRespondAction | PMCompleteAction | PMDispatchParallelAction | PMUpdatePRDAction;

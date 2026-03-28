@@ -78,53 +78,90 @@ export function routeMessage(
 
 /**
  * Parse PM Agent's JSON output to determine what action to take.
+ * PM may output multiple JSON blocks (e.g. update_prd + dispatch).
+ * Returns all parsed actions in order.
+ */
+export function parsePMActions(content: string): PMAction[] {
+  const actions: PMAction[] = [];
+  const jsonBlocks = content.matchAll(/```json\s*\n([\s\S]*?)\n```/g);
+
+  for (const match of jsonBlocks) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      const action = parseSingleAction(parsed);
+      if (action) actions.push(action);
+    } catch {
+      // skip malformed JSON blocks
+    }
+  }
+
+  return actions;
+}
+
+/**
+ * Parse PM Agent's JSON output to determine what action to take.
+ * Returns the first non-update_prd action (backward compatible).
  */
 export function parsePMAction(content: string): PMAction | null {
-  const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
-  if (!jsonMatch) return null;
+  const actions = parsePMActions(content);
+  // Return first non-prd action for backward compat, or the only action
+  return actions.find((a) => a.action !== "update_prd") || actions[0] || null;
+}
 
-  try {
-    const parsed = JSON.parse(jsonMatch[1]);
-    const action = parsed.action as string;
+function parseSingleAction(parsed: Record<string, unknown>): PMAction | null {
+  const action = parsed.action as string;
 
-    if (action === "dispatch" && parsed.target && parsed.task) {
-      return {
-        action: "dispatch",
-        target: parsed.target as AgentRole,
-        task: parsed.task,
-      };
-    }
-
-    if (action === "respond" && parsed.message) {
-      return {
-        action: "respond",
-        message: parsed.message,
-      };
-    }
-
-    if (action === "complete") {
-      return {
-        action: "complete",
-        summary: parsed.summary || "Task completed",
-      };
-    }
-
-    if (action === "dispatch_parallel" && parsed.target === "developer" && Array.isArray(parsed.tasks)) {
-      return {
-        action: "dispatch_parallel",
-        target: "developer",
-        tasks: parsed.tasks.map((t: { taskId?: string; task?: string; files?: string[] }, i: number) => ({
-          taskId: t.taskId || `dev-task-${i}`,
-          task: t.task || "",
-          files: t.files || [],
-        })),
-      };
-    }
-
-    return null;
-  } catch {
-    return null;
+  if (action === "update_prd" && parsed.prd) {
+    const prd = parsed.prd as Record<string, unknown>;
+    return {
+      action: "update_prd",
+      prd: {
+        appName: (prd.appName as string) ?? "",
+        description: (prd.description as string) ?? "",
+        targetUsers: (prd.targetUsers as string) ?? "",
+        features: Array.isArray(prd.features) ? prd.features : [],
+        dataNeeds: Array.isArray(prd.dataNeeds) ? prd.dataNeeds : [],
+        integrations: Array.isArray(prd.integrations) ? prd.integrations : [],
+        requiredServices: Array.isArray(prd.requiredServices) ? prd.requiredServices : [],
+      },
+    };
   }
+
+  if (action === "dispatch" && parsed.target && parsed.task) {
+    return {
+      action: "dispatch",
+      target: parsed.target as AgentRole,
+      task: parsed.task as string,
+    };
+  }
+
+  if (action === "respond" && parsed.message) {
+    return {
+      action: "respond",
+      message: parsed.message as string,
+    };
+  }
+
+  if (action === "complete") {
+    return {
+      action: "complete",
+      summary: (parsed.summary as string) || "Task completed",
+    };
+  }
+
+  if (action === "dispatch_parallel" && parsed.target === "developer" && Array.isArray(parsed.tasks)) {
+    return {
+      action: "dispatch_parallel",
+      target: "developer",
+      tasks: (parsed.tasks as Array<{ taskId?: string; task?: string; files?: string[] }>).map((t, i) => ({
+        taskId: t.taskId || `dev-task-${i}`,
+        task: t.task || "",
+        files: t.files || [],
+      })),
+    };
+  }
+
+  return null;
 }
 
 /**
