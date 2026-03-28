@@ -10,7 +10,7 @@ import { FileAttachmentInput, type FileAttachment } from "@/components/chat/file
 import {
   createInitialOrchestrationState,
 } from "@/lib/agents/types";
-import type { AgentRole, OrchestrationState } from "@/lib/agents/types";
+import type { AgentRole, OrchestrationState, PMUpdatePRDAction } from "@/lib/agents/types";
 import { AgentProgress, type ActorStatusInfo } from "./agent-progress";
 import { MarkdownContent } from "@/components/chat/markdown-content";
 import { AgentAvatar } from "./agent-avatar";
@@ -44,6 +44,7 @@ export interface AgentChatPanelProps {
   onAssistantComplete?: (content: string, agentRole?: AgentRole) => void;
   onOrchestrationUpdate?: (state: OrchestrationState) => void;
   onFilesWritten?: (paths: string[]) => void;
+  onPRDUpdate?: (prd: PMUpdatePRDAction["prd"]) => void;
   extraRequestBody?: Record<string, unknown>;
   placeholder?: string;
   emptyStateText?: string;
@@ -64,6 +65,7 @@ export function AgentChatPanel({
   onAssistantComplete,
   onOrchestrationUpdate,
   onFilesWritten,
+  onPRDUpdate,
   extraRequestBody,
   placeholder,
   emptyStateText,
@@ -192,6 +194,12 @@ export function AgentChatPanel({
               if (parsed.statusUpdate) {
                 setAgentPhase("progress");
                 setStatusMessage(parsed.statusUpdate);
+                continue;
+              }
+
+              // PRD update from PM Agent
+              if (parsed.prdUpdate) {
+                onPRDUpdate?.(parsed.prdUpdate);
                 continue;
               }
 
@@ -416,6 +424,7 @@ export function AgentChatPanel({
       onAssistantComplete,
       onOrchestrationUpdate,
       onFilesWritten,
+      onPRDUpdate,
       t,
     ]
   );
@@ -608,7 +617,6 @@ export function AgentChatPanel({
               attachments={attachments}
               onAttachmentsChange={setAttachments}
               disabled={disabled}
-              pipelineId={pipelineId}
             />
             <div className="flex items-center gap-2">
               <div className="relative flex flex-1 items-center rounded-md border bg-background focus-within:ring-1 focus-within:ring-ring">

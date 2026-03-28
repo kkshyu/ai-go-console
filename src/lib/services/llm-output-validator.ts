@@ -95,20 +95,45 @@ export type ValidPMAction =
 /**
  * Validate and extract PM action from LLM output.
  * Returns the validated action or null with a reason.
+ * Skips update_prd blocks (handled separately) and validates the main action.
  */
 export function validatePMAction(
   content: string,
 ): { action: ValidPMAction } | { error: string } {
-  const parsed = extractJson(content);
+  // Extract all JSON blocks and find the first non-update_prd action
+  const jsonBlocks = [...content.matchAll(/```(?:json)?\s*\n([\s\S]*?)\n```/g)];
+  let parsed: Record<string, unknown> | null = null;
+
+  for (const match of jsonBlocks) {
+    try {
+      const obj = JSON.parse(match[1]) as Record<string, unknown>;
+      if (obj.action === "update_prd") continue; // skip PRD updates
+      parsed = obj;
+      break;
+    } catch {
+      continue;
+    }
+  }
+
+  // Fallback to extractJson if no code block match
+  if (!parsed) {
+    parsed = extractJson(content);
+  }
+
   if (!parsed) {
     return { error: "No valid JSON found in PM output" };
   }
 
-  const obj = parsed as Record<string, unknown>;
+  const obj = parsed;
   const action = obj.action;
 
   if (typeof action !== "string") {
     return { error: "Missing or invalid 'action' field" };
+  }
+
+  // Skip update_prd if it was the only action found via fallback
+  if (action === "update_prd") {
+    return { error: "Only update_prd found, no main action" };
   }
 
   switch (action) {

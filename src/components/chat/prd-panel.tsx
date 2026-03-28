@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/select";
 import { MarkdownContent } from "@/components/chat/markdown-content";
 import { prdToMarkdown, type PRDData } from "@/lib/prd";
+import { getCompatibleServiceTypes, isBuiltInServiceType } from "@/lib/service-types";
+import type { ServiceType } from "@prisma/client";
 
 interface ServiceInstance {
   id: string;
@@ -121,7 +123,14 @@ export function PRDPanel({
             <div className="space-y-3">
               {requiredServiceTypes.map((svcType) => {
                 const isAllowed = allowedServices.includes(svcType);
-                const instances = serviceInstances.filter((s) => s.type === svcType);
+                const compatibleTypes = getCompatibleServiceTypes(svcType as ServiceType);
+                const instances = serviceInstances
+                  .filter((s) => compatibleTypes.includes(s.type as ServiceType))
+                  .sort((a, b) => {
+                    const aBuiltIn = isBuiltInServiceType(a.type as ServiceType) ? 0 : 1;
+                    const bBuiltIn = isBuiltInServiceType(b.type as ServiceType) ? 0 : 1;
+                    return aBuiltIn - bBuiltIn;
+                  });
                 const selectedId = selectedServices[svcType] || "";
                 const testResult = serviceTestResults[svcType];
 

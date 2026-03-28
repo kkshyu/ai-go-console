@@ -38,6 +38,7 @@ import {
   stateForDispatch,
   stateForAgentComplete,
   stateForComplete,
+  parsePMActions,
 } from "../agents/orchestrator";
 import { createSpecialistActor, type SpecialistConfig } from "./specialist-actors";
 import { PostProcessor, type PostProcessorConfig } from "./post-processor";
@@ -584,10 +585,32 @@ export class PMActor extends Actor {
       // Save PM artifact
       await saveArtifact("pm", result.content);
 
-      // Parse and validate PM action
+      // Extract all PM actions (may include update_prd + main action)
+      const allActions = parsePMActions(result.content);
+
+      // Process update_prd actions first (send prdUpdate events to client)
+      for (const act of allActions) {
+        if (act.action === "update_prd") {
+          await sendEvent({ prdUpdate: act.prd });
+        }
+      }
+
+      // Parse and validate main PM action (non-prd action)
       const validated = validatePMAction(result.content);
       const pmAction = "action" in validated ? validated.action : null;
       if ("error" in validated) {
+        // If we only had update_prd, that's fine — treat as respond with needsUserInput
+        const hasOnlyPrd = allActions.length > 0 && allActions.every((a) => a.action === "update_prd");
+        if (hasOnlyPrd) {
+          await sendEvent({
+            agentComplete: true,
+            agentRole: "pm",
+            rawContent: result.content,
+            needsUserInput: true,
+          });
+          system.signalCompletion(this.orchState);
+          return;
+        }
         actorLog("warn", this.id, `PM action validation: ${validated.error}`, this.traceId);
       }
 

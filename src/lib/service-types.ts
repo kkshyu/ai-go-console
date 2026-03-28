@@ -173,6 +173,16 @@ export function isIndustryServiceType(type: ServiceType): boolean {
   return INDUSTRY_SERVICE_TYPES.includes(type);
 }
 
+/**
+ * Get all compatible service types in the same category.
+ * e.g. "postgresql" → ["postgresql", "mysql", "mongodb", "built_in_pg"]
+ */
+export function getCompatibleServiceTypes(svcType: ServiceType): ServiceType[] {
+  const category = SERVICE_TYPE_CATEGORY[svcType];
+  if (!category) return [svcType];
+  return CATEGORY_SERVICE_TYPES[category] || [svcType];
+}
+
 export interface ConfigFieldDef {
   key: string;
   type: "text" | "password";

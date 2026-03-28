@@ -23,27 +23,11 @@ import {
   ChevronUp,
   Send,
 } from "lucide-react";
-import { ChatPanel } from "@/components/chat/chat-panel";
+import { AgentChatPanel, type AgentMessage } from "@/components/chat/agent-chat-panel";
 import { PRDPanel } from "@/components/chat/prd-panel";
-import { extractPRD, prdToMarkdown, type PRDData } from "@/lib/prd";
-
-interface ServiceRef {
-  instanceId?: string;
-  name?: string;
-  type: string;
-}
-
-interface CreateAppAction {
-  action: "create_app";
-  name: string;
-  slug?: string;
-  template: string;
-  description?: string;
-  config?: Record<string, unknown>;
-  requiredServices?: (string | ServiceRef)[];
-  files?: Array<{ path: string; content: string }>;
-  npmPackages?: string[];
-}
+import type { PRDData } from "@/lib/prd";
+import { getCompatibleServiceTypes, isBuiltInServiceType } from "@/lib/service-types";
+import type { ServiceType } from "@prisma/client";
 
 interface AppPreset {
   id: string;
@@ -136,15 +120,14 @@ export default function CreateAppPage() {
   const [inputValue, setInputValue] = useState("");
 
   // Chat mode state
-  const [creatingApp, setCreatingApp] = useState(false);
-  const [serviceWarning, setServiceWarning] = useState<string | null>(null);
   const [allowedServices, setAllowedServices] = useState<string[]>([]);
   const [serviceInstances, setServiceInstances] = useState<Array<{ id: string; name: string; type: string }>>([]);
-  const chatMessagesRef = useRef<{ role: string; content: string }[]>([]);
+  const [chatMessages, setChatMessages] = useState<AgentMessage[]>([]);
   const [prdData, setPrdData] = useState<PRDData | null>(null);
   const [selectedServices, setSelectedServices] = useState<Record<string, string>>({});
   const [serviceTestResults, setServiceTestResults] = useState<Record<string, { success: boolean; message: string } | null>>({});
   const manuallySelectedRef = useRef<Set<string>>(new Set());
+  const autoSendValueRef = useRef<string | null>(null);
 
   useEffect(() => {
     fetch("/api/organizations")
@@ -189,14 +172,23 @@ export default function CreateAppPage() {
     testService(svcType, instanceId);
   }, [testService]);
 
-  // Auto-select service instances when PRD updates
+  // Auto-select service instances when PRD updates, prioritizing built-in services
   const autoSelectServices = useCallback((prd: PRDData) => {
     const newSelected = { ...selectedServices };
     let changed = false;
     for (const svcType of prd.requiredServices) {
       if (manuallySelectedRef.current.has(svcType)) continue;
       if (newSelected[svcType]) continue;
-      const instances = serviceInstances.filter((s) => s.type === svcType);
+      // Find compatible types in the same category (e.g. postgresql → [postgresql, mysql, mongodb, built_in_pg])
+      const compatibleTypes = getCompatibleServiceTypes(svcType as ServiceType);
+      const instances = serviceInstances
+        .filter((s) => compatibleTypes.includes(s.type as ServiceType))
+        .sort((a, b) => {
+          // Built-in services first
+          const aBuiltIn = isBuiltInServiceType(a.type as ServiceType) ? 0 : 1;
+          const bBuiltIn = isBuiltInServiceType(b.type as ServiceType) ? 0 : 1;
+          return aBuiltIn - bBuiltIn;
+        });
       if (instances.length > 0) {
         newSelected[svcType] = instances[0].id;
         changed = true;
@@ -206,94 +198,27 @@ export default function CreateAppPage() {
     if (changed) setSelectedServices(newSelected);
   }, [selectedServices, serviceInstances, testService]);
 
-  const handleCreateApp = useCallback(
-    async (action: CreateAppAction) => {
-      // Use service instances selected in the right panel
-      const serviceIds = Object.values(selectedServices).filter(Boolean);
-
-      // Check for failed service tests
-      const failedServices = Object.entries(serviceTestResults)
-        .filter(([, result]) => result && !result.success)
-        .map(([svcType]) => {
-          const instanceId = selectedServices[svcType];
-          const inst = serviceInstances.find((si) => si.id === instanceId);
-          return inst?.name || svcType;
-        });
-      if (failedServices.length > 0) {
-        setServiceWarning(t("serviceConnectionFailed", { services: failedServices.join(", ") }));
-        return;
-      }
-
-      setCreatingApp(true);
-      setServiceWarning(null);
-      try {
-        // Inject PRD.md into initial files
-        const prdFile = prdData ? { path: "PRD.md", content: prdToMarkdown(prdData) } : null;
-        const allFiles = [...(action.files || []), ...(prdFile ? [prdFile] : [])];
-
-        const res = await fetch("/api/apps", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: action.name,
-            slug: action.slug,
-            template: action.template,
-            description: action.description || "",
-            config: action.config || {},
-            files: allFiles.length > 0 ? allFiles : undefined,
-            npmPackages: action.npmPackages,
-            serviceIds: serviceIds.length > 0 ? serviceIds : undefined,
-          }),
-        });
-        if (!res.ok) throw new Error("Failed to create app");
-        const app = await res.json();
-        for (const msg of chatMessagesRef.current) {
-          await fetch(`/api/apps/${app.id}/chat`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ role: msg.role, content: msg.content }),
-          }).catch(() => {});
-        }
-        await fetch(`/api/apps/${app.id}/lifecycle`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "dev-start" }),
-        }).catch(() => {});
-        router.push(`/apps/${app.id}?develop=true`);
-      } catch {
-        // Error handled via chat message
-      } finally {
-        setCreatingApp(false);
-      }
+  // PRD update from PM Agent
+  const handlePRDUpdate = useCallback(
+    (prd: PRDData) => {
+      setPrdData(prd);
+      autoSelectServices(prd);
     },
-    [selectedServices, serviceTestResults, serviceInstances, prdData, t, router]
-  );
-
-  const handleAssistantResponse = useCallback(
-    (content: string) => {
-      // Extract PRD data from response
-      const prd = extractPRD(content);
-      if (prd) {
-        setPrdData(prd);
-        autoSelectServices(prd);
-      }
-
-      const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
-      if (!jsonMatch) return;
-      try {
-        const parsed = JSON.parse(jsonMatch[1]);
-        if (parsed.action === "create_app") handleCreateApp(parsed as CreateAppAction);
-      } catch {}
-    },
-    [handleCreateApp, autoSelectServices]
+    [autoSelectServices]
   );
 
   const handleUserMessage = useCallback((content: string) => {
-    chatMessagesRef.current.push({ role: "user", content });
+    setChatMessages((prev) => [
+      ...prev,
+      { id: Date.now().toString(), role: "user", content },
+    ]);
   }, []);
 
   const handleAssistantComplete = useCallback((content: string) => {
-    chatMessagesRef.current.push({ role: "assistant", content });
+    setChatMessages((prev) => [
+      ...prev,
+      { id: (Date.now() + 1).toString(), role: "assistant", content, agentRole: "pm" },
+    ]);
   }, []);
 
   const handlePresetCreate = useCallback(
@@ -330,6 +255,10 @@ export default function CreateAppPage() {
 
   const handleInputSubmit = () => {
     if (!inputValue.trim()) return;
+    // Only auto-send on first entry (when no messages yet)
+    if (chatMessages.length === 0) {
+      autoSendValueRef.current = inputValue.trim();
+    }
     setShowChat(true);
   };
 
@@ -354,23 +283,17 @@ export default function CreateAppPage() {
         </div>
         <div className="flex flex-1 min-h-0 gap-4">
           <div className="flex flex-1 flex-col min-h-0">
-            {serviceWarning && (
-              <div className="mb-3 flex items-center gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                <span>{serviceWarning}</span>
-              </div>
-            )}
-            <ChatPanel
+            <AgentChatPanel
               placeholder={t("placeholder")}
               emptyStateText={t("chatEmptyState")}
               generatingText={t("generating")}
               totalTokensLabel={t("totalTokens")}
-              externalLoading={creatingApp}
-              onAssistantResponse={handleAssistantResponse}
               onUserMessage={handleUserMessage}
               onAssistantComplete={handleAssistantComplete}
-              autoSend={!!inputValue.trim()}
-              initialMessages={inputValue.trim() ? [{ id: "init-1", role: "user", content: inputValue.trim() }] : []}
+              onPRDUpdate={handlePRDUpdate}
+              showProgress={false}
+              autoSendMessage={autoSendValueRef.current || undefined}
+              initialMessages={chatMessages}
             />
           </div>
           <PRDPanel
@@ -435,6 +358,7 @@ export default function CreateAppPage() {
                 key={suggestion}
                 onClick={() => {
                   setInputValue(suggestion);
+                  autoSendValueRef.current = suggestion;
                   setShowChat(true);
                 }}
                 className="rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
