@@ -89,6 +89,48 @@ export default function AppDetailPage() {
   const [bottomPanelCollapsed, setBottomPanelCollapsed] = useState(false);
   const [fullscreenBottomPanel, setFullscreenBottomPanel] = useState<"logs" | "console" | null>(null);
   const [fullscreenPanelCollapsed, setFullscreenPanelCollapsed] = useState(false);
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(160); // default ~h-40
+  const [fullscreenPanelHeight, setFullscreenPanelHeight] = useState(192); // default ~h-48
+  const isDraggingRef = useRef(false);
+  const dragTargetRef = useRef<"main" | "fullscreen">("main");
+  const dragStartYRef = useRef(0);
+  const dragStartHeightRef = useRef(0);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      e.preventDefault();
+      const delta = dragStartYRef.current - e.clientY;
+      const newHeight = Math.max(80, Math.min(600, dragStartHeightRef.current + delta));
+      if (dragTargetRef.current === "main") {
+        setBottomPanelHeight(newHeight);
+      } else {
+        setFullscreenPanelHeight(newHeight);
+      }
+    };
+    const handleMouseUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+
+  const startDrag = (e: React.MouseEvent, target: "main" | "fullscreen") => {
+    isDraggingRef.current = true;
+    dragTargetRef.current = target;
+    dragStartYRef.current = e.clientY;
+    dragStartHeightRef.current = target === "main" ? bottomPanelHeight : fullscreenPanelHeight;
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+  };
   const [editingSlug, setEditingSlug] = useState(false);
   const [slugValue, setSlugValue] = useState("");
   const [slugError, setSlugError] = useState("");
@@ -478,9 +520,18 @@ export default function AppDetailPage() {
     setPanel: (v: "logs" | "console" | null) => void,
     collapsed: boolean,
     setCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void,
+    dragTarget: "main" | "fullscreen" = "main",
   ) {
     return (
-      <div className="flex items-center border-t bg-muted/40">
+      <>
+        {/* Drag handle for resizing */}
+        {panel && !collapsed && (
+          <div
+            className="h-1.5 w-full shrink-0 cursor-row-resize border-t hover:bg-primary/20 active:bg-primary/30 transition-colors"
+            onMouseDown={(e) => startDrag(e, dragTarget)}
+          />
+        )}
+        <div className="flex items-center border-t bg-muted/40">
         <button
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
             panel === "logs"
@@ -529,15 +580,16 @@ export default function AppDetailPage() {
           )}
         </div>
       </div>
+      </>
     );
   }
 
   // Shared render: Ghostty-themed log panel
-  function renderLogPanel(height: string = "h-40") {
+  function renderLogPanel(heightPx: number = 160) {
     return (
       <div
-        className={`${height} overflow-auto font-mono text-xs`}
-        style={{ backgroundColor: "#1c1c1c", color: "#d4d4d4" }}
+        className="overflow-auto font-mono text-xs"
+        style={{ backgroundColor: "#1c1c1c", color: "#d4d4d4", height: `${heightPx}px` }}
       >
         {!devLogs ? (
           <div className="flex items-center justify-center h-full" style={{ color: "#6b7280" }}>
@@ -566,9 +618,9 @@ export default function AppDetailPage() {
   }
 
   // Shared render: Chrome DevTools-styled console panel
-  function renderConsolePanel(height: string = "h-40") {
+  function renderConsolePanel(heightPx: number = 160) {
     return (
-      <div className={`${height} overflow-auto text-xs font-mono border-t bg-white`}>
+      <div className="overflow-auto text-xs font-mono border-t bg-white" style={{ height: `${heightPx}px` }}>
         {consoleLogs.length === 0 ? (
           <div className="flex items-center justify-center h-full text-muted-foreground">
             No console output
@@ -862,11 +914,11 @@ export default function AppDetailPage() {
               )}
 
               {/* Bottom toolbar — Dev Logs / Console tabs */}
-              {renderBottomToolbar(bottomPanel, setBottomPanel, bottomPanelCollapsed, setBottomPanelCollapsed)}
+              {renderBottomToolbar(bottomPanel, setBottomPanel, bottomPanelCollapsed, setBottomPanelCollapsed, "main")}
 
               {/* Bottom panel content */}
-              {!bottomPanelCollapsed && bottomPanel === "logs" && renderLogPanel()}
-              {!bottomPanelCollapsed && bottomPanel === "console" && renderConsolePanel()}
+              {!bottomPanelCollapsed && bottomPanel === "logs" && renderLogPanel(bottomPanelHeight)}
+              {!bottomPanelCollapsed && bottomPanel === "console" && renderConsolePanel(bottomPanelHeight)}
             </div>
           )}
 
@@ -1150,9 +1202,9 @@ export default function AppDetailPage() {
               title="App Preview Fullscreen"
             />
             {/* Bottom toolbar in fullscreen */}
-            {renderBottomToolbar(fullscreenBottomPanel, setFullscreenBottomPanel, fullscreenPanelCollapsed, setFullscreenPanelCollapsed)}
-            {!fullscreenPanelCollapsed && fullscreenBottomPanel === "logs" && renderLogPanel("h-48")}
-            {!fullscreenPanelCollapsed && fullscreenBottomPanel === "console" && renderConsolePanel("h-48")}
+            {renderBottomToolbar(fullscreenBottomPanel, setFullscreenBottomPanel, fullscreenPanelCollapsed, setFullscreenPanelCollapsed, "fullscreen")}
+            {!fullscreenPanelCollapsed && fullscreenBottomPanel === "logs" && renderLogPanel(fullscreenPanelHeight)}
+            {!fullscreenPanelCollapsed && fullscreenBottomPanel === "console" && renderConsolePanel(fullscreenPanelHeight)}
           </div>
         </div>
       )}
