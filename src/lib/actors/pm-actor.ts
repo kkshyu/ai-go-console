@@ -28,8 +28,6 @@ import {
   getModelForAgent,
   getOutputModel,
   type ChatMessage,
-  DEFAULT_MODEL,
-  OUTPUT_MODEL,
 } from "../ai";
 import type { AgentRole, OrchestrationState, AgentMessage as AgentMsg } from "../agents/types";
 import { createInitialOrchestrationState } from "../agents/types";

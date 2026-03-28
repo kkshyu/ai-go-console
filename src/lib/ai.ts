@@ -22,7 +22,8 @@ export interface StreamChatResult {
   usage: TokenUsage | null;
 }
 
-export { AVAILABLE_MODELS, DEFAULT_MODEL } from "./models";
+import { AVAILABLE_MODELS, DEFAULT_MODEL } from "./models";
+export { AVAILABLE_MODELS, DEFAULT_MODEL };
 
 /** Per-agent model mapping for production (NODE_ENV=production) */
 const PROD_AGENT_MODEL_MAP: Record<string, string> = {
