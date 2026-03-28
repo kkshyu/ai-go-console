@@ -155,6 +155,10 @@ export default function AppDetailPage() {
   const [previewSubPanel, setPreviewSubPanel] = useState<"browser" | "files">("browser");
   const [deploySubPanel, setDeploySubPanel] = useState<"browser" | "files">("browser");
   const [prodIframeKey, setProdIframeKey] = useState(0);
+  const [devPath, setDevPath] = useState("");
+  const [devPathInput, setDevPathInput] = useState("");
+  const [prodPath, setProdPath] = useState("");
+  const [prodPathInput, setProdPathInput] = useState("");
 
   // Auto-develop: when redirected from /create with ?develop=true
   const isDevelop = searchParams.get("develop") === "true";
@@ -839,9 +843,23 @@ export default function AppDetailPage() {
                         <FolderOpen className="h-3 w-3" />
                       </button>
                       <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <span className="flex-1 text-xs font-mono text-muted-foreground truncate">
+                      <span className="text-xs font-mono text-muted-foreground shrink-0 select-none">
                         {previewUrl}
                       </span>
+                      <input
+                        className="flex-1 min-w-0 text-xs font-mono text-muted-foreground bg-transparent outline-none placeholder:text-muted-foreground/40"
+                        value={devPathInput}
+                        onChange={(e) => setDevPathInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            const p = devPathInput.startsWith("/") ? devPathInput : devPathInput ? `/${devPathInput}` : "";
+                            setDevPath(p);
+                            setIframeKey((k) => k + 1);
+                          }
+                        }}
+                        placeholder="/"
+                        spellCheck={false}
+                      />
                       <Button
                         variant="ghost"
                         size="icon"
@@ -892,7 +910,7 @@ export default function AppDetailPage() {
                   ) : (
                     <iframe
                       key={iframeKey}
-                      src={previewUrl || `http://localhost:${app.port}`}
+                      src={`${previewUrl || `http://localhost:${app.port}`}${devPath}`}
                       className="flex-1 w-full border-0"
                       title="App Preview"
                     />
@@ -955,9 +973,23 @@ export default function AppDetailPage() {
                         <FolderOpen className="h-3 w-3" />
                       </button>
                       <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <span className="flex-1 text-xs font-mono text-muted-foreground truncate">
-                        http://localhost:{app.prodPort}
+                      <span className="text-xs font-mono text-muted-foreground shrink-0 select-none">
+                        {prodUrl || `http://localhost:${app.prodPort}`}
                       </span>
+                      <input
+                        className="flex-1 min-w-0 text-xs font-mono text-muted-foreground bg-transparent outline-none placeholder:text-muted-foreground/40"
+                        value={prodPathInput}
+                        onChange={(e) => setProdPathInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            const p = prodPathInput.startsWith("/") ? prodPathInput : prodPathInput ? `/${prodPathInput}` : "";
+                            setProdPath(p);
+                            setProdIframeKey((k) => k + 1);
+                          }
+                        }}
+                        placeholder="/"
+                        spellCheck={false}
+                      />
                       <Button
                         variant="ghost"
                         size="icon"
@@ -988,7 +1020,7 @@ export default function AppDetailPage() {
                   ) : (
                     <iframe
                       key={prodIframeKey}
-                      src={prodUrl || `http://localhost:${app.prodPort}`}
+                      src={`${prodUrl || `http://localhost:${app.prodPort}`}${prodPath}`}
                       className="flex-1 w-full border-0"
                       title="Production Preview"
                     />
@@ -1197,7 +1229,7 @@ export default function AppDetailPage() {
               </Button>
             </div>
             <iframe
-              src={previewUrl || `http://localhost:${app.port}`}
+              src={`${previewUrl || `http://localhost:${app.port}`}${devPath}`}
               className="flex-1 w-full border-0"
               title="App Preview Fullscreen"
             />
