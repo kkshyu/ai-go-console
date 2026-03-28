@@ -419,7 +419,7 @@ export const CRM_SALES_PIPELINE: PresetOverlay = {
     { path: "src/lib/mock-data.ts", content: MOCK_DATA_FILE },
   ],
   requiredServices: [
-    { category: "database", suggestedTypes: ["built_in_pg", "postgresql"], purpose: "\u5132\u5b58\u5ba2\u6236\u8207\u5546\u6a5f\u8cc7\u6599" },
+    { category: "database", suggestedTypes: ["built_in_supabase", "postgresql"], purpose: "\u5132\u5b58\u5ba2\u6236\u8207\u5546\u6a5f\u8cc7\u6599" },
     { category: "email", suggestedTypes: ["sendgrid", "ses"], purpose: "\u5bc4\u9001\u8ddf\u9032\u90f5\u4ef6", optional: true },
   ],
 };

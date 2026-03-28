@@ -647,6 +647,6 @@ export const ERP_RETAIL: PresetOverlay = {
     { path: "src/lib/mock-data.ts", content: MOCK_DATA_FILE },
   ],
   requiredServices: [
-    { category: "database", suggestedTypes: ["built_in_pg", "postgresql"], purpose: "儲存商品與訂單資料" },
+    { category: "database", suggestedTypes: ["built_in_supabase", "postgresql"], purpose: "儲存商品與訂單資料" },
   ],
 };

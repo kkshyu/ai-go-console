@@ -352,8 +352,8 @@ app.listen(PORT, "0.0.0.0", () => {
       purpose: "LINE Bot 訊息收發",
     },
     {
-      category: "built_in_pg",
-      suggestedTypes: ["built_in_pg"],
+      category: "built_in_supabase",
+      suggestedTypes: ["built_in_supabase"],
       purpose: "會員資料與點數儲存",
       optional: true,
     },

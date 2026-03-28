@@ -656,7 +656,7 @@ export default function MenuPage() {
   requiredServices: [
     {
       category: "database",
-      suggestedTypes: ["built_in_pg", "postgresql"],
+      suggestedTypes: ["built_in_supabase", "postgresql"],
       purpose: "儲存訂位資料",
     },
     {

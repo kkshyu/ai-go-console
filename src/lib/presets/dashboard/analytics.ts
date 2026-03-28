@@ -614,7 +614,7 @@ export const DASHBOARD_ANALYTICS: PresetOverlay = {
     { path: "src/app/reports/page.tsx", content: PAGE_REPORTS },
   ],
   requiredServices: [
-    { category: "database", suggestedTypes: ["built_in_pg", "postgresql"], purpose: "儲存分析資料" },
+    { category: "database", suggestedTypes: ["built_in_supabase", "postgresql"], purpose: "儲存分析資料" },
     { category: "ai_model", suggestedTypes: ["openai", "claude"], purpose: "AI 數據分析", optional: true },
   ],
 };

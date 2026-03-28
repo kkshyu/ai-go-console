@@ -1,0 +1,381 @@
+---
+# Built-in Supabase for organizations
+# Self-hosted Supabase: PostgreSQL + PostgREST + GoTrue + Kong
+# 每個 org 共用此 Supabase instance，透過 RLS 隔離
+apiVersion: v1
+kind: Secret
+metadata:
+  name: supabase-credentials
+  namespace: aigo-system
+type: Opaque
+stringData:
+  POSTGRES_USER: supabase_admin
+  POSTGRES_PASSWORD: supabase_dev_password
+  POSTGRES_DB: supabase
+  JWT_SECRET: "aigo-supabase-jwt-secret-dev-only-change-in-prod!!"
+  ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjE5MDAwMDAwMDB9.u5NrEoehmZrq6uCbdQDBk2t5UAMXLS6WGZiXCWk5xtc"
+  SERVICE_ROLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MTkwMDAwMDAwMH0.0dZnup3iJMYctbMMSO8eqLrp3R-NdU4BFfeOwYqvdto"
+---
+# Supabase PostgreSQL (with extensions: pgjwt, pgcrypto, uuid-ossp, etc.)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: supabase-db
+  namespace: aigo-system
+  labels:
+    app: supabase-db
+    aigo.dev/component: supabase
+spec:
+  serviceName: supabase-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: supabase-db
+  template:
+    metadata:
+      labels:
+        app: supabase-db
+    spec:
+      containers:
+        - name: postgres
+          image: supabase/postgres:15.8.1.060
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: POSTGRES_DB
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: JWT_SECRET
+          volumeMounts:
+            - name: supabase-db-data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - supabase_admin
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: supabase-db-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-db
+  namespace: aigo-system
+  labels:
+    app: supabase-db
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: supabase-db
+---
+# PostgREST — auto-generated REST API from PostgreSQL
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-rest
+  namespace: aigo-system
+  labels:
+    app: supabase-rest
+    aigo.dev/component: supabase
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: supabase-rest
+  template:
+    metadata:
+      labels:
+        app: supabase-rest
+    spec:
+      containers:
+        - name: postgrest
+          image: postgrest/postgrest:v12.2.3
+          ports:
+            - containerPort: 3000
+          env:
+            - name: PGRST_DB_URI
+              value: "postgresql://supabase_admin:supabase_dev_password@supabase-db.aigo-system.svc.cluster.local:5432/supabase"
+            - name: PGRST_DB_SCHEMAS
+              value: "public,storage,graphql_public"
+            - name: PGRST_DB_ANON_ROLE
+              value: "anon"
+            - name: PGRST_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: JWT_SECRET
+            - name: PGRST_DB_USE_LEGACY_GUCS
+              value: "false"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-rest
+  namespace: aigo-system
+  labels:
+    app: supabase-rest
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: 3000
+  selector:
+    app: supabase-rest
+---
+# GoTrue — Auth server
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-auth
+  namespace: aigo-system
+  labels:
+    app: supabase-auth
+    aigo.dev/component: supabase
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: supabase-auth
+  template:
+    metadata:
+      labels:
+        app: supabase-auth
+    spec:
+      containers:
+        - name: gotrue
+          image: supabase/gotrue:v2.164.0
+          ports:
+            - containerPort: 9999
+          env:
+            - name: GOTRUE_API_HOST
+              value: "0.0.0.0"
+            - name: GOTRUE_API_PORT
+              value: "9999"
+            - name: API_EXTERNAL_URL
+              value: "http://localhost:54321"
+            - name: GOTRUE_DB_DRIVER
+              value: "postgres"
+            - name: GOTRUE_DB_DATABASE_URL
+              value: "postgresql://supabase_admin:supabase_dev_password@supabase-db.aigo-system.svc.cluster.local:5432/supabase?search_path=auth"
+            - name: GOTRUE_SITE_URL
+              value: "http://localhost:3000"
+            - name: GOTRUE_URI_ALLOW_LIST
+              value: ""
+            - name: GOTRUE_DISABLE_SIGNUP
+              value: "false"
+            - name: GOTRUE_JWT_ADMIN_ROLES
+              value: "service_role"
+            - name: GOTRUE_JWT_AUD
+              value: "authenticated"
+            - name: GOTRUE_JWT_DEFAULT_GROUP_NAME
+              value: "authenticated"
+            - name: GOTRUE_JWT_EXP
+              value: "3600"
+            - name: GOTRUE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-credentials
+                  key: JWT_SECRET
+            - name: GOTRUE_EXTERNAL_EMAIL_ENABLED
+              value: "true"
+            - name: GOTRUE_MAILER_AUTOCONFIRM
+              value: "true"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9999
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-auth
+  namespace: aigo-system
+  labels:
+    app: supabase-auth
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9999
+      targetPort: 9999
+  selector:
+    app: supabase-auth
+---
+# Kong — API Gateway (unified /rest/v1, /auth/v1 endpoints)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: supabase-kong-config
+  namespace: aigo-system
+data:
+  kong.yml: |
+    _format_version: "2.1"
+    _transform: true
+
+    services:
+      - name: rest-v1
+        url: http://supabase-rest.aigo-system.svc.cluster.local:3000/
+        routes:
+          - name: rest-v1-route
+            strip_path: true
+            paths:
+              - /rest/v1/
+        plugins:
+          - name: cors
+          - name: key-auth
+            config:
+              hide_credentials: false
+              key_names:
+                - apikey
+
+      - name: auth-v1
+        url: http://supabase-auth.aigo-system.svc.cluster.local:9999/
+        routes:
+          - name: auth-v1-route
+            strip_path: true
+            paths:
+              - /auth/v1/
+        plugins:
+          - name: cors
+
+    consumers:
+      - username: anon
+        keyauth_credentials:
+          - key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjE5MDAwMDAwMDB9.u5NrEoehmZrq6uCbdQDBk2t5UAMXLS6WGZiXCWk5xtc"
+      - username: service_role
+        keyauth_credentials:
+          - key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MTkwMDAwMDAwMH0.0dZnup3iJMYctbMMSO8eqLrp3R-NdU4BFfeOwYqvdto"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-kong
+  namespace: aigo-system
+  labels:
+    app: supabase-kong
+    aigo.dev/component: supabase
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: supabase-kong
+  template:
+    metadata:
+      labels:
+        app: supabase-kong
+    spec:
+      containers:
+        - name: kong
+          image: kong:3.8
+          ports:
+            - containerPort: 8000
+            - containerPort: 8443
+          env:
+            - name: KONG_DATABASE
+              value: "off"
+            - name: KONG_DECLARATIVE_CONFIG
+              value: "/var/lib/kong/kong.yml"
+            - name: KONG_DNS_ORDER
+              value: "LAST,A,CNAME"
+            - name: KONG_PLUGINS
+              value: "request-transformer,cors,key-auth,acl"
+            - name: KONG_NGINX_PROXY_PROXY_BUFFER_SIZE
+              value: "160k"
+            - name: KONG_NGINX_PROXY_PROXY_BUFFERS
+              value: "64 160k"
+          volumeMounts:
+            - name: kong-config
+              mountPath: /var/lib/kong/kong.yml
+              subPath: kong.yml
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      volumes:
+        - name: kong-config
+          configMap:
+            name: supabase-kong-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-kong
+  namespace: aigo-system
+  labels:
+    app: supabase-kong
+spec:
+  type: ClusterIP
+  ports:
+    - name: proxy
+      port: 8000
+      targetPort: 8000
+    - name: proxy-ssl
+      port: 8443
+      targetPort: 8443
+  selector:
+    app: supabase-kong

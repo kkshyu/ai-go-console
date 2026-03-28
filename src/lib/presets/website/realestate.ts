@@ -666,7 +666,7 @@ export const WEBSITE_REALESTATE: PresetOverlay = {
   requiredServices: [
     {
       category: "storage",
-      suggestedTypes: ["built_in_disk", "s3"],
+      suggestedTypes: ["built_in_supabase", "s3"],
       purpose: "物件照片儲存",
       optional: true,
     },

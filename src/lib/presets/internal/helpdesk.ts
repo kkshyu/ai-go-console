@@ -514,7 +514,7 @@ export const INTERNAL_HELPDESK: PresetOverlay = {
     { path: "src/app/knowledge/page.tsx", content: PAGE_KNOWLEDGE },
   ],
   requiredServices: [
-    { category: "database", suggestedTypes: ["built_in_pg", "postgresql"], purpose: "儲存工單資料" },
+    { category: "database", suggestedTypes: ["built_in_supabase", "postgresql"], purpose: "儲存工單資料" },
     { category: "email", suggestedTypes: ["sendgrid", "ses"], purpose: "工單通知郵件", optional: true },
   ],
 };

@@ -1288,7 +1288,7 @@ export default function CheckoutPage() {
   requiredServices: [
     {
       category: "database",
-      suggestedTypes: ["built_in_pg", "postgresql"],
+      suggestedTypes: ["built_in_supabase", "postgresql"],
       purpose: "儲存商品與訂單",
     },
     {
@@ -1299,7 +1299,7 @@ export default function CheckoutPage() {
     },
     {
       category: "storage",
-      suggestedTypes: ["built_in_disk", "s3"],
+      suggestedTypes: ["built_in_supabase", "s3"],
       purpose: "商品圖片",
       optional: true,
     },

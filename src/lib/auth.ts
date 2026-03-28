@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { ALL_SERVICE_TYPES } from "@/lib/service-types";
 import { encrypt } from "@/lib/crypto";
-import { provisionDatabase } from "@/lib/builtin-pg";
+import { provisionSupabaseProject } from "@/lib/builtin-supabase";
 import type { ServiceType } from "@prisma/client";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -36,37 +36,21 @@ async function createOrganizationWithDefaults(name: string) {
   // Auto-provision built-in services
   const orgSlug = org.slug;
 
-  // Provision a real database & user on the shared PostgreSQL instance
-  const pgCreds = await provisionDatabase(orgSlug);
-
-  const pgConfig = encrypt(JSON.stringify({
-    host: process.env.PLATFORM_PG_HOST || "localhost",
-    port: process.env.PLATFORM_PG_PORT || "5432",
-    database: pgCreds.database,
-    username: pgCreds.username,
-    password: pgCreds.password,
+  // Provision built-in Supabase
+  const supabaseCreds = await provisionSupabaseProject(orgSlug);
+  const supabaseConfig = encrypt(JSON.stringify({
+    projectUrl: supabaseCreds.projectUrl,
+    apiKey: supabaseCreds.apiKey,
+    serviceRoleKey: supabaseCreds.serviceRoleKey,
   }));
   await prisma.service.create({
     data: {
-      name: "Built-in PostgreSQL",
-      type: "built_in_pg" as ServiceType,
-      configEncrypted: pgConfig.ciphertext,
-      iv: pgConfig.iv,
-      authTag: pgConfig.authTag,
-      organizationId: org.id,
-    },
-  });
-
-  const diskConfig = encrypt(JSON.stringify({
-    basePath: `/data/storage/${orgSlug}`,
-  }));
-  await prisma.service.create({
-    data: {
-      name: "Built-in Disk Storage",
-      type: "built_in_disk" as ServiceType,
-      configEncrypted: diskConfig.ciphertext,
-      iv: diskConfig.iv,
-      authTag: diskConfig.authTag,
+      name: "Built-in Supabase",
+      type: "built_in_supabase" as ServiceType,
+      endpointUrl: supabaseCreds.projectUrl,
+      configEncrypted: supabaseConfig.ciphertext,
+      iv: supabaseConfig.iv,
+      authTag: supabaseConfig.authTag,
       organizationId: org.id,
     },
   });

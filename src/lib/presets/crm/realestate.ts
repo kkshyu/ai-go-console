@@ -506,7 +506,7 @@ export const CRM_REALESTATE: PresetOverlay = {
     { path: "src/lib/mock-data.ts", content: MOCK_DATA_FILE },
   ],
   requiredServices: [
-    { category: "database", suggestedTypes: ["built_in_pg", "postgresql"], purpose: "\u5132\u5b58\u5ba2\u6236\u8207\u5e36\u770b\u8cc7\u6599" },
+    { category: "database", suggestedTypes: ["built_in_supabase", "postgresql"], purpose: "\u5132\u5b58\u5ba2\u6236\u8207\u5e36\u770b\u8cc7\u6599" },
     { category: "industry", suggestedTypes: ["built_in_realestate"], purpose: "\u5b58\u53d6\u7269\u4ef6\u8cc7\u6599\u5eab", optional: true },
   ],
 };

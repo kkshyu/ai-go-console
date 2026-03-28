@@ -1,18 +1,27 @@
 /**
  * Provision a built-in Supabase project for an organization.
  *
- * Currently returns mock credentials. When real provisioning is needed,
- * this should call the Supabase Management API to create a project
- * and return the actual project URL + anon key.
+ * Uses the self-hosted Supabase instance deployed in k3d.
+ * All orgs share the same Supabase instance; per-org isolation
+ * is handled via RLS policies and separate schemas.
+ *
+ * Reads connection details from environment variables:
+ *   PLATFORM_SUPABASE_URL  — Kong API gateway URL (default: http://localhost:54321)
+ *   PLATFORM_SUPABASE_ANON_KEY — JWT anon key for the instance
+ *   PLATFORM_SUPABASE_SERVICE_ROLE_KEY — JWT service_role key
  */
 export async function provisionSupabaseProject(
-  orgSlug: string
-): Promise<{ projectUrl: string; apiKey: string }> {
-  // Mock provisioning — returns placeholder values.
-  // Replace with real Supabase Management API calls when ready.
-  const projectRef = `mock-${orgSlug.replace(/[^a-z0-9]/g, "")}`;
-  return {
-    projectUrl: `https://${projectRef}.supabase.co`,
-    apiKey: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.mock-anon-key-${projectRef}`,
-  };
+  _orgSlug: string
+): Promise<{ projectUrl: string; apiKey: string; serviceRoleKey: string }> {
+  const projectUrl = process.env.PLATFORM_SUPABASE_URL || "http://localhost:54321";
+  const apiKey = process.env.PLATFORM_SUPABASE_ANON_KEY;
+  const serviceRoleKey = process.env.PLATFORM_SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!apiKey || !serviceRoleKey) {
+    throw new Error(
+      "PLATFORM_SUPABASE_ANON_KEY and PLATFORM_SUPABASE_SERVICE_ROLE_KEY must be set — cannot provision built-in Supabase"
+    );
+  }
+
+  return { projectUrl, apiKey, serviceRoleKey };
 }

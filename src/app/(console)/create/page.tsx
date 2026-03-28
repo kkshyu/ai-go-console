@@ -179,7 +179,7 @@ export default function CreateAppPage() {
     for (const svcType of prd.requiredServices) {
       if (manuallySelectedRef.current.has(svcType)) continue;
       if (newSelected[svcType]) continue;
-      // Find compatible types in the same category (e.g. postgresql → [postgresql, mysql, mongodb, built_in_pg])
+      // Find compatible types in the same category (e.g. postgresql → [postgresql, mysql, mongodb, built_in_supabase])
       const compatibleTypes = getCompatibleServiceTypes(svcType as ServiceType);
       const instances = serviceInstances
         .filter((s) => compatibleTypes.includes(s.type as ServiceType))

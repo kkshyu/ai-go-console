@@ -62,8 +62,7 @@ const SERVICE_TYPE_LABELS: Record<string, { zh: string; en: string }> = {
   whatsapp: { zh: "WhatsApp", en: "WhatsApp" },
   discord: { zh: "Discord", en: "Discord" },
   telegram: { zh: "Telegram", en: "Telegram" },
-  built_in_pg: { zh: "內建資料庫", en: "Built-in Database" },
-  built_in_disk: { zh: "內建檔案儲存", en: "Built-in Storage" },
+  built_in_supabase: { zh: "內建 Supabase", en: "Built-in Supabase" },
 };
 
 function getServiceLabel(type: string, locale: string): string {
