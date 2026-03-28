@@ -19,6 +19,7 @@
     "seed": "tsx --env-file=.env.local prisma/seed.ts"
   },
   "dependencies": {
+    "@kubernetes/client-node": "^1.4.0",
     "@monaco-editor/react": "^4.7.0",
     "@prisma/client": "^6.4.0",
     "@radix-ui/react-avatar": "^1.1.0",
@@ -31,9 +32,11 @@
     "@radix-ui/react-tabs": "^1.1.0",
     "@radix-ui/react-toast": "^1.2.0",
     "bcryptjs": "^2.4.3",
+    "bullmq": "^5.71.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "handlebars": "^4.7.8",
+    "ioredis": "^5.10.1",
     "lucide-react": "^0.469.0",
     "mongodb": "^7.1.1",
     "mysql2": "^3.20.0",

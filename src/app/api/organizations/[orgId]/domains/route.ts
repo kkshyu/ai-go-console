@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { syncRoutes } from "@/lib/proxy";
+import { syncRoutes } from "@/lib/k8s/ingress";
 
 export async function GET(
   _request: NextRequest,

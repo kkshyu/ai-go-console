@@ -143,6 +143,12 @@ model App {
   userId String @map("user_id")
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // k8s resource management
+  memoryLimitMb  Int?     @map("memory_limit_mb")
+  cpuLimitMillis Int?     @map("cpu_limit_millis")
+  autoScale      Boolean  @default(false) @map("auto_scale")
+  maxReplicas    Int      @default(1) @map("max_replicas")
+
   services     AppService[]
   chatMessages ChatMessage[]
   artifacts    AgentArtifact[]

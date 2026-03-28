@@ -1,0 +1,75 @@
+---
+# Network Policy: 組織間隔離
+# 確保 aigo-prod namespace 中不同 org 的 Pod 之間無法互相通訊
+# 每個 org 的 Pod 只能與同 org 的 Pod 和 aigo-system 中的服務通訊
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-cross-org-traffic
+  namespace: aigo-prod
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # 允許來自 Traefik Ingress Controller 的流量
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              aigo.dev/purpose: platform
+          podSelector:
+            matchLabels:
+              app: traefik
+    # 允許同 org 的 Pod 互相通訊（透過 label selector）
+    # 注意：此規則需搭配每個 org 自己的 NetworkPolicy
+    # 在 syncRoutes 時動態建立 per-org NetworkPolicy
+  egress:
+    # 允許 DNS 解析
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # 允許存取 aigo-system 中的服務（PostgreSQL, Redis 等）
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              aigo.dev/purpose: platform
+    # 允許存取外部網路（API calls, npm registry 等）
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+---
+# Dev namespace: 較寬鬆的隔離（開發用途）
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dev-default-policy
+  namespace: aigo-dev
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # 允許 Traefik 流量
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              aigo.dev/purpose: platform
+          podSelector:
+            matchLabels:
+              app: traefik
+  egress:
+    # 允許所有出站流量（開發環境需要自由度）
+    - {}

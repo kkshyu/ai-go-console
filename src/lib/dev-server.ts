@@ -1,8 +1,8 @@
-import * as sandbox from "@/lib/docker-sandbox";
+import * as sandbox from "@/lib/k8s/sandbox";
 
 /**
- * Start a dev server for an app inside a Docker container.
- * The container must already exist (created by generateApp).
+ * Start a dev server for an app inside a k8s Pod.
+ * The Pod must already exist (created by generateApp).
  */
 export async function startDevServer(
   orgSlug: string,

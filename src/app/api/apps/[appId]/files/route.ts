@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrgSlug } from "@/lib/db";
-import * as sandbox from "@/lib/docker-sandbox";
-import type { ContainerType } from "@/lib/docker-sandbox";
+import * as sandbox from "@/lib/k8s/sandbox";
+import type { ContainerType } from "@/lib/k8s/sandbox";
 import { authorizeAppAccess } from "@/lib/api-auth";
 
 /** Paths that cannot be written to */

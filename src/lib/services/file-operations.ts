@@ -5,7 +5,7 @@
  * based on agent output.
  */
 
-import { writeFiles } from "../docker-sandbox";
+import { writeFiles } from "../k8s/sandbox";
 
 export interface FileOperationResult {
   filesWritten: number;

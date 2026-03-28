@@ -1,5 +1,5 @@
 import path from "node:path";
-import * as sandbox from "@/lib/docker-sandbox";
+import * as sandbox from "@/lib/k8s/sandbox";
 
 const EXCLUDED_FILES = new Set([
   ".DS_Store",
