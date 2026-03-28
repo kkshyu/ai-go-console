@@ -22,6 +22,35 @@ import type { AgentRole } from "./types";
  * a task via a `"status": "blocked"` field in their JSON output.
  * PM Agent watches for this and decides how to recover.
  */
+const SUPABASE_INTEGRATION_GUIDE = `
+SUPABASE INTEGRATION (when architect specifies built_in_supabase service):
+- Initialize client using @supabase/supabase-js:
+  \`\`\`
+  import { createClient } from '@supabase/supabase-js'
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+  \`\`\`
+- For server-side operations (API routes, server components), use the service role key:
+  \`\`\`
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  \`\`\`
+- Database queries: use supabase.from('table').select/insert/update/delete
+- Auth: use supabase.auth.signUp/signInWithPassword/signOut
+- Storage: use supabase.storage.from('bucket').upload/download
+- Always handle errors: const { data, error } = await supabase.from(...)
+- Create a shared lib/supabase.ts for client initialization to avoid duplication
+
+CODE STYLE RULES:
+- Always use proper TypeScript types — no 'any' unless truly necessary
+- Handle all async errors with try/catch or .catch()
+- Use 'use client' directive only for components that need client-side interactivity
+- Prefer server components and server actions in Next.js App Router`;
+
 const FAILURE_CLAUSE = `
 IMPORTANT — If you CANNOT complete the task for any reason (missing information, conflicting requirements, technical limitation, etc.), you MUST still output a JSON block but include:
   "status": "blocked",
@@ -280,6 +309,7 @@ IMPORTANT rules for "files":
 - For "line-bot" template: write LINE Bot files (src/index.ts, src/handlers/*.ts). Template already includes webhook endpoint with echo-back handler — override src/index.ts or add handler modules to customize message handling logic. Use @line/bot-sdk's messagingApi for replies and push messages. Environment variables LINE_CHANNEL_SECRET and LINE_CHANNEL_ACCESS_TOKEN are available.
 - All code must be TypeScript and complete — no placeholder comments like "// TODO" or "// implement here"
 - Use the npm packages from the architect's design in your imports
+${SUPABASE_INTEGRATION_GUIDE}
 
 IMPORTANT: The "requiredServices" MUST use the exact service instance objects from the architect_design, including "instanceId", "name", and "type".
 IMPORTANT: The "npmPackages" MUST be copied from the architect_design's npmPackages array exactly.
@@ -605,6 +635,7 @@ IMPORTANT rules for "modify_files":
 - "npmPackages" is optional — only include when new dependencies are needed
 - Do NOT modify infrastructure files (package.json, Dockerfile, tsconfig.json, next.config.ts, vite.config.ts) — only source code files
 - All code must be TypeScript and complete — no placeholder comments like "// TODO" or "// implement here"
+${SUPABASE_INTEGRATION_GUIDE}
 
 When suggesting app configuration changes (services, description), output:
 \`\`\`json
