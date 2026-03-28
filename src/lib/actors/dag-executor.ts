@@ -167,6 +167,29 @@ export class DAGExecutor {
   }
 
   /**
+   * Build upstream context for a node, including structured error information
+   * from any failed dependencies so downstream agents can adapt their work.
+   */
+  private buildNodeContext(node: DAGNode): string {
+    const contextParts: string[] = [];
+
+    for (const depId of node.dependsOn) {
+      const depResult = this.nodeResults.get(depId);
+      if (!depResult) continue;
+
+      if (depResult.success) {
+        contextParts.push(`[${depResult.role.toUpperCase()} (${depResult.nodeId})]: ${depResult.summary}`);
+      } else {
+        contextParts.push(
+          `[${depResult.role.toUpperCase()} (${depResult.nodeId}) — FAILED]: ${depResult.error || "Unknown error"}. Adapt your work accordingly — skip features that depend on this agent's output.`,
+        );
+      }
+    }
+
+    return contextParts.join("\n");
+  }
+
+  /**
    * Execute a single DAG node by spawning an agent and waiting for its result.
    */
   private async executeNode(node: DAGNode): Promise<NodeResult> {
@@ -182,6 +205,9 @@ export class DAGExecutor {
         .filter((k): k is string => k !== null);
 
       const bbContext = blackboard.buildContext(contextKeys);
+
+      // Build upstream dependency context with error propagation
+      const upstreamContext = this.buildNodeContext(node);
 
       // Create and spawn the agent
       const index = parseInt(node.id.split("-").pop() || "0", 10);
@@ -215,7 +241,7 @@ export class DAGExecutor {
       });
 
       // Send task to agent
-      const fullContext = [this.config.artifactContext, bbContext, this.config.fileContext]
+      const fullContext = [this.config.artifactContext, bbContext, upstreamContext, this.config.fileContext]
         .filter(Boolean)
         .join("\n\n");
 
@@ -270,7 +296,7 @@ export class DAGExecutor {
         break;
       case "skip":
       default:
-        actorLog("warn", "dag-executor", `Skipping failed node ${node.id}`, this.config.traceId);
+        actorLog("warn", "dag-executor", `Node ${node.id} failed — error context will propagate to downstream dependents`, this.config.traceId);
         break;
     }
   }
