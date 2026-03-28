@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import {
   Play,
-  Square,
   RotateCw,
   Upload,
   Trash2,

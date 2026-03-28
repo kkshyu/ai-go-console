@@ -732,9 +732,7 @@ export default function ServicesPage() {
                 {filteredServices.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                      {searchQuery || selectedCategory
-                        ? t("emptyState")
-                        : t("emptyState")}
+                      {t("emptyState")}
                     </td>
                   </tr>
                 )}

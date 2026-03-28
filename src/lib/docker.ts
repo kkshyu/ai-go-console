@@ -15,11 +15,6 @@ function containerName(orgSlug: string, slug: string): string {
   return `aigo-${orgSlug}-${slug}-prod`;
 }
 
-/** Legacy naming: aigo-{orgSlug}-{slug} (before -prod suffix was added) */
-function legacyContainerName(orgSlug: string, slug: string): string {
-  return `aigo-${orgSlug}-${slug}`;
-}
-
 /**
  * Tag a docker image with a version for rollback
  */

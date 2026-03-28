@@ -57,6 +57,7 @@ enum ServiceType {
   // built-in (platform-managed)
   built_in_pg
   built_in_disk
+  built_in_real_estate
   built_in_accounting
   built_in_auto_repair
   built_in_beauty

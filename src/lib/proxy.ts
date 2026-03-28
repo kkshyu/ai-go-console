@@ -1,10 +1,9 @@
 import { prisma } from "@/lib/db";
-import { execFile } from "child_process";
+import { execFile, spawn } from "child_process";
 import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
 
-const CADDY_ADMIN_URL = process.env.CADDY_ADMIN_URL || "http://localhost:2019";
 const CADDY_CONTAINER = process.env.CADDY_CONTAINER || "aigo-caddy";
 
 interface AppWithStatus {
@@ -44,9 +43,9 @@ export async function syncRoutes(): Promise<void> {
   const localhostDomains: string[] = [];
 
   for (const org of orgs) {
-    const allApps: AppWithStatus[] = org.users.flatMap((u) =>
-      u.apps.filter((a): a is AppWithStatus => a.port !== null)
-    );
+    const allApps = org.users.flatMap((u) =>
+      u.apps.filter((a): a is typeof a & { port: number } => a.port !== null)
+    ) as AppWithStatus[];
     if (allApps.length === 0) continue;
 
     const devApps = allApps.filter((a) => a.status === "developing");
@@ -190,7 +189,7 @@ async function pushCaddyConfig(config: unknown): Promise<void> {
   // Pipe JSON via stdin to a shell script to avoid escaping issues with large payloads.
   try {
     const configJson = JSON.stringify(config);
-    const child = require("child_process").spawn(
+    const child = spawn(
       "docker",
       [
         "exec", "-i", CADDY_CONTAINER, "sh", "-c",
