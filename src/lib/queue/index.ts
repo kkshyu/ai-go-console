@@ -24,7 +24,11 @@ function parseRedisUrl(url: string): { host: string; port: number; password?: st
   };
 }
 
-const redisConnection = parseRedisUrl(REDIS_URL);
+const redisConnection = {
+  ...parseRedisUrl(REDIS_URL),
+  maxRetriesPerRequest: 1,
+  retryStrategy: (times: number) => (times > 3 ? null : Math.min(times * 500, 3000)),
+};
 
 // ── Queue Instances (singleton per queue name) ───────────────────────────────
 
@@ -35,6 +39,7 @@ function getQueue(name: QueueName): Queue {
   let queue = queues.get(name);
   if (!queue) {
     queue = new Queue(name, { connection: redisConnection });
+    queue.on("error", () => { /* suppress Redis connection errors */ });
     queues.set(name, queue);
   }
   return queue;
@@ -44,6 +49,7 @@ function getQueueEvents(name: QueueName): QueueEvents {
   let events = queueEvents.get(name);
   if (!events) {
     events = new QueueEvents(name, { connection: redisConnection });
+    events.on("error", () => { /* suppress Redis connection errors */ });
     queueEvents.set(name, events);
   }
   return events;
