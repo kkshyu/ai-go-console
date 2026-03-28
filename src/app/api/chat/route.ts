@@ -3,8 +3,18 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { streamChat, buildAppContextPrompt, DEFAULT_MODEL, type ChatMessage } from "@/lib/ai";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
+  // Rate limit: 20 chat requests per user per minute
+  const ip = getClientIp(request.headers);
+  const rl = rateLimit(`chat:${ip}`, 20, 60 * 1000);
+  if (rl.limited) {
+    return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
+      status: 429,
+      headers: { "Content-Type": "application/json", "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+    });
+  }
   const body = await request.json();
   const { messages, model, appId } = body as {
     messages: ChatMessage[];

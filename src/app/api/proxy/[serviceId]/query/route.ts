@@ -11,6 +11,7 @@ import {
 } from "@/lib/db-drivers";
 import { dispatchIndustryRequest } from "@/lib/builtin-industry";
 import type { ServiceType } from "@prisma/client";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 function extractToken(req: NextRequest): string | null {
   const auth = req.headers.get("authorization");
@@ -23,6 +24,16 @@ export async function POST(
   { params }: { params: Promise<{ serviceId: string }> }
 ) {
   const { serviceId } = await params;
+
+  // Rate limit: 100 queries per service per minute
+  const ip = getClientIp(request.headers);
+  const rl = rateLimit(`proxy:${serviceId}:${ip}`, 100, 60 * 1000);
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded" },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) } }
+    );
+  }
 
   // Verify HMAC proxy token
   const token = extractToken(request);
@@ -91,6 +102,24 @@ export async function POST(
       if (!sql) {
         return NextResponse.json({ error: "Missing 'sql' field" }, { status: 400 });
       }
+
+      // Block destructive DDL statements to prevent accidental/malicious data loss
+      const normalized = sql.replace(/--.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "").trim().toUpperCase();
+      const destructivePatterns = [
+        /\bDROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|FUNCTION|TRIGGER|ROLE)\b/,
+        /\bTRUNCATE\b/,
+        /\bALTER\s+(TABLE|DATABASE|SCHEMA|ROLE)\b/,
+        /\bCREATE\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|FUNCTION|TRIGGER|ROLE)\b/,
+        /\bGRANT\b/,
+        /\bREVOKE\b/,
+      ];
+      if (destructivePatterns.some((p) => p.test(normalized))) {
+        return NextResponse.json(
+          { error: "DDL statements are not allowed through the proxy" },
+          { status: 403 }
+        );
+      }
+
       const queryParams = (body.params as unknown[]) || [];
       const driver = getDbDriver(service.type as ServiceType);
       const result = await driver.query(config, sql, queryParams);

@@ -12,6 +12,16 @@ const execFileAsync = promisify(execFile);
 const TIMEOUT = 120_000; // 2 minutes
 const BUILD_TIMEOUT = 300_000; // 5 minutes
 
+/**
+ * Validate an npm package name to prevent command injection in Dockerfiles.
+ * Allows scoped packages (@scope/name) and version specifiers (name@version).
+ */
+function isValidNpmPackageName(pkg: string): boolean {
+  // Allow: letters, digits, hyphens, dots, underscores, slashes (scoped), @ (scoped/version)
+  // Reject anything that could be shell metacharacters: ; | & $ ` ( ) { } < > ! ~ " ' \  newline
+  return /^(@[a-z0-9._-]+\/)?[a-z0-9._-]+(@[a-z0-9._^~>=<|-]+)?$/i.test(pkg);
+}
+
 // ---------------------------------------------------------------------------
 // Naming helpers
 // ---------------------------------------------------------------------------
@@ -500,6 +510,12 @@ export async function installPackages(
 ): Promise<string> {
   if (packages.length === 0) return "";
 
+  // Validate package names to prevent injection via docker exec args
+  const invalidPkgs = packages.filter((p) => !isValidNpmPackageName(p));
+  if (invalidPkgs.length > 0) {
+    throw new Error(`Invalid npm package names: ${invalidPkgs.join(", ")}`);
+  }
+
   const name = await resolveDevContainerName(orgSlug, slug);
   const { stdout, stderr } = await execFileAsync(
     "docker",
@@ -567,6 +583,12 @@ export async function buildAppDevImage(
     // Just tag the base image
     await tagBaseImage(orgSlug, slug, template);
     return;
+  }
+
+  // Validate package names to prevent command injection in Dockerfile RUN
+  const invalidPkgs = npmPackages.filter((p) => !isValidNpmPackageName(p));
+  if (invalidPkgs.length > 0) {
+    throw new Error(`Invalid npm package names: ${invalidPkgs.join(", ")}`);
   }
 
   const imageName = `aigo-${orgSlug}-${slug}-dev`;

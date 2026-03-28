@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { authorizeAppAccess } from "@/lib/api-auth";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ appId: string }> }
 ) {
   const { appId } = await params;
+  const auth = await authorizeAppAccess(appId);
+  if ("error" in auth) return auth.error;
 
   const messages = await prisma.chatMessage.findMany({
     where: { appId },
@@ -23,6 +26,9 @@ export async function POST(
   { params }: { params: Promise<{ appId: string }> }
 ) {
   const { appId } = await params;
+  const auth = await authorizeAppAccess(appId);
+  if ("error" in auth) return auth.error;
+
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id || null;
 

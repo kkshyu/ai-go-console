@@ -10,6 +10,7 @@ import { regenerateCompose, getAppPath } from "@/lib/generator";
 import { syncRoutes } from "@/lib/proxy";
 import * as sandbox from "@/lib/docker-sandbox";
 import { getTemplate } from "@/lib/templates";
+import { authorizeAppAccess } from "@/lib/api-auth";
 
 
 export async function POST(
@@ -17,14 +18,13 @@ export async function POST(
   { params }: { params: Promise<{ appId: string }> }
 ) {
   const { appId } = await params;
+  const auth = await authorizeAppAccess(appId);
+  if ("error" in auth) return auth.error;
+
   const body = await request.json();
   const { action } = body as { action: string; deploymentId?: string };
 
-  const app = await prisma.app.findUnique({ where: { id: appId } });
-  if (!app) {
-    return NextResponse.json({ error: "App not found" }, { status: 404 });
-  }
-
+  const app = auth.app;
   const orgSlug = await getOrgSlug(app.userId);
 
   try {

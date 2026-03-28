@@ -6,6 +6,7 @@ import { ALL_SERVICE_TYPES } from "@/lib/service-types";
 import { encrypt } from "@/lib/crypto";
 import { provisionDatabase } from "@/lib/builtin-pg";
 import type { ServiceType } from "@prisma/client";
+import { rateLimit } from "@/lib/rate-limit";
 
 function slugify(name: string): string {
   return name
@@ -102,6 +103,12 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        // Rate limit: 10 login attempts per email per 15 minutes
+        const rl = rateLimit(`login:${credentials.email}`, 10, 15 * 60 * 1000);
+        if (rl.limited) {
+          throw new Error("Too many login attempts. Please try again later.");
+        }
+
         if (credentials.isRegister === "true") {
           // Register
           const existing = await prisma.user.findUnique({
@@ -121,11 +128,17 @@ export const authOptions: NextAuthOptions = {
             const org = await createOrganizationWithDefaults(orgName);
             organizationId = org.id;
           } else if (credentials.organizationId) {
-            // Join existing org
+            // Join existing org — verify email domain matches org's allowed domains
             const org = await prisma.organization.findUnique({
               where: { id: credentials.organizationId },
+              include: { domains: { where: { isActive: true }, select: { domain: true } } },
             });
             if (!org) throw new Error("Organization not found");
+            const emailDomain = credentials.email.split("@")[1]?.toLowerCase();
+            const orgDomains = org.domains.map((d: { domain: string }) => d.domain.toLowerCase());
+            if (orgDomains.length === 0 || !orgDomains.includes(emailDomain)) {
+              throw new Error("You are not authorized to join this organization");
+            }
             organizationId = org.id;
           } else {
             // Create new org for the user

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma, getOrgSlug } from "@/lib/db";
+import { getOrgSlug } from "@/lib/db";
 import * as sandbox from "@/lib/docker-sandbox";
 import type { ContainerType } from "@/lib/docker-sandbox";
+import { authorizeAppAccess } from "@/lib/api-auth";
 
 /** Paths that cannot be written to */
 const WRITE_BLOCKED_PREFIXES = ["node_modules/", ".git/"];
@@ -19,12 +20,10 @@ export async function GET(
   { params }: { params: Promise<{ appId: string }> }
 ) {
   const { appId } = await params;
+  const auth = await authorizeAppAccess(appId);
+  if ("error" in auth) return auth.error;
 
-  const app = await prisma.app.findUnique({ where: { id: appId } });
-  if (!app) {
-    return NextResponse.json({ error: "App not found" }, { status: 404 });
-  }
-
+  const app = auth.app;
   const orgSlug = await getOrgSlug(app.userId);
   const containerType = (request.nextUrl.searchParams.get("containerType") || "dev") as ContainerType;
 
@@ -69,12 +68,10 @@ export async function POST(
   { params }: { params: Promise<{ appId: string }> }
 ) {
   const { appId } = await params;
+  const auth = await authorizeAppAccess(appId);
+  if ("error" in auth) return auth.error;
 
-  const app = await prisma.app.findUnique({ where: { id: appId } });
-  if (!app) {
-    return NextResponse.json({ error: "App not found" }, { status: 404 });
-  }
-
+  const app = auth.app;
   const orgSlug = await getOrgSlug(app.userId);
   const containerType = (request.nextUrl.searchParams.get("containerType") || "dev") as ContainerType;
 

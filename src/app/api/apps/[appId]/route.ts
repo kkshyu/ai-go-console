@@ -4,19 +4,18 @@ import { removeApp } from "@/lib/generator";
 import { stopApp } from "@/lib/docker";
 import { stopDevServer } from "@/lib/dev-server";
 import { slugify } from "@/lib/utils";
+import { authorizeAppAccess } from "@/lib/api-auth";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ appId: string }> }
 ) {
   const { appId } = await params;
+  const auth = await authorizeAppAccess(appId);
+  if ("error" in auth) return auth.error;
+
   const body = await request.json();
   const { slug } = body;
-
-  const app = await prisma.app.findUnique({ where: { id: appId } });
-  if (!app) {
-    return NextResponse.json({ error: "App not found" }, { status: 404 });
-  }
 
   const data: { slug?: string } = {};
 
@@ -35,7 +34,7 @@ export async function PATCH(
   }
 
   if (Object.keys(data).length === 0) {
-    return NextResponse.json(app);
+    return NextResponse.json(auth.app);
   }
 
   const updated = await prisma.app.update({
@@ -58,6 +57,8 @@ export async function GET(
   { params }: { params: Promise<{ appId: string }> }
 ) {
   const { appId } = await params;
+  const auth = await authorizeAppAccess(appId);
+  if ("error" in auth) return auth.error;
 
   const app = await prisma.app.findUnique({
     where: { id: appId },
@@ -88,24 +89,21 @@ export async function DELETE(
   { params }: { params: Promise<{ appId: string }> }
 ) {
   const { appId } = await params;
+  const auth = await authorizeAppAccess(appId);
+  if ("error" in auth) return auth.error;
 
-  const app = await prisma.app.findUnique({ where: { id: appId } });
-  if (!app) {
-    return NextResponse.json({ error: "App not found" }, { status: 404 });
-  }
-
-  const orgSlug = await getOrgSlug(app.userId);
+  const orgSlug = await getOrgSlug(auth.app.userId);
 
   // Stop running processes
   try {
-    await stopDevServer(orgSlug, app.slug);
+    await stopDevServer(orgSlug, auth.app.slug);
   } catch { /* ignore */ }
   try {
-    await stopApp(app.slug);
+    await stopApp(auth.app.slug);
   } catch { /* ignore */ }
 
   // Remove files
-  await removeApp(orgSlug, app.slug);
+  await removeApp(orgSlug, auth.app.slug);
 
   // Delete from DB
   await prisma.app.delete({ where: { id: appId } });
