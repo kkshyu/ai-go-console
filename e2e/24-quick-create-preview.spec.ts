@@ -28,13 +28,14 @@ test.describe("Quick Create Preset Preview", () => {
           .first()
       ).toBeVisible({ timeout: 10_000 });
 
-      const previewIframe = page.locator("iframe");
-      const devControlButton = page.locator("button", {
-        hasText: /Start Dev|Stop Dev|啟動開發環境|停止開發環境/,
-      });
-
-      // Preview is considered available when iframe is shown or dev controls are present.
-      await expect(previewIframe.first().or(devControlButton)).toBeVisible({
+      // Preview is available when an iframe is shown or dev controls appear — use .or() on base
+      // locators, then .first(), per Playwright union-locator guidance.
+      const previewOrDevControls = page.locator("iframe").or(
+        page.locator("button", {
+          hasText: /Start Dev|Stop Dev|啟動開發環境|停止開發環境/,
+        })
+      );
+      await expect(previewOrDevControls.first()).toBeVisible({
         timeout: 30_000,
       });
     } finally {
