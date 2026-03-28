@@ -43,8 +43,8 @@ test.describe("Navigation & i18n", () => {
     const text = await h1.textContent();
     const isEnglish = text?.includes("Apps");
 
-    // Click globe icon to toggle language
-    await page.click('button:has-text("Switch Language"), button[title="Switch Language"]');
+    // Click globe icon to toggle language (text varies by current locale)
+    await page.getByRole("button", { name: /Switch Language|切換語言/ }).click();
     await page.waitForLoadState("networkidle");
 
     const newText = await h1.textContent();

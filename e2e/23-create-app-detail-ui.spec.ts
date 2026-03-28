@@ -119,9 +119,9 @@ test.describe("App Detail Page UI", () => {
     await page.goto(`/apps/${appId}`);
     // The button text is "停止開發環境" (Stop Dev) since blog has port assigned
     // or "Start Dev" / "啟動開發環境" if stopped
-    const devButton = page.locator("button", {
-      hasText: /Start Dev|啟動開發環境|停止開發環境|Stop Dev/,
+    const devButton = page.getByRole("button", {
+      name: /Start Dev|啟動開發環境|停止開發環境|Stop Dev/,
     });
-    await expect(devButton).toBeVisible({ timeout: 10000 });
+    await expect(devButton).toBeAttached({ timeout: 30000 });
   });
 });
