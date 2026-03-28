@@ -8,7 +8,7 @@
 
 import * as k8s from "@kubernetes/client-node";
 import { Writable, PassThrough } from "stream";
-import { execApi, cpApi, coreApi } from "./client";
+import { execApi, cpApi, coreApi, isK8sNotFound } from "./client";
 import { tmpdir } from "os";
 import { join } from "path";
 import { mkdtemp, writeFile, rm } from "fs/promises";
@@ -369,8 +369,7 @@ export async function getPodStatus(
         return "stopped";
     }
   } catch (err: unknown) {
-    const status = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-    if (status === 404) return "not_found";
+    if (isK8sNotFound(err)) return "not_found";
     throw err;
   }
 }

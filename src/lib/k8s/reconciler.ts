@@ -9,7 +9,7 @@
  */
 
 import { prisma } from "@/lib/db";
-import { coreApi, appsApi, config } from "./client";
+import { coreApi, appsApi, config, isK8sNotFound } from "./client";
 import { devPodName, prodDeploymentName } from "./manifests";
 import { getPodStatus } from "./exec";
 
@@ -127,8 +127,7 @@ async function reconcileProdApp(
       }
     }
   } catch (err: unknown) {
-    const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-    if (errStatus === 404) {
+    if (isK8sNotFound(err)) {
       // Deployment doesn't exist — mark as error
       console.warn(`[Reconciler] Prod deployment ${deployName} not found, updating to error`);
       await prisma.app.update({

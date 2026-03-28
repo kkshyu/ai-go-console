@@ -6,7 +6,7 @@
  * and provides file I/O via k8s exec API.
  */
 
-import { coreApi, config } from "./client";
+import { coreApi, config, isK8sNotFound } from "./client";
 import {
   execInPod,
   copyToPod,
@@ -113,8 +113,7 @@ export async function createDevContainer(
   try {
     await coreApi().readNamespacedService({ name: svcName, namespace: ns });
   } catch (err: unknown) {
-    const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-    if (errStatus === 404) {
+    if (isK8sNotFound(err)) {
       const svcSpec = generateDevServiceSpec(orgSlug, slug, tmpl.internalDevPort);
       await coreApi().createNamespacedService({ namespace: ns, body: svcSpec });
     }
@@ -154,8 +153,7 @@ export async function stopDevContainer(orgSlug: string, slug: string): Promise<v
   try {
     await coreApi().deleteNamespacedPod({ name: podName, namespace: ns });
   } catch (err: unknown) {
-    const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-    if (errStatus !== 404) throw err;
+    if (!isK8sNotFound(err)) throw err;
   }
 }
 
@@ -171,16 +169,14 @@ export async function removeDevContainer(orgSlug: string, slug: string): Promise
   try {
     await coreApi().deleteNamespacedPod({ name: podName, namespace: ns });
   } catch (err: unknown) {
-    const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-    if (errStatus !== 404) throw err;
+    if (!isK8sNotFound(err)) throw err;
   }
 
   // Delete Service
   try {
     await coreApi().deleteNamespacedService({ name: svcName, namespace: ns });
   } catch (err: unknown) {
-    const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-    if (errStatus !== 404) throw err;
+    if (!isK8sNotFound(err)) throw err;
   }
 }
 
