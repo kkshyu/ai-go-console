@@ -53,6 +53,7 @@ export interface AgentChatPanelProps {
   conversationId?: string;
   showProgress?: boolean;
   autoSendMessage?: string;
+  pipelineId?: string;
 }
 
 type AgentPhase = "thinking" | "translating" | "progress" | null;
@@ -73,6 +74,7 @@ export function AgentChatPanel({
   conversationId,
   showProgress = true,
   autoSendMessage,
+  pipelineId,
 }: AgentChatPanelProps) {
   const t = useTranslations("chat");
   const tAgents = useTranslations("agents");
