@@ -26,7 +26,7 @@ export interface StorableChunk {
  * Store content chunks with their embeddings.
  */
 export async function storeChunks(
-  pipelineId: string,
+  conversationId: string,
   sourceType: string,
   sourceId: string,
   agentRole: string,
@@ -51,14 +51,14 @@ export async function storeChunks(
   const params = [
     sourceType,
     sourceId,
-    pipelineId,
+    conversationId,
     agentRole,
     ...validChunks.map((c) => c.content),
   ];
 
   try {
     await prisma.$queryRawUnsafe(
-      `INSERT INTO content_chunks (id, source_type, source_id, pipeline_id, agent_role, chunk_index, content, embedding)
+      `INSERT INTO content_chunks (id, source_type, source_id, conversation_id, agent_role, chunk_index, content, embedding)
        VALUES ${values}`,
       ...params,
     );
@@ -72,7 +72,7 @@ export async function storeChunks(
  * Search for similar chunks using cosine similarity.
  */
 export async function searchSimilarChunks(
-  pipelineId: string,
+  conversationId: string,
   queryEmbedding: number[],
   options?: {
     limit?: number;
@@ -102,12 +102,12 @@ export async function searchSimilarChunks(
       `SELECT content, agent_role, source_id,
               1 - (embedding <=> '${embeddingStr}'::vector) as similarity
        FROM content_chunks
-       WHERE pipeline_id = $1
+       WHERE conversation_id = $1
          ${sourceTypeClause}
          AND 1 - (embedding <=> '${embeddingStr}'::vector) >= $2
        ORDER BY embedding <=> '${embeddingStr}'::vector
        LIMIT $3`,
-      pipelineId,
+      conversationId,
       minSimilarity,
       limit,
     );
@@ -134,7 +134,7 @@ export function assembleContext(
 ): string {
   if (results.length === 0) return "";
 
-  let context = "\n\nRelevant artifacts from this pipeline:\n";
+  let context = "\n\nRelevant artifacts from this conversation:\n";
   let charCount = context.length;
 
   for (const r of results) {

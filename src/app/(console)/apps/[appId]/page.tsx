@@ -158,7 +158,7 @@ export default function AppDetailPage() {
 
   // Auto-develop: when redirected from /create with ?develop=true
   const isDevelop = searchParams.get("develop") === "true";
-  const [pipelineId, setPipelineId] = useState<string | undefined>(undefined);
+  const [conversationId] = useState<string>(() => `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const [autoSendMessage, setAutoSendMessage] = useState<string | undefined>(undefined);
   const developInitRef = useRef(false);
 
@@ -215,25 +215,14 @@ export default function AppDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appId]);
 
-  // Auto-develop: create pipeline and trigger multi-agent after chat is loaded
+  // Auto-develop: trigger multi-agent after chat is loaded
   useEffect(() => {
     if (!isDevelop || !chatLoaded || developInitRef.current) return;
     developInitRef.current = true;
 
-    // Create a pipeline for multi-agent orchestration
-    fetch("/api/pipelines", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    })
-      .then((r) => r.json())
-      .then((pipeline) => {
-        setPipelineId(pipeline.id);
-        setAutoSendMessage("請根據上面的需求開始開發此應用程式。");
-        // Clean up URL query param to prevent re-trigger on refresh
-        router.replace(`/apps/${appId}`, { scroll: false });
-      })
-      .catch(() => {});
+    setAutoSendMessage("請根據上面的需求開始開發此應用程式。");
+    // Clean up URL query param to prevent re-trigger on refresh
+    router.replace(`/apps/${appId}`, { scroll: false });
   }, [isDevelop, chatLoaded, appId, router]);
 
   async function checkDevServerStatus(_slug: string) {
@@ -767,7 +756,7 @@ export default function AppDetailPage() {
                 onAssistantResponse={handleAssistantResponse}
                 onFilesWritten={handleFilesWritten}
                 showProgress={true}
-                pipelineId={pipelineId}
+                conversationId={conversationId}
                 autoSendMessage={autoSendMessage}
               />
             )}

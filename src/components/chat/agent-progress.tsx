@@ -45,7 +45,7 @@ interface AgentProgressProps {
 /**
  * Displays actor execution statuses and active agent progress.
  */
-export function PipelineProgress({
+export function AgentProgress({
   state,
   currentAgent,
   isLoading,

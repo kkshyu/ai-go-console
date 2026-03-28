@@ -62,14 +62,11 @@ function extractJsonContent(content: string): unknown | null {
 }
 
 /**
- * Load persisted artifacts for a pipeline and format as minimal context.
- */
-/**
  * Load artifact context using RAG (vector similarity search) when available,
  * falling back to full concatenation with truncation.
  */
 async function loadArtifactContext(
-  pipelineId: string,
+  conversationId: string,
   queryText?: string,
   maxChars: number = 8000,
 ): Promise<string> {
@@ -84,7 +81,7 @@ async function loadArtifactContext(
         }>(
           "retrieval",
           "retrieve_request",
-          { pipelineId, query: queryText, maxChars },
+          { conversationId, query: queryText, maxChars },
           10_000, // 10s timeout
         );
 
@@ -99,14 +96,14 @@ async function loadArtifactContext(
 
   // Fallback: original concatenation approach with truncation
   const artifacts = await prisma.agentArtifact.findMany({
-    where: { pipelineId },
+    where: { conversationId },
     orderBy: { createdAt: "asc" },
     select: { agentRole: true, type: true, content: true },
   });
 
   if (artifacts.length === 0) return "";
 
-  let context = "\n\nArtifacts from this pipeline:\n";
+  let context = "\n\nArtifacts from this conversation:\n";
   let charCount = context.length;
 
   for (const a of artifacts) {
@@ -125,13 +122,13 @@ export async function POST(request: NextRequest) {
     messages,
     model,
     appId,
-    pipelineId,
+    conversationId: clientConversationId,
     orchestrationState: clientState,
   } = body as {
     messages: ChatMessage[];
     model?: string;
     appId?: string;
-    pipelineId?: string;
+    conversationId?: string;
     orchestrationState?: OrchestrationState;
   };
 
@@ -141,6 +138,9 @@ export async function POST(request: NextRequest) {
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  // Use client-provided conversationId or generate one
+  const conversationId = clientConversationId || `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   // Read locale from cookie for agent translation output
   const cookieStore = await cookies();
@@ -231,28 +231,12 @@ export async function POST(request: NextRequest) {
       | undefined,
   }));
 
-  // Load orchestration state
-  let orchState: OrchestrationState | undefined = clientState;
-  if (!orchState && pipelineId) {
-    const pipeline = await prisma.agentPipeline.findUnique({
-      where: { id: pipelineId },
-    });
-    if (pipeline) {
-      orchState = {
-        status: pipeline.status as OrchestrationState["status"],
-        currentAgent: (pipeline.currentAgent as OrchestrationState["currentAgent"]) || null,
-        tasks: (pipeline.tasks as unknown as OrchestrationState["tasks"]) || [],
-        parallelGroups: (pipeline.parallelGroups as unknown as OrchestrationState["parallelGroups"]) || [],
-        activeActors: [],
-      };
-    }
-  }
+  // Load orchestration state from client (no more DB pipeline)
+  const orchState: OrchestrationState | undefined = clientState;
 
   // Load persisted artifacts for context (use last user message as RAG query)
   const lastUserMessage = messages.filter((m) => m.role === "user").pop()?.content || "";
-  const artifactContext = pipelineId
-    ? await loadArtifactContext(pipelineId, lastUserMessage)
-    : "";
+  const artifactContext = await loadArtifactContext(conversationId, lastUserMessage);
 
   // Build PM prompt
   const pmPrompt = appContext
@@ -281,7 +265,6 @@ export async function POST(request: NextRequest) {
     actorId?: string,
     taskId?: string
   ) => {
-    if (!pipelineId) return;
     const type = getArtifactType(content);
     if (!type) return;
     const jsonContent = extractJsonContent(content);
@@ -289,12 +272,13 @@ export async function POST(request: NextRequest) {
 
     const artifact = await prisma.agentArtifact.create({
       data: {
-        pipelineId,
+        conversationId,
         agentRole,
         type,
         content: jsonContent as object,
         ...(actorId && { actorId }),
         ...(taskId && { taskId }),
+        ...(appId && { appId }),
       },
     });
 
@@ -305,7 +289,7 @@ export async function POST(request: NextRequest) {
         backgroundSystem.fireAndForget("embedding", "embed_request", {
           sourceType: "artifact",
           sourceId: artifact.id,
-          pipelineId,
+          conversationId,
           agentRole,
           content,
         });
@@ -317,11 +301,12 @@ export async function POST(request: NextRequest) {
 
   // Start actor system in background
   (async () => {
+    let bgSystem: BackgroundActorSystem | undefined;
     try {
       // 0. Ensure background actor system is initialized (Embedding, Retrieval, Summarizer)
       try {
         const { ensureBackgroundSystem } = await import("@/lib/actors/background-system");
-        await ensureBackgroundSystem();
+        bgSystem = await ensureBackgroundSystem();
       } catch (err) {
         console.warn("[multi-agent] Background system init failed (RAG will be unavailable):", err);
       }
@@ -339,6 +324,8 @@ export async function POST(request: NextRequest) {
           appContext,
           sendEvent,
           locale,
+          conversationId,
+          backgroundSystem: bgSystem,
         })
       );
 
@@ -358,6 +345,8 @@ export async function POST(request: NextRequest) {
         appId,
         userId: session?.user?.id,
         orgSlug: appOrgSlug,
+        conversationId,
+        backgroundSystem: bgSystem,
       };
 
       const pmActor = new PMActor(pmConfig, orchState);
@@ -384,27 +373,10 @@ export async function POST(request: NextRequest) {
 
       // 7. Cleanup
       system.stopHeartbeat();
-
-      // 8. Persist final state
-      const finalState = system.getFinalState();
-      if (pipelineId && finalState) {
-        await prisma.agentPipeline.update({
-          where: { id: pipelineId },
-          data: {
-            status: finalState.status,
-            currentAgent: finalState.currentAgent || "pm",
-            completedAgents: finalState.tasks
-              .filter((t) => t.status === "completed")
-              .map((t) => t.agentRole),
-            tasks: JSON.parse(JSON.stringify(finalState.tasks)),
-            parallelGroups: finalState.parallelGroups
-              ? JSON.parse(JSON.stringify(finalState.parallelGroups))
-              : undefined,
-          },
-        });
-      }
-
       system.stopAll();
+
+      // Send conversationId to client so it can be used for subsequent requests
+      await sendEvent({ conversationId });
 
       await sendEvent("[DONE]");
       await writer.write(encoder.encode("data: [DONE]\n\n"));
@@ -424,3 +396,6 @@ export async function POST(request: NextRequest) {
     },
   });
 }
+
+// Import type for use in async function
+import type { BackgroundActorSystem } from "@/lib/actors/background-system";

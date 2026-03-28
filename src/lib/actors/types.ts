@@ -21,7 +21,10 @@ export type MessageType =
   | "restart"          // Supervisor restarts an actor
   | "error"            // Actor reports failure
   | "parallel_task"    // PM dispatches parallel work items
-  | "parallel_result"; // One parallel developer returns result
+  | "parallel_result"  // One parallel developer returns result
+  | "discuss"          // Worker sends discussion to another worker
+  | "discuss_reply"    // Worker replies to a discussion
+  | "report";          // Worker reports conclusion to PM
 
 /** Base fields shared by all actor messages. */
 interface ActorMessageBase {
@@ -66,6 +69,31 @@ export interface ParallelResultPayload {
   summary: string;
   blocked: boolean;
   blockedReason?: string;
+}
+
+// ---- Worker-to-Worker Discussion Payloads ----
+
+export interface DiscussPayload {
+  topic: string;
+  content: string;
+  fromRole: AgentRole;
+  context?: string;
+}
+
+export interface DiscussReplyPayload {
+  topic: string;
+  content: string;
+  fromRole: AgentRole;
+  inReplyTo: string;       // message ID of the discuss message
+}
+
+// ---- Worker-to-PM Report Payload ----
+
+export interface ReportPayload {
+  agentRole: AgentRole;
+  content: string;
+  summary: string;
+  discussionLog?: string[]; // log of peer discussions that occurred
 }
 
 /** Structured error types for deterministic recovery. */
@@ -129,6 +157,21 @@ export interface ParallelResultMessage extends ActorMessageBase {
   payload: ParallelResultPayload;
 }
 
+export interface DiscussMessage extends ActorMessageBase {
+  type: "discuss";
+  payload: DiscussPayload;
+}
+
+export interface DiscussReplyMessage extends ActorMessageBase {
+  type: "discuss_reply";
+  payload: DiscussReplyPayload;
+}
+
+export interface ReportMessage extends ActorMessageBase {
+  type: "report";
+  payload: ReportPayload;
+}
+
 /** Discriminated union of all actor messages — switch on `type` for automatic payload narrowing. */
 export type ActorMessage =
   | TaskMessage
@@ -138,7 +181,10 @@ export type ActorMessage =
   | RestartMessage
   | ErrorMessage
   | ParallelTaskMessage
-  | ParallelResultMessage;
+  | ParallelResultMessage
+  | DiscussMessage
+  | DiscussReplyMessage
+  | ReportMessage;
 
 // ---- Actor State ----
 
@@ -192,7 +238,7 @@ export interface BackgroundMessage {
 export interface EmbedRequestPayload {
   sourceType: "artifact" | "agent_output";
   sourceId: string;
-  pipelineId: string;
+  conversationId: string;
   agentRole: string;
   content: string;
 }
@@ -204,7 +250,7 @@ export interface EmbedResultPayload {
 }
 
 export interface RetrieveRequestPayload {
-  pipelineId: string;
+  conversationId: string;
   query: string;
   maxChars?: number;
   sourceType?: string;
@@ -249,6 +295,9 @@ export function createMessage(type: "restart", from: string, to: string, payload
 export function createMessage(type: "error", from: string, to: string, payload: ErrorPayload, traceId?: string): ErrorMessage;
 export function createMessage(type: "parallel_task", from: string, to: string, payload: ParallelTaskPayload, traceId?: string): ParallelTaskMessage;
 export function createMessage(type: "parallel_result", from: string, to: string, payload: ParallelResultPayload, traceId?: string): ParallelResultMessage;
+export function createMessage(type: "discuss", from: string, to: string, payload: DiscussPayload, traceId?: string): DiscussMessage;
+export function createMessage(type: "discuss_reply", from: string, to: string, payload: DiscussReplyPayload, traceId?: string): DiscussReplyMessage;
+export function createMessage(type: "report", from: string, to: string, payload: ReportPayload, traceId?: string): ReportMessage;
 export function createMessage(
   type: MessageType,
   from: string,

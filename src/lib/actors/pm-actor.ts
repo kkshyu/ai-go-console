@@ -5,6 +5,9 @@
  * It receives user messages, runs LLM to decide actions, dispatches to
  * specialist actors, and handles parallel developer coordination.
  *
+ * PM actively tracks worker status and handles both task_result and report
+ * messages from workers (report includes discussion logs from peer communication).
+ *
  * Post-processing side effects (file operations, service binding) are
  * delegated to PostProcessor to keep this class focused on orchestration.
  */
@@ -17,6 +20,7 @@ import type {
   TaskResultPayload,
   ParallelResultPayload,
   ParallelTaskPayload,
+  ReportPayload,
   ErrorPayload,
 } from "./types";
 import { createMessage } from "./types";
@@ -44,12 +48,22 @@ import {
 } from "../services/parallel-merge";
 import { validatePMAction } from "../services/llm-output-validator";
 import { actorLog } from "./logger";
+import type { BackgroundActorSystem } from "./background-system";
 
 /** Maximum number of agent interactions per request. */
 const MAX_INTERACTIONS = 20;
 
 /** Delay before retrying after a rate limit error. */
 const RATE_LIMIT_BACKOFF_MS = 5_000;
+
+/** Worker status tracking interval */
+const STATUS_CHECK_INTERVAL_MS = 30_000;
+
+/** Worker stale threshold (no heartbeat) */
+const WORKER_STALE_MS = 60_000;
+
+/** Worker long-running threshold */
+const WORKER_LONG_RUNNING_MS = 180_000;
 
 const PM_PROGRESS_MESSAGES = [
   "正在分析進度...",
@@ -77,6 +91,14 @@ function getFallbackMessage(action?: string): string {
   return (action && FALLBACK_MESSAGES.pm[action]) || FALLBACK_MESSAGES.pm.default || "處理完成。";
 }
 
+interface WorkerStatus {
+  role: AgentRole;
+  actorId: string;
+  dispatchedAt: number;
+  lastHeartbeat: number;
+  status: "running" | "completed" | "error";
+}
+
 export interface PMActorConfig {
   model: string;
   allowedServices: string[];
@@ -92,6 +114,8 @@ export interface PMActorConfig {
   appId?: string;
   userId?: string;
   orgSlug?: string;
+  conversationId?: string;
+  backgroundSystem?: BackgroundActorSystem;
 }
 
 export class PMActor extends Actor {
@@ -105,6 +129,10 @@ export class PMActor extends Actor {
   private pendingParallelResults: Map<string, ParallelResultPayload> = new Map();
   private expectedParallelCount = 0;
   private currentGroupId: string | null = null;
+
+  // Worker status tracking
+  private workerStatusTracker: Map<string, WorkerStatus> = new Map();
+  private statusCheckTimer: ReturnType<typeof setInterval> | null = null;
 
   // Timer tracking for GC
   private activeTimers: Set<ReturnType<typeof setInterval>> = new Set();
@@ -141,6 +169,9 @@ export class PMActor extends Actor {
       this.config.sendEvent({ error: "Request timeout reached" }).catch(() => {});
       this.config.system.signalCompletion(this.orchState);
     }, PMActor.REQUEST_TIMEOUT_MS);
+
+    // Start worker status tracking
+    this.startStatusTracking();
   }
 
   onStop(): void {
@@ -154,6 +185,12 @@ export class PMActor extends Actor {
     if (this.requestTimeout) {
       clearTimeout(this.requestTimeout);
       this.requestTimeout = null;
+    }
+
+    // Clear status check timer
+    if (this.statusCheckTimer) {
+      clearInterval(this.statusCheckTimer);
+      this.statusCheckTimer = null;
     }
 
     // Abort any in-flight operations
@@ -181,6 +218,8 @@ export class PMActor extends Actor {
         return this.handleUserMessage(message);
       case "task_result":
         return this.handleAgentResult(message);
+      case "report":
+        return this.handleReport(message);
       case "parallel_result":
         return this.handleParallelResult(message);
       case "error":
@@ -188,6 +227,66 @@ export class PMActor extends Actor {
       default:
         return null;
     }
+  }
+
+  // ---- Worker Status Tracking ----
+
+  private startStatusTracking(): void {
+    this.statusCheckTimer = setInterval(async () => {
+      const now = Date.now();
+      for (const [actorId, status] of this.workerStatusTracker) {
+        if (status.status !== "running") continue;
+
+        const elapsed = now - status.dispatchedAt;
+        const sinceLast = now - status.lastHeartbeat;
+
+        // Worker is stale — send heartbeat ping
+        if (sinceLast > WORKER_STALE_MS) {
+          actorLog("warn", this.id, `Worker ${actorId} (${status.role}) stale for ${Math.round(sinceLast / 1000)}s`, this.traceId);
+          const ping = createMessage("heartbeat_ping", this.id, actorId, {});
+          this.config.system.send(ping);
+        }
+
+        // Worker has been running for too long — notify client
+        if (elapsed > WORKER_LONG_RUNNING_MS) {
+          try {
+            await this.config.sendEvent({
+              statusUpdate: `${status.role} 已執行 ${Math.round(elapsed / 60000)} 分鐘...`,
+              agentRole: "pm",
+            });
+          } catch { /* stream may have closed */ }
+        }
+      }
+    }, STATUS_CHECK_INTERVAL_MS);
+  }
+
+  private registerWorker(actorId: string, role: AgentRole): void {
+    this.workerStatusTracker.set(actorId, {
+      role,
+      actorId,
+      dispatchedAt: Date.now(),
+      lastHeartbeat: Date.now(),
+      status: "running",
+    });
+  }
+
+  private markWorkerComplete(actorId: string): void {
+    const status = this.workerStatusTracker.get(actorId);
+    if (status) {
+      status.status = "completed";
+      status.lastHeartbeat = Date.now();
+    }
+  }
+
+  /** Build peer registry from currently active workers */
+  private buildPeerRegistry(): Map<AgentRole, string> {
+    const registry = new Map<AgentRole, string>();
+    for (const [actorId, status] of this.workerStatusTracker) {
+      if (status.status === "running") {
+        registry.set(status.role, actorId);
+      }
+    }
+    return registry;
   }
 
   // ---- User Message ----
@@ -209,11 +308,14 @@ export class PMActor extends Actor {
     return null;
   }
 
-  // ---- Agent Result ----
+  // ---- Agent Result (task_result — backward compatible) ----
 
   private async handleAgentResult(message: ActorMessage & { type: "task_result" }): Promise<ActorMessage | null> {
     const payload = message.payload;
     const { sendEvent, saveArtifact } = this.config;
+
+    // Mark worker as complete
+    this.markWorkerComplete(message.from);
 
     // Save artifact
     await saveArtifact(payload.agentRole, payload.content);
@@ -248,11 +350,71 @@ export class PMActor extends Actor {
     return null;
   }
 
+  // ---- Report (includes discussion log from peer communication) ----
+
+  private async handleReport(message: ActorMessage & { type: "report" }): Promise<ActorMessage | null> {
+    const payload = message.payload;
+    const { sendEvent, saveArtifact } = this.config;
+
+    // Mark worker as complete
+    this.markWorkerComplete(message.from);
+
+    // Save artifact
+    await saveArtifact(payload.agentRole, payload.content);
+
+    // Delegate post-processing
+    await this.postProcessor.process(payload.content);
+
+    // Update state
+    this.orchState = stateForAgentComplete(
+      this.orchState,
+      payload.agentRole,
+      payload.summary
+    );
+
+    // Log discussion if present
+    if (payload.discussionLog && payload.discussionLog.length > 0) {
+      actorLog("info", this.id, `Worker ${payload.agentRole} conducted ${payload.discussionLog.length} discussion exchanges`, this.traceId);
+      await sendEvent({
+        discussionComplete: {
+          agentRole: payload.agentRole,
+          exchangeCount: payload.discussionLog.length,
+        },
+      });
+    }
+
+    // Send completion event
+    await sendEvent({
+      agentComplete: true,
+      agentRole: payload.agentRole,
+      rawContent: payload.content,
+      orchestrationState: this.orchState,
+    });
+
+    // Add to message history (include discussion context)
+    const contentWithDiscussion = payload.discussionLog && payload.discussionLog.length > 0
+      ? `${payload.content}\n\n--- PEER DISCUSSIONS ---\n${payload.discussionLog.join("\n")}`
+      : payload.content;
+
+    this.messages.push({
+      role: "assistant",
+      content: contentWithDiscussion,
+      agentRole: payload.agentRole,
+    });
+
+    // Continue PM decision loop
+    await this.runPMLoop();
+    return null;
+  }
+
   // ---- Parallel Result ----
 
   private async handleParallelResult(message: ActorMessage & { type: "parallel_result" }): Promise<ActorMessage | null> {
     const payload = message.payload;
     const { saveArtifact } = this.config;
+
+    // Mark worker as complete
+    this.markWorkerComplete(message.from);
 
     // Save artifact with actor/task IDs
     await saveArtifact(payload.agentRole, payload.content, payload.actorId, payload.taskId);
@@ -273,6 +435,12 @@ export class PMActor extends Actor {
   private async handleAgentError(message: ActorMessage & { type: "error" }): Promise<ActorMessage | null> {
     const payload = message.payload;
     const { sendEvent } = this.config;
+
+    // Mark worker as error
+    const workerStatus = this.workerStatusTracker.get(payload.actorId);
+    if (workerStatus) {
+      workerStatus.status = "error";
+    }
 
     actorLog("warn", this.id, `Agent error: ${payload.agentRole} (${payload.errorType}): ${payload.error}`, this.traceId);
 
@@ -546,6 +714,9 @@ export class PMActor extends Actor {
     // Update orchestration state
     this.orchState = stateForDispatch(this.orchState, target, task);
 
+    // Build peer registry from active workers
+    const peerRegistry = this.buildPeerRegistry();
+
     // Create specialist config
     const specialistConfig: SpecialistConfig = {
       model: this.config.model,
@@ -554,11 +725,21 @@ export class PMActor extends Actor {
       appContext: this.config.appContext,
       sendEvent: this.config.sendEvent,
       locale: this.config.locale,
+      peerRegistry,
+      conversationId: this.config.conversationId,
+      backgroundSystem: this.config.backgroundSystem,
     };
 
     // Create and spawn specialist actor
     const specialist = createSpecialistActor(target, 0, specialistConfig);
     await system.spawn(specialist);
+
+    // Register worker for status tracking
+    this.registerWorker(specialist.id, target);
+
+    // Update peer registry for all active workers (they now have a new peer)
+    // Note: existing actors won't see the updated registry until next dispatch,
+    // but new actors will have the full picture
 
     // Send agent metadata
     await this.config.sendEvent({
@@ -604,7 +785,7 @@ export class PMActor extends Actor {
       },
     });
 
-    // Create specialist config
+    // Create specialist config with background system access
     const specialistConfig: SpecialistConfig = {
       model: this.config.model,
       allowedServices: this.config.allowedServices,
@@ -612,6 +793,8 @@ export class PMActor extends Actor {
       appContext: this.config.appContext,
       sendEvent: this.config.sendEvent,
       locale: this.config.locale,
+      conversationId: this.config.conversationId,
+      backgroundSystem: this.config.backgroundSystem,
     };
 
     // Spawn all developers and dispatch tasks concurrently
@@ -630,6 +813,9 @@ export class PMActor extends Actor {
 
       const developer = createSpecialistActor("developer", index, specialistConfig);
       await system.spawn(developer);
+
+      // Register worker for status tracking
+      this.registerWorker(developer.id, "developer");
 
       const parallelMsg = createMessage("parallel_task", this.id, developer.id, {
         groupId,
@@ -669,6 +855,7 @@ export class PMActor extends Actor {
 
     // Update state for each completed developer
     for (const [, result] of this.pendingParallelResults) {
+      this.markWorkerComplete(result.actorId);
       this.orchState = stateForAgentComplete(
         this.orchState,
         "developer",

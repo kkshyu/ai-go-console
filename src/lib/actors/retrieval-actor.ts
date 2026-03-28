@@ -30,7 +30,7 @@ export class RetrievalActor extends BackgroundActor {
 
     // 2. Search for similar chunks
     const results = await searchSimilarChunks(
-      payload.pipelineId,
+      payload.conversationId,
       queryEmbedding,
       {
         limit: 20,
