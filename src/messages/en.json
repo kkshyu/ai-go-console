@@ -104,6 +104,7 @@
     "preview": "Preview",
     "generating": "Generating app...",
     "serviceNotAuthorized": "Required service not authorized for your organization",
+    "serviceConnectionFailed": "The following services failed to connect. Please check their settings: {services}",
     "contactAdmin": "Please contact your organization admin to enable these services.",
     "totalTokens": "Tokens",
     "modeQuick": "Quick Create",

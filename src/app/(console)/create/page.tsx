@@ -35,6 +35,7 @@ interface ServiceRef {
 interface CreateAppAction {
   action: "create_app";
   name: string;
+  slug?: string;
   template: string;
   description?: string;
   config?: Record<string, unknown>;
@@ -198,11 +199,37 @@ export default function CreateAppPage() {
       setCreatingApp(true);
       setServiceWarning(null);
       try {
+        // Test service connections before creating the app
+        if (serviceIds && serviceIds.length > 0) {
+          const testResults = await Promise.all(
+            serviceIds.map(async (svcId: string) => {
+              try {
+                const res = await fetch(`/api/services/${svcId}/test`, { method: "POST" });
+                const data = await res.json();
+                return { id: svcId, ...data };
+              } catch {
+                return { id: svcId, success: false, message: "Connection failed" };
+              }
+            })
+          );
+          const failed = testResults.filter((r) => !r.success);
+          if (failed.length > 0) {
+            const failedNames = failed.map((f) => {
+              const inst = serviceInstances.find((si) => si.id === f.id);
+              return inst?.name || f.id;
+            });
+            setServiceWarning(t("serviceConnectionFailed", { services: failedNames.join(", ") }));
+            setCreatingApp(false);
+            return;
+          }
+        }
+
         const res = await fetch("/api/apps", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: action.name,
+            slug: action.slug,
             template: action.template,
             description: action.description || "",
             config: action.config || {},
