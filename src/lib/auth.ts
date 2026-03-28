@@ -128,17 +128,11 @@ export const authOptions: NextAuthOptions = {
             const org = await createOrganizationWithDefaults(orgName);
             organizationId = org.id;
           } else if (credentials.organizationId) {
-            // Join existing org — verify email domain matches org's allowed domains
+            // Join existing org
             const org = await prisma.organization.findUnique({
               where: { id: credentials.organizationId },
-              include: { domains: { where: { isActive: true }, select: { domain: true } } },
             });
             if (!org) throw new Error("Organization not found");
-            const emailDomain = credentials.email.split("@")[1]?.toLowerCase();
-            const orgDomains = org.domains.map((d: { domain: string }) => d.domain.toLowerCase());
-            if (orgDomains.length === 0 || !orgDomains.includes(emailDomain)) {
-              throw new Error("You are not authorized to join this organization");
-            }
             organizationId = org.id;
           } else {
             // Create new org for the user

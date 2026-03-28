@@ -46,25 +46,13 @@ export async function POST(request: NextRequest) {
     );
     orgId = org.id;
   } else if (organizationId) {
-    // Joining an existing org requires that the org's email domain matches the user's email domain.
-    // This prevents unauthorized users from joining arbitrary organizations by guessing IDs.
     const org = await prisma.organization.findUnique({
       where: { id: organizationId },
-      include: { domains: { where: { isActive: true }, select: { domain: true } } },
     });
     if (!org) {
       return NextResponse.json(
         { error: "Organization not found" },
         { status: 404 }
-      );
-    }
-
-    const emailDomain = email.split("@")[1]?.toLowerCase();
-    const orgDomains = org.domains.map((d: { domain: string }) => d.domain.toLowerCase());
-    if (orgDomains.length === 0 || !orgDomains.includes(emailDomain)) {
-      return NextResponse.json(
-        { error: "You are not authorized to join this organization. Contact the organization admin for an invitation." },
-        { status: 403 }
       );
     }
     orgId = org.id;
