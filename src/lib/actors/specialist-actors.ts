@@ -12,7 +12,6 @@
 import { Actor } from "./actor";
 import type {
   ActorMessage,
-  TaskPayload,
   TaskResultPayload,
   ParallelResultPayload,
   ParallelTaskPayload,

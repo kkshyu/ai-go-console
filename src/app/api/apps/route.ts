@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   const { name, slug: requestedSlug, description, template: bodyTemplate, config, serviceIds, userId, files, npmPackages, presetId } = body;
 
   // When presetId is provided, resolve template from the preset overlay
-  const overlay = presetId && !files ? getPresetOverlay(presetId) : null;
+  const overlay = presetId && !files ? await getPresetOverlay(presetId) : null;
   const template = overlay?.templateId || bodyTemplate;
 
   if (!name || !template) {

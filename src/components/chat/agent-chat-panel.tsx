@@ -513,6 +513,7 @@ export function AgentChatPanel({
                           className="inline-flex items-center gap-1 rounded bg-black/10 px-1.5 py-0.5 text-xs"
                         >
                           {f.type === "image" && f.preview ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
                             <img src={f.preview} alt={f.name} className="h-4 w-4 rounded object-cover" />
                           ) : null}
                           {f.name}

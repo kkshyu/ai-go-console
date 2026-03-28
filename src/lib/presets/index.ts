@@ -17,62 +17,53 @@ export interface PresetOverlay {
 
 /* ---------- Lazy imports — resolved on first call ---------- */
 
-let _presets: Record<string, () => PresetOverlay> | null = null;
+const PRESET_LOADERS: Record<string, () => Promise<PresetOverlay>> = {
+  // CRM
+  "crm-sales-pipeline": () => import("./crm/sales-pipeline").then((m) => m.CRM_SALES_PIPELINE),
+  "crm-realestate": () => import("./crm/realestate").then((m) => m.CRM_REALESTATE),
+  "crm-client-portal": () => import("./crm/client-portal").then((m) => m.CRM_CLIENT_PORTAL),
 
-function getPresetRegistry(): Record<string, () => PresetOverlay> {
-  if (_presets) return _presets;
+  // ERP
+  "erp-retail": () => import("./erp/retail").then((m) => m.ERP_RETAIL),
+  "erp-realestate": () => import("./erp/realestate").then((m) => m.ERP_REALESTATE),
+  "erp-accounting": () => import("./erp/accounting").then((m) => m.ERP_ACCOUNTING),
 
-  _presets = {
-    // CRM
-    "crm-sales-pipeline": () => require("./crm/sales-pipeline").CRM_SALES_PIPELINE,
-    "crm-realestate": () => require("./crm/realestate").CRM_REALESTATE,
-    "crm-client-portal": () => require("./crm/client-portal").CRM_CLIENT_PORTAL,
+  // LINE Bot
+  "linebot-customer-service": () => import("./linebot/customer-service").then((m) => m.LINEBOT_CUSTOMER_SERVICE),
+  "linebot-booking": () => import("./linebot/booking").then((m) => m.LINEBOT_BOOKING),
+  "linebot-order-notify": () => import("./linebot/order-notify").then((m) => m.LINEBOT_ORDER_NOTIFY),
+  "linebot-membership": () => import("./linebot/membership").then((m) => m.LINEBOT_MEMBERSHIP),
 
-    // ERP
-    "erp-retail": () => require("./erp/retail").ERP_RETAIL,
-    "erp-realestate": () => require("./erp/realestate").ERP_REALESTATE,
-    "erp-accounting": () => require("./erp/accounting").ERP_ACCOUNTING,
+  // Website
+  "website-corporate": () => import("./website/corporate").then((m) => m.WEBSITE_CORPORATE),
+  "website-portfolio": () => import("./website/portfolio").then((m) => m.WEBSITE_PORTFOLIO),
+  "website-realestate": () => import("./website/realestate").then((m) => m.WEBSITE_REALESTATE),
 
-    // LINE Bot
-    "linebot-customer-service": () => require("./linebot/customer-service").LINEBOT_CUSTOMER_SERVICE,
-    "linebot-booking": () => require("./linebot/booking").LINEBOT_BOOKING,
-    "linebot-order-notify": () => require("./linebot/order-notify").LINEBOT_ORDER_NOTIFY,
-    "linebot-membership": () => require("./linebot/membership").LINEBOT_MEMBERSHIP,
+  // E-commerce
+  "ecommerce-storefront": () => import("./ecommerce/storefront").then((m) => m.ECOMMERCE_STOREFRONT),
+  "ecommerce-order-mgmt": () => import("./ecommerce/order-mgmt").then((m) => m.ECOMMERCE_ORDER_MGMT),
 
-    // Website
-    "website-corporate": () => require("./website/corporate").WEBSITE_CORPORATE,
-    "website-portfolio": () => require("./website/portfolio").WEBSITE_PORTFOLIO,
-    "website-realestate": () => require("./website/realestate").WEBSITE_REALESTATE,
+  // Booking
+  "booking-appointment": () => import("./booking/appointment").then((m) => m.BOOKING_APPOINTMENT),
+  "booking-restaurant": () => import("./booking/restaurant").then((m) => m.BOOKING_RESTAURANT),
 
-    // E-commerce
-    "ecommerce-storefront": () => require("./ecommerce/storefront").ECOMMERCE_STOREFRONT,
-    "ecommerce-order-mgmt": () => require("./ecommerce/order-mgmt").ECOMMERCE_ORDER_MGMT,
+  // Internal
+  "internal-hr": () => import("./internal/hr").then((m) => m.INTERNAL_HR),
+  "internal-project": () => import("./internal/project").then((m) => m.INTERNAL_PROJECT),
+  "internal-helpdesk": () => import("./internal/helpdesk").then((m) => m.INTERNAL_HELPDESK),
 
-    // Booking
-    "booking-appointment": () => require("./booking/appointment").BOOKING_APPOINTMENT,
-    "booking-restaurant": () => require("./booking/restaurant").BOOKING_RESTAURANT,
-
-    // Internal
-    "internal-hr": () => require("./internal/hr").INTERNAL_HR,
-    "internal-project": () => require("./internal/project").INTERNAL_PROJECT,
-    "internal-helpdesk": () => require("./internal/helpdesk").INTERNAL_HELPDESK,
-
-    // Dashboard
-    "dashboard-analytics": () => require("./dashboard/analytics").DASHBOARD_ANALYTICS,
-  };
-
-  return _presets;
-}
+  // Dashboard
+  "dashboard-analytics": () => import("./dashboard/analytics").then((m) => m.DASHBOARD_ANALYTICS),
+};
 
 /* ---------- Public API ---------- */
 
-export function getPresetOverlay(presetId: string): PresetOverlay | null {
-  const registry = getPresetRegistry();
-  const factory = registry[presetId];
-  if (!factory) return null;
-  return factory();
+export async function getPresetOverlay(presetId: string): Promise<PresetOverlay | null> {
+  const loader = PRESET_LOADERS[presetId];
+  if (!loader) return null;
+  return loader();
 }
 
 export function listPresetIds(): string[] {
-  return Object.keys(getPresetRegistry());
+  return Object.keys(PRESET_LOADERS);
 }

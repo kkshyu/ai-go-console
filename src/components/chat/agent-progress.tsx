@@ -6,6 +6,13 @@ import type { AgentRole, OrchestrationState } from "@/lib/agents/types";
 
 type AgentPhase = "thinking" | "translating" | "progress" | null;
 
+export interface ActorStatusInfo {
+  actorId: string;
+  role: string;
+  status: string;
+  restartCount?: number;
+}
+
 interface AgentProgressProps {
   state: OrchestrationState;
   currentAgent?: AgentRole | null;
@@ -13,6 +20,8 @@ interface AgentProgressProps {
   agentPhase?: AgentPhase;
   statusMessage?: string;
   generatingText?: string;
+  actorStatuses?: ActorStatusInfo[];
+  restartEvent?: { actorId: string; role: string; restartCount: number } | null;
 }
 
 /**
@@ -20,7 +29,7 @@ interface AgentProgressProps {
  * All status updates come from the PM agent.
  */
 export function AgentProgress({
-  state,
+  state: _state,
   currentAgent,
   isLoading,
   agentPhase,

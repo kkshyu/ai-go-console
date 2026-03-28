@@ -17,11 +17,8 @@ import { ActorSystem } from "./actor-system";
 import type {
   ActorMessage,
   TaskPayload,
-  TaskResultPayload,
   ParallelResultPayload,
   ParallelTaskPayload,
-  ReportPayload,
-  ErrorPayload,
 } from "./types";
 import { createMessage } from "./types";
 import {

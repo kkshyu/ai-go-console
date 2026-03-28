@@ -71,7 +71,8 @@ export class FileProcessorActor extends BackgroundActor {
         // Extract text from PDF
         try {
           const buffer = await (await import("../file-storage")).readFileFromStorage(storagePath);
-          const pdfParse = (await import("pdf-parse")).default;
+          const pdfModule = await import("pdf-parse");
+          const pdfParse = (pdfModule as unknown as { default: (buffer: Buffer) => Promise<{ text: string }> }).default;
           const pdf = await pdfParse(buffer);
           extractedText = (pdf.text || "").slice(0, MAX_TEXT_LENGTH);
           if (!extractedText.trim()) {

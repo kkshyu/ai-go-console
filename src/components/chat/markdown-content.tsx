@@ -6,14 +6,6 @@ import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 import { ChevronRight, Settings2 } from "lucide-react";
 
-function isJsonLike(text: string): boolean {
-  const trimmed = text.trim();
-  return (
-    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
-    (trimmed.startsWith("[") && trimmed.endsWith("]"))
-  );
-}
-
 const ACTION_LABELS: Record<string, string> = {
   create_app: "建立應用程式",
   update_app: "更新應用設定",

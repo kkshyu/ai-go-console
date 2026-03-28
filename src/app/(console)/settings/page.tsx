@@ -19,7 +19,7 @@ interface Profile {
   email: string;
   name: string;
   role: string;
-  organization: { name: string };
+  organization: { name: string } | null;
 }
 
 export default function SettingsPage() {
@@ -45,7 +45,7 @@ export default function SettingsPage() {
       .then((r) => r.json())
       .then((data) => {
         setProfile(data);
-        setName(data.name);
+        setName(data.name ?? "");
       })
       .catch(() => {});
 
@@ -171,7 +171,7 @@ export default function SettingsPage() {
                   {t("organization")}
                 </label>
                 <p className="text-sm text-muted-foreground">
-                  {profile.organization.name}
+                  {profile.organization?.name ?? "-"}
                 </p>
               </div>
             </div>

@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useImperativeHandle, forwardRef } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { Paperclip, X, FileText, Image, FileCode, File, Loader2 } from "lucide-react";
+import { Paperclip, X, FileText, Image as ImageIcon, FileCode, File, Loader2 } from "lucide-react";
 
 export interface FileAttachment {
   id: string;
@@ -36,7 +36,7 @@ function formatFileSize(bytes: number): string {
 function getFileIcon(type: string) {
   switch (type) {
     case "image":
-      return <Image className="h-3.5 w-3.5" />;
+      return <ImageIcon className="h-3.5 w-3.5" />;
     case "code":
       return <FileCode className="h-3.5 w-3.5" />;
     case "pdf":
@@ -207,6 +207,7 @@ export const FileAttachmentInput = forwardRef<FileAttachmentInputHandle, FileAtt
               {attachment.status === "uploading" ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
               ) : attachment.type === "image" && attachment.preview ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={attachment.preview}
                   alt={attachment.name}
