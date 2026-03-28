@@ -19,6 +19,7 @@ interface LogEntry {
 /**
  * Emit a structured log entry for the actor system.
  * All logs include actorId and optional traceId for request correlation.
+ * Output is JSON for log aggregator compatibility.
  */
 export function actorLog(
   level: LogLevel,
@@ -36,21 +37,48 @@ export function actorLog(
     ...extra,
   };
 
-  const prefix = `[Actor:${actorId}]${traceId ? `[trace:${traceId}]` : ""}`;
+  const jsonLine = JSON.stringify(entry);
 
   switch (level) {
     case "error":
-      console.error(prefix, message, extra ? JSON.stringify(extra) : "");
+      console.error(jsonLine);
       break;
     case "warn":
-      console.warn(prefix, message, extra ? JSON.stringify(extra) : "");
+      console.warn(jsonLine);
       break;
     default:
-      console.log(prefix, message, extra ? JSON.stringify(extra) : "");
+      console.log(jsonLine);
   }
+}
 
-  // Future: emit to OpenTelemetry, Datadog, etc.
-  void entry;
+/** Start a timer and return a function to stop it and get duration in ms. */
+export function startTimer(
+  label: string,
+  actorId: string,
+  traceId?: string,
+): () => number {
+  const start = performance.now();
+  return () => {
+    const durationMs = Math.round(performance.now() - start);
+    actorLog("info", actorId, `${label} completed`, traceId, {
+      durationMs,
+      metric: label,
+    });
+    return durationMs;
+  };
+}
+
+/** Emit a metric event as a structured JSON log line. */
+export function emitMetric(
+  name: string,
+  value: number,
+  actorId: string,
+  traceId?: string,
+  tags?: Record<string, string>,
+): void {
+  actorLog("info", actorId, `metric:${name}`, traceId, {
+    metric: { name, value, ...tags },
+  });
 }
 
 /** Generate a unique trace ID for a request. */
