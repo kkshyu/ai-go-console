@@ -1,5 +1,42 @@
 # AI Go Console
 
+## AI 啟動 SOP（快速上手）
+
+AI agent 首次進入此專案時，依照以下步驟啟動環境：
+
+### 一鍵啟動
+
+```bash
+bash scripts/setup.sh
+```
+
+此腳本會自動完成以下所有步驟。若需手動執行或排錯，參考下方逐步說明。
+
+### 逐步啟動流程
+
+| 步驟 | 指令 | 說明 |
+|------|------|------|
+| 1. 環境變數 | `ln -s /path/to/main/.env.local .env.local` | Worktree 需 symlink 主專案的 .env.local |
+| 2. Docker 服務 | `docker compose up -d` | 啟動 PostgreSQL (5432)、builtin-postgres (5434)、disk-storage、caddy |
+| 3. 等待 DB | `docker exec aigo-postgres pg_isready -U aigo` | 確認 PostgreSQL 已就緒 |
+| 4. 安裝依賴 | `pnpm install` | 必須使用 pnpm，不可用 npm/yarn |
+| 5. DB 遷移 | `npx prisma migrate deploy` | 套用 schema 至資料庫 |
+| 6. Prisma Client | `npx prisma generate` | 產生 Prisma Client |
+| 7. Seed 資料 | `npx prisma db seed` | 建立測試帳號與服務資料 |
+| 8. 啟動 Dev Server | `pnpm dev` 或 `preview_start ai-go-console` | Next.js + Turbopack，port 3000 |
+
+### 常見問題排錯
+
+| 問題 | 解法 |
+|------|------|
+| `.env.local` 不存在 | 從主專案 `ln -s` 建立 symlink |
+| PostgreSQL 連不上 | `docker compose up -d postgres` 並等待就緒 |
+| Prisma Client 錯誤 | `npx prisma generate` |
+| Seed 重複執行失敗 | 可忽略，或 `npx prisma migrate reset --force` 重置 |
+| Port 3000 被佔用 | launch.json 已設定 `autoPort: true`，會自動換 port |
+
+---
+
 ## 套件管理
 
 本專案使用 **pnpm** 作為套件管理工具。所有安裝、新增、移除套件的操作皆須使用 `pnpm`（例如 `pnpm install`、`pnpm add`），不要使用 npm 或 yarn。
