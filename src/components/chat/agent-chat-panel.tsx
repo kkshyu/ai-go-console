@@ -50,6 +50,7 @@ export interface AgentChatPanelProps {
   externalLoading?: boolean;
   pipelineId?: string;
   showProgress?: boolean;
+  autoSendMessage?: string;
 }
 
 type AgentPhase = "thinking" | "translating" | "progress" | null;
@@ -69,6 +70,7 @@ export function AgentChatPanel({
   externalLoading = false,
   pipelineId,
   showProgress = true,
+  autoSendMessage,
 }: AgentChatPanelProps) {
   const t = useTranslations("chat");
   const tAgents = useTranslations("agents");
@@ -120,15 +122,14 @@ export function AgentChatPanel({
     }
   }, [modelMenuOpen]);
 
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!input.trim() || isLoading || externalLoading) return;
+  const sendMessage = useCallback(
+    async (messageContent: string) => {
+      if (!messageContent.trim() || isLoading || externalLoading) return;
 
       const userMessage: AgentMessage = {
         id: Date.now().toString(),
         role: "user",
-        content: input.trim(),
+        content: messageContent.trim(),
       };
 
       const newMessages = [...messages, userMessage];
@@ -414,7 +415,6 @@ export function AgentChatPanel({
       }
     },
     [
-      input,
       isLoading,
       externalLoading,
       messages,
@@ -430,6 +430,23 @@ export function AgentChatPanel({
       t,
     ]
   );
+
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      sendMessage(input);
+    },
+    [input, sendMessage]
+  );
+
+  // Auto-send message when autoSendMessage prop is set
+  const autoSendFiredRef = useRef(false);
+  useEffect(() => {
+    if (autoSendMessage && !autoSendFiredRef.current && !isLoading && !externalLoading) {
+      autoSendFiredRef.current = true;
+      sendMessage(autoSendMessage);
+    }
+  }, [autoSendMessage, isLoading, externalLoading, sendMessage]);
 
   const totalTokens = Object.values(tokenUsage).reduce(
     (sum, u) => sum + u.totalTokens,

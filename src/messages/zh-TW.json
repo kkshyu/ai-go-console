@@ -115,6 +115,7 @@
     "creating": "建立中...",
     "createFailed": "應用程式建立失敗，請稍後再試",
     "allCategories": "全部",
+    "chatEmptyState": "描述您想建立的應用程式，AI 將協助分析需求並建立",
     "presets": {
       "finance-expense-report": {
         "name": "費用報銷系統",

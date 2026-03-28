@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -72,6 +72,7 @@ const statusVariant: Record<string, "default" | "success" | "warning" | "destruc
 export default function AppDetailPage() {
   const { appId } = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const t = useTranslations("apps");
   const [app, setApp] = useState<AppData | null>(null);
   const [devLogs, setDevLogs] = useState("");
@@ -108,6 +109,12 @@ export default function AppDetailPage() {
   const [rightPanel, setRightPanel] = useState<"preview" | "deploy" | "files">("preview");
   const [fileManagerKey, setFileManagerKey] = useState(0);
 
+  // Auto-develop: when redirected from /create with ?develop=true
+  const isDevelop = searchParams.get("develop") === "true";
+  const [pipelineId, setPipelineId] = useState<string | undefined>(undefined);
+  const [autoSendMessage, setAutoSendMessage] = useState<string | undefined>(undefined);
+  const developInitRef = useRef(false);
+
   // Dev server is running if we have a port and it's in developing state
   const [devRunning, setDevRunning] = useState(false);
   const hasPreview = app?.port && devRunning;
@@ -143,6 +150,27 @@ export default function AppDetailPage() {
     fetchDeployments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appId]);
+
+  // Auto-develop: create pipeline and trigger multi-agent after chat is loaded
+  useEffect(() => {
+    if (!isDevelop || !chatLoaded || developInitRef.current) return;
+    developInitRef.current = true;
+
+    // Create a pipeline for multi-agent orchestration
+    fetch("/api/pipelines", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+      .then((r) => r.json())
+      .then((pipeline) => {
+        setPipelineId(pipeline.id);
+        setAutoSendMessage("請根據上面的需求開始開發此應用程式。");
+        // Clean up URL query param to prevent re-trigger on refresh
+        router.replace(`/apps/${appId}`, { scroll: false });
+      })
+      .catch(() => {});
+  }, [isDevelop, chatLoaded, appId, router]);
 
   async function checkDevServerStatus(_slug: string) {
     try {
@@ -665,6 +693,8 @@ export default function AppDetailPage() {
                 onAssistantResponse={handleAssistantResponse}
                 onFilesWritten={handleFilesWritten}
                 showProgress={true}
+                pipelineId={pipelineId}
+                autoSendMessage={autoSendMessage}
               />
             )}
           </div>
