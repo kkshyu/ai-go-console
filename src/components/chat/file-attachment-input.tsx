@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useImperativeHandle, forwardRef } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Paperclip, X, FileText, Image, FileCode, File, Loader2 } from "lucide-react";
@@ -14,12 +14,17 @@ export interface FileAttachment {
   status: "uploading" | "uploaded" | "processing" | "ready" | "error";
 }
 
+export interface FileAttachmentInputHandle {
+  triggerFileSelect: () => void;
+}
+
 interface FileAttachmentInputProps {
   attachments: FileAttachment[];
   onAttachmentsChange: (attachments: FileAttachment[]) => void;
   disabled?: boolean;
   maxFiles?: number;
   maxSizeMB?: number;
+  hideButton?: boolean;
 }
 
 function formatFileSize(bytes: number): string {
@@ -41,15 +46,20 @@ function getFileIcon(type: string) {
   }
 }
 
-export function FileAttachmentInput({
+export const FileAttachmentInput = forwardRef<FileAttachmentInputHandle, FileAttachmentInputProps>(function FileAttachmentInput({
   attachments,
   onAttachmentsChange,
   disabled = false,
   maxFiles = 5,
   maxSizeMB = 10,
-}: FileAttachmentInputProps) {
+  hideButton = false,
+}, ref) {
   const t = useTranslations("chat");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    triggerFileSelect: () => fileInputRef.current?.click(),
+  }));
   const [isDragging, setIsDragging] = useState(false);
   const dragCounter = useRef(0);
 
@@ -234,20 +244,22 @@ export function FileAttachmentInput({
       />
 
       {/* Attach button */}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 shrink-0"
-        onClick={() => fileInputRef.current?.click()}
-        disabled={disabled || attachments.length >= maxFiles}
-        title={t("attachFile")}
-      >
-        <Paperclip className="h-4 w-4" />
-      </Button>
+      {!hideButton && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={disabled || attachments.length >= maxFiles}
+          title={t("attachFile")}
+        >
+          <Paperclip className="h-4 w-4" />
+        </Button>
+      )}
     </div>
   );
-}
+});
 
 function detectType(file: File): FileAttachment["type"] {
   if (file.type.startsWith("image/")) return "image";
