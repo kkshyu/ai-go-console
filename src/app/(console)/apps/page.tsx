@@ -14,7 +14,8 @@ import {
   SelectItem,
   SelectValue,
 } from "@/components/ui/select";
-import { PlusCircle, AppWindow, Search, ServerCog } from "lucide-react";
+import { PlusCircle, AppWindow, Search, ServerCog, FolderUp } from "lucide-react";
+import { ImportAppDialog } from "@/components/import-app-dialog";
 
 interface AppService {
   service: { id: string; name: string; type: string };
@@ -48,6 +49,7 @@ export default function AppsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [templateFilter, setTemplateFilter] = useState("all");
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/apps")
@@ -83,12 +85,18 @@ export default function AppsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{t("title")}</h1>
-        <Link href="/create">
-          <Button>
-            <PlusCircle className="h-4 w-4" />
-            {t("create")}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <FolderUp className="h-4 w-4" />
+            {t("import")}
           </Button>
-        </Link>
+          <Link href="/create">
+            <Button>
+              <PlusCircle className="h-4 w-4" />
+              {t("create")}
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Search & Filters */}
@@ -183,6 +191,18 @@ export default function AppsPage() {
           ))}
         </div>
       )}
+
+      <ImportAppDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onAppCreated={() => {
+          setImportOpen(false);
+          fetch("/api/apps")
+            .then((res) => res.json())
+            .then((data) => setApps(data))
+            .catch(() => {});
+        }}
+      />
     </div>
   );
 }
