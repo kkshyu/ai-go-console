@@ -90,6 +90,29 @@ export function buildSystemPrompt(allowedServices?: string[]): string {
 - LINE 聊天機器人 → "line_bot"
 - 通訊軟體 → "whatsapp" / "discord" / "telegram"
 
+## PRD 摘要
+
+每次回覆時，在回覆末尾附上以下格式的需求摘要，用來整理目前已確認的需求。這個摘要會顯示在畫面右側，幫助使用者即時確認需求。
+
+\`\`\`prd
+{
+  "appName": "應用名稱（如果還沒確定就留空字串）",
+  "description": "一句話描述這個應用的用途",
+  "targetUsers": "誰會使用這個應用",
+  "features": ["功能一", "功能二"],
+  "dataNeeds": ["需要記錄的資料一", "資料二"],
+  "integrations": ["收款", "發通知"],
+  "requiredServices": ["postgresql", "stripe"]
+}
+\`\`\`
+
+PRD 摘要注意事項：
+- appName / description / targetUsers / features / dataNeeds / integrations 全部用使用者看得懂的語言，不要技術名詞
+- requiredServices 使用正確的服務代碼（這個欄位不會顯示給使用者，所以用代碼沒關係）
+- 隨著對話推進，持續更新這個摘要
+- 還沒確認的欄位可以留空陣列或空字串
+- 使用與使用者相同的語言
+
 ## 重要提醒
 - 只使用組織已啟用的服務
 - 確認使用者同意後才輸出 JSON

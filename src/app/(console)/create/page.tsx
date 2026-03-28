@@ -24,6 +24,8 @@ import {
   Send,
 } from "lucide-react";
 import { ChatPanel } from "@/components/chat/chat-panel";
+import { PRDPanel } from "@/components/chat/prd-panel";
+import { extractPRD, prdToMarkdown, type PRDData } from "@/lib/prd";
 
 interface ServiceRef {
   instanceId?: string;
@@ -139,6 +141,10 @@ export default function CreateAppPage() {
   const [allowedServices, setAllowedServices] = useState<string[]>([]);
   const [serviceInstances, setServiceInstances] = useState<Array<{ id: string; name: string; type: string }>>([]);
   const chatMessagesRef = useRef<{ role: string; content: string }[]>([]);
+  const [prdData, setPrdData] = useState<PRDData | null>(null);
+  const [selectedServices, setSelectedServices] = useState<Record<string, string>>({});
+  const [serviceTestResults, setServiceTestResults] = useState<Record<string, { success: boolean; message: string } | null>>({});
+  const manuallySelectedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     fetch("/api/organizations")
@@ -166,71 +172,64 @@ export default function CreateAppPage() {
       .catch(() => {});
   }, []);
 
+  const testService = useCallback(async (svcType: string, instanceId: string) => {
+    setServiceTestResults((prev) => ({ ...prev, [svcType]: null }));
+    try {
+      const res = await fetch(`/api/services/${instanceId}/test`, { method: "POST" });
+      const data = await res.json();
+      setServiceTestResults((prev) => ({ ...prev, [svcType]: data }));
+    } catch {
+      setServiceTestResults((prev) => ({ ...prev, [svcType]: { success: false, message: "Connection failed" } }));
+    }
+  }, []);
+
+  const handleServiceChange = useCallback((svcType: string, instanceId: string) => {
+    manuallySelectedRef.current.add(svcType);
+    setSelectedServices((prev) => ({ ...prev, [svcType]: instanceId }));
+    testService(svcType, instanceId);
+  }, [testService]);
+
+  // Auto-select service instances when PRD updates
+  const autoSelectServices = useCallback((prd: PRDData) => {
+    const newSelected = { ...selectedServices };
+    let changed = false;
+    for (const svcType of prd.requiredServices) {
+      if (manuallySelectedRef.current.has(svcType)) continue;
+      if (newSelected[svcType]) continue;
+      const instances = serviceInstances.filter((s) => s.type === svcType);
+      if (instances.length > 0) {
+        newSelected[svcType] = instances[0].id;
+        changed = true;
+        testService(svcType, instances[0].id);
+      }
+    }
+    if (changed) setSelectedServices(newSelected);
+  }, [selectedServices, serviceInstances, testService]);
+
   const handleCreateApp = useCallback(
     async (action: CreateAppAction) => {
-      let serviceIds: string[] | undefined;
-      if (action.requiredServices && action.requiredServices.length > 0) {
-        const getServiceType = (s: string | ServiceRef): string =>
-          typeof s === "string" ? s : s.type;
-        const unauthorized = action.requiredServices.filter(
-          (s) => !allowedServices.includes(getServiceType(s))
-        );
-        if (unauthorized.length > 0) {
-          const names = unauthorized.map((s) =>
-            typeof s === "string" ? s : s.name || s.type
-          );
-          setServiceWarning(`${t("serviceNotAuthorized")}: ${names.join(", ")}`);
-          return;
-        }
+      // Use service instances selected in the right panel
+      const serviceIds = Object.values(selectedServices).filter(Boolean);
 
-        const resolvedIds: string[] = [];
-        const missingTypes: string[] = [];
-        for (const svc of action.requiredServices) {
-          if (typeof svc !== "string" && svc.instanceId) {
-            resolvedIds.push(svc.instanceId);
-          } else {
-            const svcType = getServiceType(svc);
-            const instance = serviceInstances.find((si) => si.type === svcType);
-            if (instance) {
-              resolvedIds.push(instance.id);
-            } else {
-              missingTypes.push(svcType);
-            }
-          }
-        }
-        if (missingTypes.length > 0) {
-          setServiceWarning(`${t("serviceNotAuthorized")}: ${missingTypes.join(", ")}`);
-          return;
-        }
-        serviceIds = resolvedIds;
+      // Check for failed service tests
+      const failedServices = Object.entries(serviceTestResults)
+        .filter(([, result]) => result && !result.success)
+        .map(([svcType]) => {
+          const instanceId = selectedServices[svcType];
+          const inst = serviceInstances.find((si) => si.id === instanceId);
+          return inst?.name || svcType;
+        });
+      if (failedServices.length > 0) {
+        setServiceWarning(t("serviceConnectionFailed", { services: failedServices.join(", ") }));
+        return;
       }
 
       setCreatingApp(true);
       setServiceWarning(null);
       try {
-        if (serviceIds && serviceIds.length > 0) {
-          const testResults = await Promise.all(
-            serviceIds.map(async (svcId: string) => {
-              try {
-                const res = await fetch(`/api/services/${svcId}/test`, { method: "POST" });
-                const data = await res.json();
-                return { id: svcId, ...data };
-              } catch {
-                return { id: svcId, success: false, message: "Connection failed" };
-              }
-            })
-          );
-          const failed = testResults.filter((r) => !r.success);
-          if (failed.length > 0) {
-            const failedNames = failed.map((f) => {
-              const inst = serviceInstances.find((si) => si.id === f.id);
-              return inst?.name || f.id;
-            });
-            setServiceWarning(t("serviceConnectionFailed", { services: failedNames.join(", ") }));
-            setCreatingApp(false);
-            return;
-          }
-        }
+        // Inject PRD.md into initial files
+        const prdFile = prdData ? { path: "PRD.md", content: prdToMarkdown(prdData) } : null;
+        const allFiles = [...(action.files || []), ...(prdFile ? [prdFile] : [])];
 
         const res = await fetch("/api/apps", {
           method: "POST",
@@ -241,9 +240,9 @@ export default function CreateAppPage() {
             template: action.template,
             description: action.description || "",
             config: action.config || {},
-            files: action.files,
+            files: allFiles.length > 0 ? allFiles : undefined,
             npmPackages: action.npmPackages,
-            serviceIds,
+            serviceIds: serviceIds.length > 0 ? serviceIds : undefined,
           }),
         });
         if (!res.ok) throw new Error("Failed to create app");
@@ -267,11 +266,18 @@ export default function CreateAppPage() {
         setCreatingApp(false);
       }
     },
-    [allowedServices, serviceInstances, t, router]
+    [selectedServices, serviceTestResults, serviceInstances, prdData, t, router]
   );
 
   const handleAssistantResponse = useCallback(
     (content: string) => {
+      // Extract PRD data from response
+      const prd = extractPRD(content);
+      if (prd) {
+        setPrdData(prd);
+        autoSelectServices(prd);
+      }
+
       const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
       if (!jsonMatch) return;
       try {
@@ -279,7 +285,7 @@ export default function CreateAppPage() {
         if (parsed.action === "create_app") handleCreateApp(parsed as CreateAppAction);
       } catch {}
     },
-    [handleCreateApp]
+    [handleCreateApp, autoSelectServices]
   );
 
   const handleUserMessage = useCallback((content: string) => {
@@ -346,7 +352,7 @@ export default function CreateAppPage() {
             &larr; {t("backToHome")}
           </button>
         </div>
-        <div className="flex flex-1 min-h-0">
+        <div className="flex flex-1 min-h-0 gap-4">
           <div className="flex flex-1 flex-col min-h-0 max-w-3xl">
             {serviceWarning && (
               <div className="mb-3 flex items-center gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200">
@@ -367,6 +373,15 @@ export default function CreateAppPage() {
               initialMessages={inputValue.trim() ? [{ id: "init-1", role: "user", content: inputValue.trim() }] : []}
             />
           </div>
+          <PRDPanel
+            prdData={prdData}
+            requiredServiceTypes={prdData?.requiredServices || []}
+            serviceInstances={serviceInstances}
+            allowedServices={allowedServices}
+            selectedServices={selectedServices}
+            onServiceChange={handleServiceChange}
+            serviceTestResults={serviceTestResults}
+          />
         </div>
       </div>
     );

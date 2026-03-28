@@ -129,6 +129,14 @@
     "createFailed": "Failed to create application. Please try again later.",
     "allCategories": "All",
     "chatEmptyState": "Describe the app you want to build and AI will help analyze requirements",
+    "prdTitle": "Requirements Summary",
+    "prdEmpty": "AI is gathering your requirements...",
+    "servicesTitle": "Required Services",
+    "serviceNotEnabled": "Not enabled",
+    "serviceNoInstance": "No instance",
+    "serviceConnected": "Connected",
+    "serviceFailed": "Connection failed",
+    "serviceTesting": "Testing...",
     "presets": {
       "finance-expense-report": {
         "name": "Expense Report System",
