@@ -51,9 +51,20 @@ command -v docker  >/dev/null 2>&1 || error "docker 未安裝。請先安裝 Doc
 command -v k3d     >/dev/null 2>&1 || error "k3d 未安裝。請執行: brew install k3d (macOS) 或參考 https://k3d.io"
 command -v kubectl >/dev/null 2>&1 || error "kubectl 未安裝。請執行: brew install kubectl (macOS)"
 
+# 選裝工具：k9s（終端 k8s 管理 UI）
+if ! command -v k9s >/dev/null 2>&1; then
+  warn "k9s 未安裝，嘗試自動安裝..."
+  if command -v brew >/dev/null 2>&1; then
+    brew install k9s || warn "k9s 安裝失敗，可稍後手動安裝: brew install k9s"
+  else
+    warn "k9s 未安裝且無 Homebrew，請手動安裝: https://k9scli.io/topics/install/"
+  fi
+fi
+
 info "  docker $(docker --version | awk '{print $3}' | tr -d ',')"
 info "  k3d $(k3d version | head -1 | awk '{print $3}')"
 info "  kubectl $(kubectl version --client --short 2>/dev/null || kubectl version --client -o json | grep gitVersion | awk -F'"' '{print $4}')"
+command -v k9s >/dev/null 2>&1 && info "  k9s $(k9s version --short 2>/dev/null | grep Version | awk '{print $2}' || k9s version 2>&1 | head -1)"
 
 # ── Step 2: 建立/重置 k3d 叢集 ───────────────────────────────────────────
 info "Step 2/5: 建立 k3d 叢集..."
@@ -166,4 +177,5 @@ echo "    kubectl get pods -n aigo-prod    # 查看 prod 容器"
 echo "    kubectl get ingressroute -A      # 查看路由"
 echo "    k3d cluster stop $CLUSTER_NAME   # 停止叢集"
 echo "    k3d cluster start $CLUSTER_NAME  # 啟動叢集"
+echo "    k9s                              # 終端 k8s 管理 UI"
 echo ""
