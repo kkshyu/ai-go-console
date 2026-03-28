@@ -25,6 +25,7 @@ export interface SpecialistConfig {
   serviceInstances?: Array<{ id: string; name: string; type: string }>;
   appContext?: string;
   sendEvent: (data: unknown) => Promise<void>;
+  locale?: string;
 }
 
 /** Progress messages shown while an agent is generating. */
@@ -165,7 +166,7 @@ abstract class BaseSpecialistActor extends Actor {
 
     await sendEvent({ translating: true, agentRole });
 
-    const translated = await translateForUser(content, agentRole);
+    const translated = await translateForUser(content, agentRole, this.config.locale);
     const displayContent = translated.content || stripJsonBlocks(content) || "處理完成。";
 
     await sendEvent({ content: displayContent, agentRole });

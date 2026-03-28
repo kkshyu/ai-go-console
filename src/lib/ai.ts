@@ -258,28 +258,21 @@ export function stripJsonBlocks(content: string): string {
 }
 
 /**
- * Translate raw agent output into a user-friendly message.
- * Uses a fast/cheap model to rewrite technical agent output
- * as clear, conversational text for end users.
+ * Locale-to-language name mapping for translation output.
  */
-export async function translateForUser(
-  rawContent: string,
-  agentRole: string,
-): Promise<StreamChatResult> {
-  // Use full content (including JSON) for translation context.
-  // The translator will extract the meaningful parts.
-  const trimmed = rawContent.trim();
-  if (!trimmed || trimmed.length < 5) {
-    return { content: "", usage: null };
-  }
+const LOCALE_LANGUAGE_MAP: Record<string, string> = {
+  "zh-TW": "繁體中文",
+  "en": "English",
+};
 
-  // Cap input to avoid wasting tokens — translator only needs a summary
-  const truncated = trimmed.length > 2000 ? trimmed.slice(0, 2000) + "\n..." : trimmed;
-
-  const systemPrompt = `You are a UX writer for AI Go, an app-building platform. Your job is to rewrite internal agent output into clear, friendly messages for end users.
+/**
+ * Build the translation system prompt for a given language.
+ */
+function buildTranslationSystemPrompt(languageName: string): string {
+  return `You are a UX writer for AI Go, an app-building platform. Your job is to rewrite internal agent output into clear, friendly messages for end users.
 
 Rules:
-- Keep the SAME language as the input (if input is Chinese, output Chinese)
+- ALWAYS respond in ${languageName}, regardless of the input language
 - Never include raw JSON, code blocks, technical jargon, or internal action names in your output
 - Be concise — one short paragraph or a few bullet points max
 - Use a warm, professional tone
@@ -288,27 +281,109 @@ Rules:
 - If the agent designed architecture, summarize the technology choices
 - If the agent created an app, summarize the app name, features, and services
 - Do not mention other agents, pipeline stages, or internal system details
+- Do NOT comment on the format, completeness, or structure of the input — just summarize the content
 - ALWAYS produce output — never say you didn't receive content`;
+}
+
+/**
+ * Build the user message for translation based on locale.
+ */
+function buildTranslationUserMessage(agentRole: string, content: string, locale: string): string {
+  if (locale === "en") {
+    return `Rewrite the following ${agentRole} agent output as a user-friendly English message:\n\n${content}`;
+  }
+  return `將以下 ${agentRole} 代理的輸出改寫為使用者友善的繁體中文訊息：\n\n${content}`;
+}
+
+/**
+ * Truncate long content for translation, trying to preserve JSON block boundaries.
+ */
+function truncateForTranslation(content: string, maxLength: number = 2000): string {
+  if (content.length <= maxLength) return content;
+
+  // Find the last complete JSON block within a slightly extended range
+  const searchRange = content.slice(0, maxLength + 500);
+  const lastJsonEnd = searchRange.lastIndexOf("```");
+  if (lastJsonEnd > 500) {
+    return content.slice(0, lastJsonEnd + 3);
+  }
+  return content.slice(0, maxLength) + "\n...（內容已省略）";
+}
+
+/**
+ * Direct translation of content (single LLM call, no chunking).
+ * Exported for use by SummarizerActor.
+ */
+export async function translateDirect(
+  content: string,
+  agentRole: string,
+  locale: string = "zh-TW",
+): Promise<StreamChatResult> {
+  const languageName = LOCALE_LANGUAGE_MAP[locale] || "繁體中文";
+  const truncated = truncateForTranslation(content);
+  const systemPrompt = buildTranslationSystemPrompt(languageName);
+  const userMessage = buildTranslationUserMessage(agentRole, truncated, locale);
 
   try {
-    const result = await chat(
-      [
-        {
-          role: "user",
-          content: `Rewrite this ${agentRole} agent output as a user-friendly message:\n\n${truncated}`,
-        },
-      ],
+    return await chat(
+      [{ role: "user", content: userMessage }],
       OUTPUT_MODEL,
       undefined,
       systemPrompt,
     );
-
-    return result;
   } catch {
-    // If translation fails, return stripped version as fallback
-    const fallback = stripJsonBlocks(rawContent);
+    const fallback = stripJsonBlocks(content);
     return { content: fallback || "", usage: null };
   }
+}
+
+/**
+ * Translate raw agent output into a user-friendly message.
+ * Uses a fast/cheap model to rewrite technical agent output
+ * as clear, conversational text for end users.
+ *
+ * For short content (<=2000 chars), translates directly.
+ * For long content, delegates to the background SummarizerActor
+ * for map-reduce processing.
+ */
+export async function translateForUser(
+  rawContent: string,
+  agentRole: string,
+  locale: string = "zh-TW",
+): Promise<StreamChatResult> {
+  const trimmed = rawContent.trim();
+  if (!trimmed || trimmed.length < 5) {
+    return { content: "", usage: null };
+  }
+
+  // Short content or no background system: direct translation
+  if (trimmed.length <= 2000) {
+    return translateDirect(trimmed, agentRole, locale);
+  }
+
+  // Long content: try SummarizerActor for map-reduce
+  try {
+    const { backgroundSystem } = await import("./actors/background-system");
+    if (backgroundSystem.initialized) {
+      const result = await backgroundSystem.request<{
+        content: string;
+        usage: TokenUsage | null;
+      }>(
+        "summarizer",
+        "summarize_request",
+        { content: trimmed, agentRole, locale },
+        30_000, // 30s timeout for map-reduce
+      );
+      if (result.content) {
+        return result;
+      }
+    }
+  } catch (err) {
+    console.warn(`[translateForUser] Summarizer failed, falling back: ${err}`);
+  }
+
+  // Fallback: direct translation with truncation
+  return translateDirect(trimmed, agentRole, locale);
 }
 
 /**
