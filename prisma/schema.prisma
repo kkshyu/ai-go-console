@@ -145,7 +145,7 @@ model App {
 
   services     AppService[]
   chatMessages ChatMessage[]
-  pipelines    AgentPipeline[]
+  artifacts    AgentArtifact[]
   deployments  Deployment[]
 
   @@map("apps")
@@ -221,46 +221,27 @@ model ChatMessage {
   userId String? @map("user_id")
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  pipelineId String?        @map("pipeline_id")
-  pipeline   AgentPipeline? @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
+  conversationId String? @map("conversation_id")
 
   @@map("chat_messages")
-}
-
-model AgentPipeline {
-  id              String   @id @default(cuid())
-  status          String   @default("idle")
-  currentAgent    String?  @map("current_stage")
-  completedAgents String[] @map("completed_stages")
-  tasks           Json?    @map("stage_data")
-  parallelGroups  Json?    @map("parallel_groups")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-
-  appId String? @map("app_id")
-  app   App?    @relation(fields: [appId], references: [id], onDelete: Cascade)
-
-  messages  ChatMessage[]
-  artifacts AgentArtifact[]
-
-  @@map("agent_pipelines")
 }
 
 /// Persists structured outputs from agents (design docs, task specs, etc.)
 /// so they can be referenced across agent calls without repeating in context.
 model AgentArtifact {
-  id         String   @id @default(cuid())
-  pipelineId String   @map("pipeline_id")
-  agentRole  String   @map("agent_role")
-  type       String   // "design" | "spec" | "review" | "deployment" | "task"
-  content    Json     // the structured JSON output from the agent
-  actorId    String?  @map("actor_id")  // actor instance ID (e.g. "developer-0")
-  taskId     String?  @map("task_id")   // parallel task identifier
-  createdAt  DateTime @default(now()) @map("created_at")
+  id             String   @id @default(cuid())
+  conversationId String   @map("conversation_id")
+  agentRole      String   @map("agent_role")
+  type           String   // "design" | "spec" | "review" | "deployment" | "task"
+  content        Json     // the structured JSON output from the agent
+  actorId        String?  @map("actor_id")  // actor instance ID (e.g. "developer-0")
+  taskId         String?  @map("task_id")   // parallel task identifier
+  createdAt      DateTime @default(now()) @map("created_at")
 
-  pipeline AgentPipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  appId String? @map("app_id")
+  app   App?    @relation(fields: [appId], references: [id], onDelete: Cascade)
 
-  @@index([pipelineId, agentRole])
+  @@index([conversationId, agentRole])
   @@map("agent_artifacts")
 }
 

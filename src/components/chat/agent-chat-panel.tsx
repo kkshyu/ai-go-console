@@ -11,7 +11,7 @@ import {
   createInitialOrchestrationState,
 } from "@/lib/agents/types";
 import type { AgentRole, OrchestrationState } from "@/lib/agents/types";
-import { PipelineProgress, type ActorStatusInfo } from "./pipeline-progress";
+import { AgentProgress, type ActorStatusInfo } from "./agent-progress";
 import { MarkdownContent } from "@/components/chat/markdown-content";
 import { AgentAvatar } from "./agent-avatar";
 
@@ -50,7 +50,7 @@ export interface AgentChatPanelProps {
   generatingText?: string;
   totalTokensLabel?: string;
   externalLoading?: boolean;
-  pipelineId?: string;
+  conversationId?: string;
   showProgress?: boolean;
   autoSendMessage?: string;
 }
@@ -70,7 +70,7 @@ export function AgentChatPanel({
   generatingText,
   totalTokensLabel,
   externalLoading = false,
-  pipelineId,
+  conversationId,
   showProgress = true,
   autoSendMessage,
 }: AgentChatPanelProps) {
@@ -140,7 +140,7 @@ export function AgentChatPanel({
               ...(m.fileIds?.length ? { fileIds: m.fileIds } : {}),
             })),
             model: selectedModel,
-            pipelineId,
+            conversationId,
             orchestrationState: orchState,
             ...extraRequestBody,
           }),
@@ -409,7 +409,7 @@ export function AgentChatPanel({
       messages,
       selectedModel,
       extraRequestBody,
-      pipelineId,
+      conversationId,
       orchState,
       onUserMessage,
       onAssistantResponse,
@@ -565,7 +565,7 @@ export function AgentChatPanel({
         {/* Agent Progress — below messages */}
         {showProgress && (
           <div className="mb-3">
-            <PipelineProgress
+            <AgentProgress
               state={orchState}
               currentAgent={currentAgent}
               isLoading={isLoading || externalLoading}

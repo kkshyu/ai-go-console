@@ -19,7 +19,7 @@ interface AgentProgressProps {
  * Displays a single status text line for agent progress.
  * All status updates come from the PM agent.
  */
-export function PipelineProgress({
+export function AgentProgress({
   state,
   currentAgent,
   isLoading,

@@ -43,7 +43,7 @@ export class EmbeddingActor extends BackgroundActor {
 
     // 4. Store in vector database
     await storeChunks(
-      payload.pipelineId,
+      payload.conversationId,
       payload.sourceType,
       payload.sourceId,
       payload.agentRole,
