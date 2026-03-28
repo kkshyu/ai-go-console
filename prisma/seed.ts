@@ -46,7 +46,7 @@ const ALL_SERVICE_TYPES: ServiceType[] = [
   "auth0", "firebase_auth", "line_login",
   "supabase", "hasura",
   "line_bot", "whatsapp", "discord", "telegram",
-  "built_in_pg", "built_in_disk", "built_in_real_estate",
+  "built_in_pg", "built_in_disk",
   "built_in_restaurant", "built_in_medical", "built_in_beauty",
   "built_in_education", "built_in_realestate", "built_in_fitness",
   "built_in_retail", "built_in_hospitality", "built_in_legal",
@@ -173,23 +173,6 @@ async function main() {
       },
     });
 
-    const realEstateCfg = encrypt(JSON.stringify({
-      apiBaseUrl: `/api/platform/real-estate/${org.slug}`,
-    }));
-
-    await prisma.service.upsert({
-      where: { id: `builtin-real-estate-${org.slug}` },
-      update: {},
-      create: {
-        id: `builtin-real-estate-${org.slug}`,
-        name: "Built-in Real Estate",
-        type: ServiceType.built_in_real_estate,
-        configEncrypted: realEstateCfg.ciphertext,
-        iv: realEstateCfg.iv,
-        authTag: realEstateCfg.authTag,
-        organizationId: org.id,
-      },
-    });
   }
 
   // Industry built-in services for each org
