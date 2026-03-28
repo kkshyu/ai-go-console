@@ -13,7 +13,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "db:seed": "prisma db seed",
-    "build-base-images": "bash scripts/build-base-images.sh"
+    "build-base-images": "bash scripts/build-base-images.sh",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "prisma": {
     "seed": "tsx --env-file=.env.local prisma/seed.ts"
@@ -69,7 +71,8 @@
     "prisma": "^6.4.0",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.2"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
