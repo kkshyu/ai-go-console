@@ -10,6 +10,7 @@ export enum ServiceCategory {
   platform = "platform",
   chat = "chat",
   ai_model = "ai_model",
+  industry = "industry",
 }
 
 export const ALL_SERVICE_TYPES: ServiceType[] = [
@@ -49,11 +50,45 @@ export const ALL_SERVICE_TYPES: ServiceType[] = [
   // built-in
   "built_in_pg",
   "built_in_disk",
+  // built-in industry
+  "built_in_restaurant",
+  "built_in_medical",
+  "built_in_beauty",
+  "built_in_education",
+  "built_in_realestate",
+  "built_in_fitness",
+  "built_in_retail",
+  "built_in_hospitality",
+  "built_in_legal",
+  "built_in_accounting",
+  "built_in_auto_repair",
+  "built_in_pet_care",
+  "built_in_photography",
+  "built_in_cleaning",
+  "built_in_logistics",
   // ai_model
   "openai",
   "gemini",
   "claude",
   "openrouter",
+];
+
+export const INDUSTRY_SERVICE_TYPES: ServiceType[] = [
+  "built_in_restaurant",
+  "built_in_medical",
+  "built_in_beauty",
+  "built_in_education",
+  "built_in_realestate",
+  "built_in_fitness",
+  "built_in_retail",
+  "built_in_hospitality",
+  "built_in_legal",
+  "built_in_accounting",
+  "built_in_auto_repair",
+  "built_in_pet_care",
+  "built_in_photography",
+  "built_in_cleaning",
+  "built_in_logistics",
 ];
 
 export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
@@ -82,9 +117,26 @@ export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
   whatsapp: ServiceCategory.chat,
   discord: ServiceCategory.chat,
   telegram: ServiceCategory.chat,
-  // built-in
+  // built-in infra
   built_in_pg: ServiceCategory.database,
   built_in_disk: ServiceCategory.storage,
+  // built-in industry
+  built_in_restaurant: ServiceCategory.industry,
+  built_in_medical: ServiceCategory.industry,
+  built_in_beauty: ServiceCategory.industry,
+  built_in_education: ServiceCategory.industry,
+  built_in_realestate: ServiceCategory.industry,
+  built_in_fitness: ServiceCategory.industry,
+  built_in_retail: ServiceCategory.industry,
+  built_in_hospitality: ServiceCategory.industry,
+  built_in_legal: ServiceCategory.industry,
+  built_in_accounting: ServiceCategory.industry,
+  built_in_auto_repair: ServiceCategory.industry,
+  built_in_pet_care: ServiceCategory.industry,
+  built_in_photography: ServiceCategory.industry,
+  built_in_cleaning: ServiceCategory.industry,
+  built_in_logistics: ServiceCategory.industry,
+  // ai_model
   openai: ServiceCategory.ai_model,
   gemini: ServiceCategory.ai_model,
   claude: ServiceCategory.ai_model,
@@ -101,15 +153,21 @@ export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
   [ServiceCategory.platform]: ["supabase", "hasura"],
   [ServiceCategory.chat]: ["line_bot", "whatsapp", "discord", "telegram"],
   [ServiceCategory.ai_model]: ["openai", "gemini", "claude", "openrouter"],
+  [ServiceCategory.industry]: INDUSTRY_SERVICE_TYPES,
 };
 
 export const BUILT_IN_SERVICE_TYPES: ReadonlySet<ServiceType> = new Set([
   "built_in_pg",
   "built_in_disk",
+  ...INDUSTRY_SERVICE_TYPES,
 ]);
 
 export function isBuiltInServiceType(type: ServiceType): boolean {
   return BUILT_IN_SERVICE_TYPES.has(type);
+}
+
+export function isIndustryServiceType(type: ServiceType): boolean {
+  return INDUSTRY_SERVICE_TYPES.includes(type);
 }
 
 export interface ConfigFieldDef {
@@ -257,6 +315,22 @@ export const SERVICE_TYPE_CONFIG_FIELDS: Record<ServiceType, ConfigFieldDef[]> =
   // built-in (auto-configured by platform)
   built_in_pg: [],
   built_in_disk: [],
+  // built-in industry (auto-configured by platform)
+  built_in_restaurant: [],
+  built_in_medical: [],
+  built_in_beauty: [],
+  built_in_education: [],
+  built_in_realestate: [],
+  built_in_fitness: [],
+  built_in_retail: [],
+  built_in_hospitality: [],
+  built_in_legal: [],
+  built_in_accounting: [],
+  built_in_auto_repair: [],
+  built_in_pet_care: [],
+  built_in_photography: [],
+  built_in_cleaning: [],
+  built_in_logistics: [],
   // --- ai_model ---
   openai: [
     { key: "apiKey", type: "password", placeholder: "sk-..." },
@@ -305,6 +379,21 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   telegram: "Telegram",
   built_in_pg: "Built-in PostgreSQL",
   built_in_disk: "Built-in Disk Storage",
+  built_in_restaurant: "Built-in Restaurant",
+  built_in_medical: "Built-in Medical",
+  built_in_beauty: "Built-in Beauty",
+  built_in_education: "Built-in Education",
+  built_in_realestate: "Built-in Real Estate",
+  built_in_fitness: "Built-in Fitness",
+  built_in_retail: "Built-in Retail",
+  built_in_hospitality: "Built-in Hospitality",
+  built_in_legal: "Built-in Legal",
+  built_in_accounting: "Built-in Accounting",
+  built_in_auto_repair: "Built-in Auto Repair",
+  built_in_pet_care: "Built-in Pet Care",
+  built_in_photography: "Built-in Photography",
+  built_in_cleaning: "Built-in Cleaning",
+  built_in_logistics: "Built-in Logistics",
   openai: "OpenAI",
   gemini: "Google Gemini",
   claude: "Claude (Anthropic)",
@@ -321,6 +410,7 @@ export const SERVICE_CATEGORY_LABELS: Record<ServiceCategory, string> = {
   [ServiceCategory.platform]: "Platform",
   [ServiceCategory.chat]: "Chat",
   [ServiceCategory.ai_model]: "AI Model",
+  [ServiceCategory.industry]: "Industry",
 };
 
 /**
@@ -366,9 +456,25 @@ export const SERVICE_TYPE_HTTP_MODE: Record<ServiceType, HttpMode> = {
   whatsapp: "fixed",
   discord: "fixed",
   telegram: "fixed",
-  // built-in
+  // built-in infra
   built_in_pg: "proxy",
   built_in_disk: "sdk",
+  // built-in industry — all accessed via proxy
+  built_in_restaurant: "proxy",
+  built_in_medical: "proxy",
+  built_in_beauty: "proxy",
+  built_in_education: "proxy",
+  built_in_realestate: "proxy",
+  built_in_fitness: "proxy",
+  built_in_retail: "proxy",
+  built_in_hospitality: "proxy",
+  built_in_legal: "proxy",
+  built_in_accounting: "proxy",
+  built_in_auto_repair: "proxy",
+  built_in_pet_care: "proxy",
+  built_in_photography: "proxy",
+  built_in_cleaning: "proxy",
+  built_in_logistics: "proxy",
   // ai_model — fixed well-known API URLs
   openai: "fixed",
   gemini: "fixed",

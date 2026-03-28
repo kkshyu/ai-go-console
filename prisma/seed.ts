@@ -47,7 +47,30 @@ const ALL_SERVICE_TYPES: ServiceType[] = [
   "supabase", "hasura",
   "line_bot", "whatsapp", "discord", "telegram",
   "built_in_pg", "built_in_disk",
+  "built_in_restaurant", "built_in_medical", "built_in_beauty",
+  "built_in_education", "built_in_realestate", "built_in_fitness",
+  "built_in_retail", "built_in_hospitality", "built_in_legal",
+  "built_in_accounting", "built_in_auto_repair", "built_in_pet_care",
+  "built_in_photography", "built_in_cleaning", "built_in_logistics",
   "openai", "gemini", "claude", "openrouter",
+];
+
+const INDUSTRY_SERVICES: { type: ServiceType; name: string }[] = [
+  { type: "built_in_restaurant", name: "Built-in Restaurant" },
+  { type: "built_in_medical", name: "Built-in Medical" },
+  { type: "built_in_beauty", name: "Built-in Beauty" },
+  { type: "built_in_education", name: "Built-in Education" },
+  { type: "built_in_realestate", name: "Built-in Real Estate" },
+  { type: "built_in_fitness", name: "Built-in Fitness" },
+  { type: "built_in_retail", name: "Built-in Retail" },
+  { type: "built_in_hospitality", name: "Built-in Hospitality" },
+  { type: "built_in_legal", name: "Built-in Legal" },
+  { type: "built_in_accounting", name: "Built-in Accounting" },
+  { type: "built_in_auto_repair", name: "Built-in Auto Repair" },
+  { type: "built_in_pet_care", name: "Built-in Pet Care" },
+  { type: "built_in_photography", name: "Built-in Photography" },
+  { type: "built_in_cleaning", name: "Built-in Cleaning" },
+  { type: "built_in_logistics", name: "Built-in Logistics" },
 ];
 
 // ── Main seed ───────────────────────────────────────────────────────────────
@@ -151,7 +174,31 @@ async function main() {
     });
   }
 
-  console.log("  ✓ Built-in services provisioned for all orgs");
+  // Industry built-in services for each org
+  for (const org of [acme, startup]) {
+    for (const svc of INDUSTRY_SERVICES) {
+      const industryCfg = encrypt(JSON.stringify({
+        industry: svc.type.replace("built_in_", ""),
+        version: "1.0",
+      }));
+
+      await prisma.service.upsert({
+        where: { id: `${svc.type}-${org.slug}` },
+        update: {},
+        create: {
+          id: `${svc.type}-${org.slug}`,
+          name: svc.name,
+          type: svc.type,
+          configEncrypted: industryCfg.ciphertext,
+          iv: industryCfg.iv,
+          authTag: industryCfg.authTag,
+          organizationId: org.id,
+        },
+      });
+    }
+  }
+
+  console.log("  ✓ Built-in services provisioned for all orgs (including 15 industry services)");
 
   // ── 3. Users ────────────────────────────────────────────────────────────
 

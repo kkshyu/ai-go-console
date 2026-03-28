@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
 import { verifyProxyToken } from "@/lib/proxy-token";
-import { SERVICE_TYPE_HTTP_MODE } from "@/lib/service-types";
+import { SERVICE_TYPE_HTTP_MODE, isIndustryServiceType } from "@/lib/service-types";
 import {
   getDbDriver,
   getMongoDriver,
   isMongoType,
   type MongoOperation,
 } from "@/lib/db-drivers";
+import { dispatchIndustryRequest } from "@/lib/builtin-industry";
 import type { ServiceType } from "@prisma/client";
 
 function extractToken(req: NextRequest): string | null {
@@ -66,6 +67,12 @@ export async function POST(
   }
 
   try {
+    // Industry built-in services — each handles requests independently
+    if (isIndustryServiceType(service.type as ServiceType)) {
+      const result = dispatchIndustryRequest(service.type as ServiceType, body);
+      return NextResponse.json(result.body, { status: result.status });
+    }
+
     if (isMongoType(service.type as ServiceType)) {
       // MongoDB operation
       const op = body as unknown as MongoOperation;
