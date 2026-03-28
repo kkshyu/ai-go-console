@@ -123,7 +123,7 @@ if [ "$SKIP_INFRA" = false ]; then
   # 停止已有的 port-forward
   pkill -f "kubectl port-forward.*postgres.*5432" 2>/dev/null || true
   pkill -f "kubectl port-forward.*redis.*6379" 2>/dev/null || true
-  pkill -f "kubectl port-forward.*supabase-kong.*54321" 2>/dev/null || true
+  pkill -f "kubectl port-forward.*builtin-supabase-kong.*54321" 2>/dev/null || true
   sleep 1
 
   # PostgreSQL (平台資料庫)
@@ -155,10 +155,10 @@ if [ "$SKIP_INFRA" = false ]; then
   info "  Redis port-forward 已啟動 (PID: $REDIS_PF_PID, localhost:6379) ✓"
 
   # Supabase Kong (API Gateway)
-  kubectl wait --for=condition=available deployment/supabase-kong \
+  kubectl wait --for=condition=available deployment/builtin-supabase-kong \
     -n aigo-system --timeout=60s 2>/dev/null || error "Supabase Kong Deployment 未就緒"
 
-  kubectl port-forward svc/supabase-kong 54321:8000 -n aigo-system &>/dev/null &
+  kubectl port-forward svc/builtin-supabase-kong 54321:8000 -n aigo-system &>/dev/null &
   SB_PF_PID=$!
   sleep 2
 

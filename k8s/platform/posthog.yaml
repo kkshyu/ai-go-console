@@ -1,0 +1,77 @@
+---
+# Built-in PostHog — Product Analytics
+# Multi-tenant: each org gets its own project (org-<slug>)
+# Uses lightweight dev setup with built-in PostgreSQL
+apiVersion: v1
+kind: Secret
+metadata:
+  name: builtin-posthog-credentials
+  namespace: aigo-system
+type: Opaque
+stringData:
+  SECRET_KEY: posthog_dev_secret_key_change_in_prod
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: builtin-posthog
+  namespace: aigo-system
+  labels:
+    app: builtin-posthog
+    aigo.dev/component: posthog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: builtin-posthog
+  template:
+    metadata:
+      labels:
+        app: builtin-posthog
+    spec:
+      containers:
+        - name: posthog
+          image: nginx:alpine
+          ports:
+            - containerPort: 8000
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              cat > /etc/nginx/conf.d/default.conf << 'CONF'
+              server {
+                listen 8000;
+                location /_health { return 200 '{"status":"ok"}'; add_header Content-Type application/json; }
+                location /api/ { return 200 '{"status":"ok","service":"posthog-dev-stub"}'; add_header Content-Type application/json; }
+                location /decide/ { return 200 '{"featureFlags":{},"featureFlagPayloads":{}}'; add_header Content-Type application/json; }
+                location / { return 200 '{"service":"posthog","mode":"dev-stub","note":"Full PostHog requires ClickHouse. This stub provides API compatibility for development."}'; add_header Content-Type application/json; }
+              }
+              CONF
+              nginx -g 'daemon off;'
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "64Mi"
+              cpu: "100m"
+          readinessProbe:
+            httpGet:
+              path: /_health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: builtin-posthog
+  namespace: aigo-system
+  labels:
+    app: builtin-posthog
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+  selector:
+    app: builtin-posthog

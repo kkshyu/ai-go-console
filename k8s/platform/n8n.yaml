@@ -1,0 +1,89 @@
+---
+# Built-in n8n — Workflow Automation
+# Multi-tenant: shared instance with per-org webhook URL prefix
+apiVersion: v1
+kind: Secret
+metadata:
+  name: builtin-n8n-credentials
+  namespace: aigo-system
+type: Opaque
+stringData:
+  N8N_ENCRYPTION_KEY: n8n_dev_encryption_key_change_in_prod
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: builtin-n8n
+  namespace: aigo-system
+  labels:
+    app: builtin-n8n
+    aigo.dev/component: n8n
+spec:
+  serviceName: builtin-n8n
+  replicas: 1
+  selector:
+    matchLabels:
+      app: builtin-n8n
+  template:
+    metadata:
+      labels:
+        app: builtin-n8n
+    spec:
+      containers:
+        - name: n8n
+          image: n8nio/n8n:1.69.2
+          ports:
+            - containerPort: 5678
+          env:
+            - name: N8N_PORT
+              value: "5678"
+            - name: N8N_PROTOCOL
+              value: "http"
+            - name: WEBHOOK_URL
+              value: "http://builtin-n8n.aigo-system.svc.cluster.local:5678/"
+            - name: N8N_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: builtin-n8n-credentials
+                  key: N8N_ENCRYPTION_KEY
+            - name: DB_TYPE
+              value: "sqlite"
+          volumeMounts:
+            - name: n8n-data
+              mountPath: /home/node/.n8n
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 5678
+            initialDelaySeconds: 15
+            periodSeconds: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: n8n-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: builtin-n8n
+  namespace: aigo-system
+  labels:
+    app: builtin-n8n
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5678
+      targetPort: 5678
+  selector:
+    app: builtin-n8n

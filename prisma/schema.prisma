@@ -54,9 +54,16 @@ enum ServiceType {
   whatsapp
   discord
   telegram
-  // built-in (platform-managed)
+  // built-in (platform-managed infrastructure)
   built_in_real_estate
   built_in_supabase
+  built_in_keycloak
+  built_in_minio
+  built_in_n8n
+  built_in_qdrant
+  built_in_meilisearch
+  built_in_posthog
+  built_in_metabase
   built_in_accounting
   built_in_auto_repair
   built_in_beauty
@@ -258,17 +265,20 @@ model ChatFile {
   fileType       String   @map("file_type") // "image" | "text" | "pdf" | "code" | "unknown"
   mimeType       String   @map("mime_type")
   sizeBytes      Int      @map("size_bytes")
-  storagePath    String   @map("storage_path")
-  extractedText  String?  @map("extracted_text") @db.Text
-  summary        String?  @db.Text
-  status         String   @default("uploaded") // "uploaded" | "processing" | "ready" | "error"
-  createdAt      DateTime @default(now()) @map("created_at")
+  storagePath      String   @map("storage_path")
+  extractedText    String?  @map("extracted_text") @db.Text
+  summary          String?  @db.Text
+  status           String   @default("uploaded") // "uploaded" | "processing" | "ready" | "error"
+  importSessionId  String?  @map("import_session_id")
+  relativePath     String?  @map("relative_path")
+  createdAt        DateTime @default(now()) @map("created_at")
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([organizationId])
+  @@index([importSessionId])
   @@map("chat_files")
 }
 

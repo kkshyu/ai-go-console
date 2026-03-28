@@ -40,7 +40,7 @@ import type { BackgroundActorSystem } from "./background-system";
 export interface SpecialistConfig {
   model: string;
   allowedServices: string[];
-  serviceInstances?: Array<{ id: string; name: string; type: string }>;
+  serviceInstances?: Array<{ id: string; name: string; type: string; status?: 'ok' | 'failed' | 'untested'; message?: string }>;
   appContext?: string;
   sendEvent: (data: unknown) => Promise<void>;
   locale?: string;

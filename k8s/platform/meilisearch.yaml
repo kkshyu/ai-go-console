@@ -1,0 +1,83 @@
+---
+# Built-in Meilisearch — Full-text Search Engine
+# Multi-tenant: each org gets its own index prefix (org_<slug>_*)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: builtin-meilisearch-credentials
+  namespace: aigo-system
+type: Opaque
+stringData:
+  MEILI_MASTER_KEY: meilisearch_dev_master_key_change_in_prod
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: builtin-meilisearch
+  namespace: aigo-system
+  labels:
+    app: builtin-meilisearch
+    aigo.dev/component: meilisearch
+spec:
+  serviceName: builtin-meilisearch
+  replicas: 1
+  selector:
+    matchLabels:
+      app: builtin-meilisearch
+  template:
+    metadata:
+      labels:
+        app: builtin-meilisearch
+    spec:
+      containers:
+        - name: meilisearch
+          image: getmeili/meilisearch:v1.11.3
+          ports:
+            - containerPort: 7700
+          env:
+            - name: MEILI_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: builtin-meilisearch-credentials
+                  key: MEILI_MASTER_KEY
+            - name: MEILI_ENV
+              value: "development"
+          volumeMounts:
+            - name: meilisearch-data
+              mountPath: /meili_data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 7700
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: meilisearch-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: builtin-meilisearch
+  namespace: aigo-system
+  labels:
+    app: builtin-meilisearch
+spec:
+  type: ClusterIP
+  ports:
+    - port: 7700
+      targetPort: 7700
+  selector:
+    app: builtin-meilisearch

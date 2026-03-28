@@ -1,0 +1,78 @@
+---
+# Built-in Keycloak — Identity & Access Management
+# Multi-tenant: each org gets its own realm (org-<slug>)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: builtin-keycloak-credentials
+  namespace: aigo-system
+type: Opaque
+stringData:
+  KEYCLOAK_ADMIN: admin
+  KEYCLOAK_ADMIN_PASSWORD: admin_dev_password
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: builtin-keycloak
+  namespace: aigo-system
+  labels:
+    app: builtin-keycloak
+    aigo.dev/component: keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: builtin-keycloak
+  template:
+    metadata:
+      labels:
+        app: builtin-keycloak
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.0
+          args: ["start-dev"]
+          ports:
+            - containerPort: 8080
+          env:
+            - name: KEYCLOAK_ADMIN
+              valueFrom:
+                secretKeyRef:
+                  name: builtin-keycloak-credentials
+                  key: KEYCLOAK_ADMIN
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: builtin-keycloak-credentials
+                  key: KEYCLOAK_ADMIN_PASSWORD
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: builtin-keycloak
+  namespace: aigo-system
+  labels:
+    app: builtin-keycloak
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: builtin-keycloak

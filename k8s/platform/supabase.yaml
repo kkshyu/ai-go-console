@@ -5,7 +5,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: supabase-credentials
+  name: builtin-supabase-credentials
   namespace: aigo-system
 type: Opaque
 stringData:
@@ -20,21 +20,21 @@ stringData:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: supabase-db
+  name: builtin-supabase-db
   namespace: aigo-system
   labels:
-    app: supabase-db
+    app: builtin-supabase-db
     aigo.dev/component: supabase
 spec:
-  serviceName: supabase-db
+  serviceName: builtin-supabase-db
   replicas: 1
   selector:
     matchLabels:
-      app: supabase-db
+      app: builtin-supabase-db
   template:
     metadata:
       labels:
-        app: supabase-db
+        app: builtin-supabase-db
     spec:
       containers:
         - name: postgres
@@ -45,22 +45,22 @@ spec:
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: supabase-credentials
+                  name: builtin-supabase-credentials
                   key: POSTGRES_USER
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: supabase-credentials
+                  name: builtin-supabase-credentials
                   key: POSTGRES_PASSWORD
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:
-                  name: supabase-credentials
+                  name: builtin-supabase-credentials
                   key: POSTGRES_DB
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: supabase-credentials
+                  name: builtin-supabase-credentials
                   key: JWT_SECRET
           volumeMounts:
             - name: supabase-db-data
@@ -92,36 +92,36 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: supabase-db
+  name: builtin-supabase-db
   namespace: aigo-system
   labels:
-    app: supabase-db
+    app: builtin-supabase-db
 spec:
   type: ClusterIP
   ports:
     - port: 5432
       targetPort: 5432
   selector:
-    app: supabase-db
+    app: builtin-supabase-db
 ---
 # PostgREST — auto-generated REST API from PostgreSQL
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: supabase-rest
+  name: builtin-supabase-rest
   namespace: aigo-system
   labels:
-    app: supabase-rest
+    app: builtin-supabase-rest
     aigo.dev/component: supabase
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: supabase-rest
+      app: builtin-supabase-rest
   template:
     metadata:
       labels:
-        app: supabase-rest
+        app: builtin-supabase-rest
     spec:
       containers:
         - name: postgrest
@@ -130,7 +130,7 @@ spec:
             - containerPort: 3000
           env:
             - name: PGRST_DB_URI
-              value: "postgresql://supabase_admin:supabase_dev_password@supabase-db.aigo-system.svc.cluster.local:5432/supabase"
+              value: "postgresql://supabase_admin:supabase_dev_password@builtin-supabase-db.aigo-system.svc.cluster.local:5432/supabase"
             - name: PGRST_DB_SCHEMAS
               value: "public,storage,graphql_public"
             - name: PGRST_DB_ANON_ROLE
@@ -138,7 +138,7 @@ spec:
             - name: PGRST_JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: supabase-credentials
+                  name: builtin-supabase-credentials
                   key: JWT_SECRET
             - name: PGRST_DB_USE_LEGACY_GUCS
               value: "false"
@@ -159,36 +159,36 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: supabase-rest
+  name: builtin-supabase-rest
   namespace: aigo-system
   labels:
-    app: supabase-rest
+    app: builtin-supabase-rest
 spec:
   type: ClusterIP
   ports:
     - port: 3000
       targetPort: 3000
   selector:
-    app: supabase-rest
+    app: builtin-supabase-rest
 ---
 # GoTrue — Auth server
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: supabase-auth
+  name: builtin-supabase-auth
   namespace: aigo-system
   labels:
-    app: supabase-auth
+    app: builtin-supabase-auth
     aigo.dev/component: supabase
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: supabase-auth
+      app: builtin-supabase-auth
   template:
     metadata:
       labels:
-        app: supabase-auth
+        app: builtin-supabase-auth
     spec:
       containers:
         - name: gotrue
@@ -205,7 +205,7 @@ spec:
             - name: GOTRUE_DB_DRIVER
               value: "postgres"
             - name: GOTRUE_DB_DATABASE_URL
-              value: "postgresql://supabase_admin:supabase_dev_password@supabase-db.aigo-system.svc.cluster.local:5432/supabase?search_path=auth"
+              value: "postgresql://supabase_admin:supabase_dev_password@builtin-supabase-db.aigo-system.svc.cluster.local:5432/supabase?search_path=auth"
             - name: GOTRUE_SITE_URL
               value: "http://localhost:3000"
             - name: GOTRUE_URI_ALLOW_LIST
@@ -223,7 +223,7 @@ spec:
             - name: GOTRUE_JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: supabase-credentials
+                  name: builtin-supabase-credentials
                   key: JWT_SECRET
             - name: GOTRUE_EXTERNAL_EMAIL_ENABLED
               value: "true"
@@ -246,23 +246,23 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: supabase-auth
+  name: builtin-supabase-auth
   namespace: aigo-system
   labels:
-    app: supabase-auth
+    app: builtin-supabase-auth
 spec:
   type: ClusterIP
   ports:
     - port: 9999
       targetPort: 9999
   selector:
-    app: supabase-auth
+    app: builtin-supabase-auth
 ---
 # Kong — API Gateway (unified /rest/v1, /auth/v1 endpoints)
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: supabase-kong-config
+  name: builtin-supabase-kong-config
   namespace: aigo-system
 data:
   kong.yml: |
@@ -271,7 +271,7 @@ data:
 
     services:
       - name: rest-v1
-        url: http://supabase-rest.aigo-system.svc.cluster.local:3000/
+        url: http://builtin-supabase-rest.aigo-system.svc.cluster.local:3000/
         routes:
           - name: rest-v1-route
             strip_path: true
@@ -286,7 +286,7 @@ data:
                 - apikey
 
       - name: auth-v1
-        url: http://supabase-auth.aigo-system.svc.cluster.local:9999/
+        url: http://builtin-supabase-auth.aigo-system.svc.cluster.local:9999/
         routes:
           - name: auth-v1-route
             strip_path: true
@@ -306,20 +306,20 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: supabase-kong
+  name: builtin-supabase-kong
   namespace: aigo-system
   labels:
-    app: supabase-kong
+    app: builtin-supabase-kong
     aigo.dev/component: supabase
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: supabase-kong
+      app: builtin-supabase-kong
   template:
     metadata:
       labels:
-        app: supabase-kong
+        app: builtin-supabase-kong
     spec:
       containers:
         - name: kong
@@ -359,15 +359,15 @@ spec:
       volumes:
         - name: kong-config
           configMap:
-            name: supabase-kong-config
+            name: builtin-supabase-kong-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: supabase-kong
+  name: builtin-supabase-kong
   namespace: aigo-system
   labels:
-    app: supabase-kong
+    app: builtin-supabase-kong
 spec:
   type: ClusterIP
   ports:
@@ -378,4 +378,4 @@ spec:
       port: 8443
       targetPort: 8443
   selector:
-    app: supabase-kong
+    app: builtin-supabase-kong

@@ -12,6 +12,7 @@ import { actorSystemRegistry } from "@/lib/actors/registry";
 import {
   resolveMultiAgentContext,
   saveArtifact,
+  probeAndEnrichServices,
 } from "@/lib/services/multi-agent-service";
 import type { BackgroundActorSystem } from "@/lib/actors/background-system";
 
@@ -99,7 +100,16 @@ export async function POST(request: NextRequest) {
     let bgSystem: BackgroundActorSystem | undefined;
     const traceId = generateTraceId();
     try {
-      // 0. Ensure background actor system is initialized
+      // 0a. Probe service instances for connectivity
+      if (ctx.serviceInstances.length > 0) {
+        ctx.serviceInstances = await probeAndEnrichServices(
+          ctx.serviceInstances,
+          session?.user?.organizationId,
+          sendEvent,
+        );
+      }
+
+      // 0b. Ensure background actor system is initialized
       try {
         const { ensureBackgroundSystem } = await import(
           "@/lib/actors/background-system"
