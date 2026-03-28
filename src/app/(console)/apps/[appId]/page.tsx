@@ -761,7 +761,6 @@ export default function AppDetailPage() {
                 placeholder={t("chatPlaceholder")}
                 emptyStateText={t("chatEmptyState")}
                 generatingText={t("generating")}
-                totalTokensLabel={t("totalTokens")}
                 onUserMessage={handleUserMessage}
                 onAssistantComplete={handleAssistantComplete}
                 onAssistantResponse={handleAssistantResponse}
