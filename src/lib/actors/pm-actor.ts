@@ -3,8 +3,10 @@
  *
  * The PM (Product Manager) is the central orchestrator in the actor system.
  * It receives user messages, runs LLM to decide actions, dispatches to
- * specialist actors, handles parallel developer coordination, and monitors
- * all agents via the actor system's heartbeat.
+ * specialist actors, and handles parallel developer coordination.
+ *
+ * Post-processing side effects (file operations, service binding) are
+ * delegated to PostProcessor to keep this class focused on orchestration.
  */
 
 import { Actor } from "./actor";
@@ -14,6 +16,7 @@ import type {
   TaskPayload,
   TaskResultPayload,
   ParallelResultPayload,
+  ParallelTaskPayload,
   ErrorPayload,
 } from "./types";
 import { createMessage } from "./types";
@@ -33,21 +36,20 @@ import {
   stateForComplete,
 } from "../agents/orchestrator";
 import { createSpecialistActor, type SpecialistConfig } from "./specialist-actors";
-import { executeFileOperations } from "../services/file-operations";
-import {
-  extractServicesFromContent,
-  getAuthorizedServiceIds,
-  bindServicesToApp,
-} from "../services/service-authorization";
+import { PostProcessor, type PostProcessorConfig } from "./post-processor";
 import {
   mergeParallelOutputs,
   mergeResultToContent,
   type MergeResult,
 } from "../services/parallel-merge";
 import { validatePMAction } from "../services/llm-output-validator";
+import { actorLog } from "./logger";
 
 /** Maximum number of agent interactions per request. */
 const MAX_INTERACTIONS = 20;
+
+/** Delay before retrying after a rate limit error. */
+const RATE_LIMIT_BACKOFF_MS = 5_000;
 
 const PM_PROGRESS_MESSAGES = [
   "正在分析進度...",
@@ -97,6 +99,7 @@ export class PMActor extends Actor {
   private orchState: OrchestrationState;
   private interactionCount = 0;
   private messages: AgentMsg[] = [];
+  private postProcessor: PostProcessor;
 
   // Parallel execution tracking
   private pendingParallelResults: Map<string, ParallelResultPayload> = new Map();
@@ -115,12 +118,24 @@ export class PMActor extends Actor {
     super("pm-0", "pm");
     this.config = config;
     this.orchState = initialState || createInitialOrchestrationState();
+
+    // Initialize post-processor with delegated config
+    const ppConfig: PostProcessorConfig = {
+      appSlug: config.appSlug,
+      appId: config.appId,
+      userId: config.userId,
+      orgSlug: config.orgSlug,
+      serviceInstances: config.serviceInstances,
+      sendEvent: config.sendEvent,
+      traceId: config.system.traceId,
+    };
+    this.postProcessor = new PostProcessor(ppConfig);
   }
 
   async onStart(): Promise<void> {
     // Start request-level timeout
     this.requestTimeout = setTimeout(() => {
-      console.warn("[PMActor] Request timeout reached, aborting");
+      actorLog("warn", this.id, "Request timeout reached, aborting", this.traceId);
       this.abortController.abort();
       this.orchState = { ...this.orchState, status: "error" };
       this.config.sendEvent({ error: "Request timeout reached" }).catch(() => {});
@@ -155,7 +170,7 @@ export class PMActor extends Actor {
   }
 
   async onRestart(error: Error): Promise<void> {
-    console.warn(`[PMActor] Restarting after error: ${error.message}`);
+    actorLog("warn", this.id, `Restarting after error: ${error.message}`, this.traceId);
     // Reset abort controller on restart
     this.abortController = new AbortController();
   }
@@ -177,8 +192,8 @@ export class PMActor extends Actor {
 
   // ---- User Message ----
 
-  private async handleUserMessage(message: ActorMessage): Promise<ActorMessage | null> {
-    const payload = message.payload as TaskPayload;
+  private async handleUserMessage(message: ActorMessage & { type: "task" }): Promise<ActorMessage | null> {
+    const payload = message.payload;
 
     // Initialize messages from payload
     if (payload.messages) {
@@ -196,18 +211,15 @@ export class PMActor extends Actor {
 
   // ---- Agent Result ----
 
-  private async handleAgentResult(message: ActorMessage): Promise<ActorMessage | null> {
-    const payload = message.payload as TaskResultPayload;
+  private async handleAgentResult(message: ActorMessage & { type: "task_result" }): Promise<ActorMessage | null> {
+    const payload = message.payload;
     const { sendEvent, saveArtifact } = this.config;
 
     // Save artifact
     await saveArtifact(payload.agentRole, payload.content);
 
-    // Directly write files to Docker container if applicable
-    await this.doFileOperations(payload.content);
-
-    // Bind services selected by architect or required by developer
-    await this.doServiceBinding(payload.content);
+    // Delegate post-processing (file ops + service binding)
+    await this.postProcessor.process(payload.content);
 
     // Update state
     this.orchState = stateForAgentComplete(
@@ -238,8 +250,8 @@ export class PMActor extends Actor {
 
   // ---- Parallel Result ----
 
-  private async handleParallelResult(message: ActorMessage): Promise<ActorMessage | null> {
-    const payload = message.payload as ParallelResultPayload;
+  private async handleParallelResult(message: ActorMessage & { type: "parallel_result" }): Promise<ActorMessage | null> {
+    const payload = message.payload;
     const { saveArtifact } = this.config;
 
     // Save artifact with actor/task IDs
@@ -256,32 +268,65 @@ export class PMActor extends Actor {
     return null;
   }
 
-  // ---- Agent Error ----
+  // ---- Agent Error (with deterministic recovery) ----
 
-  private async handleAgentError(message: ActorMessage): Promise<ActorMessage | null> {
-    const payload = message.payload as ErrorPayload;
+  private async handleAgentError(message: ActorMessage & { type: "error" }): Promise<ActorMessage | null> {
+    const payload = message.payload;
     const { sendEvent } = this.config;
 
-    await sendEvent({
-      error: `Agent ${payload.agentRole} failed permanently: ${payload.error}`,
-    });
+    actorLog("warn", this.id, `Agent error: ${payload.agentRole} (${payload.errorType}): ${payload.error}`, this.traceId);
 
-    // Add blocked message to history so PM can handle it
-    this.messages.push({
-      role: "assistant",
-      content: `\`\`\`json\n{"status": "blocked", "blockedReason": "${payload.error}"}\n\`\`\``,
-      agentRole: payload.agentRole,
-    });
+    // Deterministic recovery based on error type
+    switch (payload.errorType) {
+      case "rate_limit": {
+        actorLog("info", this.id, `Rate limit hit, backing off ${RATE_LIMIT_BACKOFF_MS}ms`, this.traceId);
+        await sendEvent({ statusUpdate: "遇到速率限制，稍後重試...", agentRole: "pm" });
+        await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_BACKOFF_MS));
+        // Add a note to history and let PM loop retry
+        this.messages.push({
+          role: "assistant",
+          content: `[SYSTEM]: Agent ${payload.agentRole} hit rate limit. Retrying after backoff.`,
+          agentRole: payload.agentRole,
+        });
+        await this.runPMLoop();
+        return null;
+      }
 
-    this.orchState = stateForAgentComplete(
-      this.orchState,
-      payload.agentRole,
-      `Failed: ${payload.error}`
-    );
+      case "api_timeout": {
+        await sendEvent({ statusUpdate: "API 逾時，正在重新安排任務...", agentRole: "pm" });
+        this.messages.push({
+          role: "assistant",
+          content: `\`\`\`json\n{"status": "blocked", "blockedReason": "API timeout - ${payload.error}"}\n\`\`\``,
+          agentRole: payload.agentRole,
+        });
+        this.orchState = stateForAgentComplete(this.orchState, payload.agentRole, `Failed: API timeout`);
+        await this.runPMLoop();
+        return null;
+      }
 
-    // Continue PM loop to handle the failure
-    await this.runPMLoop();
-    return null;
+      default: {
+        // For unknown/invalid_response errors, fall through to LLM-based recovery
+        await sendEvent({
+          error: `Agent ${payload.agentRole} failed permanently: ${payload.error}`,
+        });
+
+        this.messages.push({
+          role: "assistant",
+          content: `\`\`\`json\n{"status": "blocked", "blockedReason": "${payload.error}"}\n\`\`\``,
+          agentRole: payload.agentRole,
+        });
+
+        this.orchState = stateForAgentComplete(
+          this.orchState,
+          payload.agentRole,
+          `Failed: ${payload.error}`
+        );
+
+        // Continue PM loop to handle the failure
+        await this.runPMLoop();
+        return null;
+      }
+    }
   }
 
   // ---- PM Decision Loop ----
@@ -345,6 +390,7 @@ export class PMActor extends Actor {
         clearInterval(progressTimer);
         this.activeTimers.delete(progressTimer);
         const errMsg = err instanceof Error ? err.message : "Unknown error";
+        actorLog("error", this.id, `PM LLM failed: ${errMsg}`, this.traceId);
         await sendEvent({ error: `PM agent failed: ${errMsg}` });
         this.orchState = { ...this.orchState, status: "error" };
         system.signalCompletion(this.orchState);
@@ -373,7 +419,7 @@ export class PMActor extends Actor {
       const validated = validatePMAction(result.content);
       const pmAction = "action" in validated ? validated.action : null;
       if ("error" in validated) {
-        console.warn(`[PMActor] PM action validation: ${validated.error}`);
+        actorLog("warn", this.id, `PM action validation: ${validated.error}`, this.traceId);
       }
 
       // ---- Handle dispatch ----
@@ -532,11 +578,6 @@ export class PMActor extends Actor {
     } satisfies TaskPayload);
 
     system.send(taskMsg);
-
-    // The specialist will process asynchronously.
-    // When done, its task_result message is automatically routed back
-    // to PM via the ActorSystem's systemSend mechanism.
-    // PM's onReceive will handle it via handleAgentResult.
   }
 
   private async dispatchParallel(
@@ -601,15 +642,10 @@ export class PMActor extends Actor {
           content: m.content,
           agentRole: m.agentRole,
         })),
-      });
+      } satisfies ParallelTaskPayload);
 
       system.send(parallelMsg);
     }
-
-    // Developers will process asynchronously. Their parallel_result messages
-    // are automatically routed back to PM via systemSend.
-    // PM's onReceive will handle them via handleParallelResult,
-    // which merges and continues when all results are collected.
   }
 
   // ---- Merge Parallel Results ----
@@ -665,11 +701,8 @@ export class PMActor extends Actor {
     // Save merged artifact
     await saveArtifact("developer", mergedContent);
 
-    // Directly write merged files to Docker container
-    await this.doFileOperations(mergedContent);
-
-    // Bind services from merged results
-    await this.doServiceBinding(mergedContent);
+    // Delegate post-processing (file ops + service binding)
+    await this.postProcessor.process(mergedContent);
 
     // Reset parallel tracking
     this.pendingParallelResults.clear();
@@ -689,82 +722,16 @@ export class PMActor extends Actor {
 
     // Log conflicts if any
     if (mergeResult.conflicts.length > 0) {
-      console.warn(
-        `[PMActor] Parallel merge conflicts detected: ${mergeResult.conflicts.map((c) => c.path).join(", ")}`,
+      actorLog(
+        "warn",
+        this.id,
+        `Parallel merge conflicts: ${mergeResult.conflicts.map((c) => c.path).join(", ")}`,
+        this.traceId,
       );
     }
 
     const content = mergeResultToContent(mergeResult);
     return { content, mergeResult };
-  }
-
-  // ---- Docker File Operations ----
-
-  /**
-   * Parse agent output and write files directly to the Docker container.
-   */
-  private async doFileOperations(content: string): Promise<void> {
-    if (!this.config.appSlug) return;
-
-    try {
-      const result = await executeFileOperations(
-        content,
-        this.config.orgSlug || "default",
-        this.config.appSlug,
-      );
-      if (result) {
-        await this.config.sendEvent({
-          filesWritten: {
-            count: result.filesWritten,
-            paths: result.paths,
-          },
-        });
-      }
-    } catch (err) {
-      console.warn(
-        `[PMActor] Failed to write files: ${err instanceof Error ? err.message : "Unknown error"}`,
-      );
-    }
-  }
-
-  // ---- Service Binding (delegated to service-authorization module) ----
-
-  private async doServiceBinding(content: string): Promise<void> {
-    if (!this.config.appId) return;
-
-    try {
-      const services = extractServicesFromContent(content);
-      if (services.length === 0) return;
-
-      const authorizedIds = await getAuthorizedServiceIds(
-        this.config.userId,
-        this.config.serviceInstances,
-      );
-
-      const result = await bindServicesToApp(
-        this.config.appId,
-        services,
-        authorizedIds,
-      );
-
-      if (result.unauthorized && result.unauthorized.length > 0) {
-        await this.config.sendEvent({
-          pmMessage: `無法完成：您未被授權使用以下服務：${result.unauthorized.join(", ")}。請聯繫管理員取得授權。`,
-          agentRole: "pm",
-        });
-        return;
-      }
-
-      if (result.bound > 0) {
-        await this.config.sendEvent({
-          servicesBound: { count: result.bound, names: result.names.join(", ") },
-        });
-      }
-    } catch (err) {
-      console.warn(
-        `[PMActor] Failed to bind services: ${err instanceof Error ? err.message : "Unknown error"}`,
-      );
-    }
   }
 
   // ---- Translation Helper ----

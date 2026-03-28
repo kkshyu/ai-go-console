@@ -3,12 +3,15 @@
  *
  * Defines the message protocol, actor state, and supervisor strategy
  * for the in-memory actor system used within SSE request lifecycle.
+ *
+ * Uses discriminated unions for type-safe message handling — the compiler
+ * automatically narrows payload types when you switch on message.type.
  */
 
 import type { AgentRole, BackgroundAgentRole } from "../agents/types";
 import type { TokenUsage } from "../ai";
 
-// ---- Message Protocol ----
+// ---- Message Protocol (Discriminated Union) ----
 
 export type MessageType =
   | "task"             // PM dispatches work to a specialist
@@ -20,14 +23,122 @@ export type MessageType =
   | "parallel_task"    // PM dispatches parallel work items
   | "parallel_result"; // One parallel developer returns result
 
-export interface ActorMessage {
+/** Base fields shared by all actor messages. */
+interface ActorMessageBase {
   id: string;
-  type: MessageType;
   from: string;       // actor ID
   to: string;         // actor ID
-  payload: unknown;
   timestamp: number;
+  traceId?: string;    // request-level trace ID for observability
 }
+
+// ---- Task Payloads ----
+
+export interface TaskPayload {
+  task: string;
+  context?: string;       // artifact context from previous agents
+  messages?: Array<{ role: string; content: string; agentRole?: string }>;
+}
+
+export interface TaskResultPayload {
+  agentRole: AgentRole;
+  content: string;         // raw LLM output
+  summary: string;
+  blocked: boolean;
+  blockedReason?: string;
+}
+
+export interface ParallelTaskPayload {
+  groupId: string;
+  taskId: string;
+  task: string;
+  files: string[];
+  context?: string;
+  messages?: Array<{ role: string; content: string; agentRole?: string }>;
+}
+
+export interface ParallelResultPayload {
+  groupId: string;
+  taskId: string;
+  agentRole: AgentRole;
+  actorId: string;
+  content: string;
+  summary: string;
+  blocked: boolean;
+  blockedReason?: string;
+}
+
+/** Structured error types for deterministic recovery. */
+export type ActorErrorType =
+  | "api_timeout"
+  | "rate_limit"
+  | "invalid_response"
+  | "unknown";
+
+export interface ErrorPayload {
+  actorId: string;
+  agentRole: AgentRole;
+  error: string;
+  errorType: ActorErrorType;
+  recoverable: boolean;
+}
+
+export interface HeartbeatPayload {
+  status: string;
+}
+
+// ---- Discriminated Union Messages ----
+
+export interface TaskMessage extends ActorMessageBase {
+  type: "task";
+  payload: TaskPayload;
+}
+
+export interface TaskResultMessage extends ActorMessageBase {
+  type: "task_result";
+  payload: TaskResultPayload;
+}
+
+export interface HeartbeatPingMessage extends ActorMessageBase {
+  type: "heartbeat_ping";
+  payload: Record<string, never>;
+}
+
+export interface HeartbeatPongMessage extends ActorMessageBase {
+  type: "heartbeat_pong";
+  payload: HeartbeatPayload;
+}
+
+export interface RestartMessage extends ActorMessageBase {
+  type: "restart";
+  payload: { error: string };
+}
+
+export interface ErrorMessage extends ActorMessageBase {
+  type: "error";
+  payload: ErrorPayload;
+}
+
+export interface ParallelTaskMessage extends ActorMessageBase {
+  type: "parallel_task";
+  payload: ParallelTaskPayload;
+}
+
+export interface ParallelResultMessage extends ActorMessageBase {
+  type: "parallel_result";
+  payload: ParallelResultPayload;
+}
+
+/** Discriminated union of all actor messages — switch on `type` for automatic payload narrowing. */
+export type ActorMessage =
+  | TaskMessage
+  | TaskResultMessage
+  | HeartbeatPingMessage
+  | HeartbeatPongMessage
+  | RestartMessage
+  | ErrorMessage
+  | ParallelTaskMessage
+  | ParallelResultMessage;
 
 // ---- Actor State ----
 
@@ -59,49 +170,6 @@ export const DEFAULT_SUPERVISOR_STRATEGY: SupervisorStrategy = {
   heartbeatIntervalMs: 15_000,
   heartbeatTimeoutMs: 120_000,
 };
-
-// ---- Task Payloads ----
-
-export interface TaskPayload {
-  task: string;
-  context?: string;       // artifact context from previous agents
-  messages?: Array<{ role: string; content: string; agentRole?: string }>;
-}
-
-export interface TaskResultPayload {
-  agentRole: AgentRole;
-  content: string;         // raw LLM output
-  summary: string;
-  blocked: boolean;
-  blockedReason?: string;
-}
-
-export interface ParallelTaskPayload {
-  groupId: string;
-  tasks: Array<{
-    taskId: string;
-    task: string;
-    files: string[];
-  }>;
-}
-
-export interface ParallelResultPayload {
-  groupId: string;
-  taskId: string;
-  agentRole: AgentRole;
-  actorId: string;
-  content: string;
-  summary: string;
-  blocked: boolean;
-  blockedReason?: string;
-}
-
-export interface ErrorPayload {
-  actorId: string;
-  agentRole: AgentRole;
-  error: string;
-  recoverable: boolean;
-}
 
 // ---- Background Actor Types ----
 
@@ -172,11 +240,21 @@ export interface ActorStats {
 
 let _msgCounter = 0;
 
+/** Create a type-safe actor message. The overloads ensure payload matches the message type. */
+export function createMessage(type: "task", from: string, to: string, payload: TaskPayload, traceId?: string): TaskMessage;
+export function createMessage(type: "task_result", from: string, to: string, payload: TaskResultPayload, traceId?: string): TaskResultMessage;
+export function createMessage(type: "heartbeat_ping", from: string, to: string, payload: Record<string, never>, traceId?: string): HeartbeatPingMessage;
+export function createMessage(type: "heartbeat_pong", from: string, to: string, payload: HeartbeatPayload, traceId?: string): HeartbeatPongMessage;
+export function createMessage(type: "restart", from: string, to: string, payload: { error: string }, traceId?: string): RestartMessage;
+export function createMessage(type: "error", from: string, to: string, payload: ErrorPayload, traceId?: string): ErrorMessage;
+export function createMessage(type: "parallel_task", from: string, to: string, payload: ParallelTaskPayload, traceId?: string): ParallelTaskMessage;
+export function createMessage(type: "parallel_result", from: string, to: string, payload: ParallelResultPayload, traceId?: string): ParallelResultMessage;
 export function createMessage(
   type: MessageType,
   from: string,
   to: string,
-  payload: unknown
+  payload: unknown,
+  traceId?: string,
 ): ActorMessage {
   return {
     id: `msg-${Date.now()}-${++_msgCounter}`,
@@ -185,5 +263,6 @@ export function createMessage(
     to,
     payload,
     timestamp: Date.now(),
-  };
+    ...(traceId && { traceId }),
+  } as ActorMessage;
 }

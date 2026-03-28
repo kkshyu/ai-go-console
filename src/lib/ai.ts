@@ -167,12 +167,16 @@ Be concise and helpful. Respond in the same language as the user.`;
 /**
  * Stream chat completion from OpenRouter
  */
+/** Default timeout for streaming LLM calls (90 seconds). */
+const STREAM_TIMEOUT_MS = 90_000;
+
 export async function streamChat(
   messages: ChatMessage[],
   onChunk: (text: string) => void,
   model: string = DEFAULT_MODEL,
   allowedServices?: string[],
-  systemPromptOverride?: string
+  systemPromptOverride?: string,
+  abortSignal?: AbortSignal,
 ): Promise<StreamChatResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
@@ -181,67 +185,99 @@ export async function streamChat(
 
   const systemPrompt = systemPromptOverride || buildSystemPrompt(allowedServices);
 
-  const response = await fetch(OPENROUTER_API_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": process.env.NEXTAUTH_URL || "http://localhost:3000",
-      "X-Title": "AI Go Console",
-    },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "system", content: systemPrompt }, ...messages],
-      stream: true,
-      max_tokens: 4096,
-    }),
-  });
+  // Create a timeout-based abort if no external signal provided
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => timeoutController.abort(), STREAM_TIMEOUT_MS);
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`OpenRouter API error: ${response.status} ${error}`);
-  }
+  // Combine external signal with timeout
+  const signal = abortSignal
+    ? anySignal([abortSignal, timeoutController.signal])
+    : timeoutController.signal;
 
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("No response body");
+  try {
+    const response = await fetch(OPENROUTER_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.NEXTAUTH_URL || "http://localhost:3000",
+        "X-Title": "AI Go Console",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "system", content: systemPrompt }, ...messages],
+        stream: true,
+        max_tokens: 4096,
+      }),
+      signal,
+    });
 
-  const decoder = new TextDecoder();
-  let fullContent = "";
-  let usage: TokenUsage | null = null;
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`OpenRouter API error: ${response.status} ${error}`);
+    }
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("No response body");
 
-    const chunk = decoder.decode(value, { stream: true });
-    const lines = chunk.split("\n").filter((line) => line.startsWith("data: "));
+    const decoder = new TextDecoder();
+    let fullContent = "";
+    let usage: TokenUsage | null = null;
 
-    for (const line of lines) {
-      const data = line.slice(6).trim();
-      if (data === "[DONE]") continue;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-      try {
-        const parsed = JSON.parse(data);
-        const content = parsed.choices?.[0]?.delta?.content;
-        if (content) {
-          fullContent += content;
-          onChunk(content);
+      // Reset timeout on each chunk received
+      clearTimeout(timeoutId);
+
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split("\n").filter((line) => line.startsWith("data: "));
+
+      for (const line of lines) {
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) {
+            fullContent += content;
+            onChunk(content);
+          }
+          // Capture usage from the final chunk
+          if (parsed.usage) {
+            usage = {
+              promptTokens: parsed.usage.prompt_tokens ?? 0,
+              completionTokens: parsed.usage.completion_tokens ?? 0,
+              totalTokens: parsed.usage.total_tokens ?? 0,
+            };
+          }
+        } catch {
+          // Skip malformed JSON lines
         }
-        // Capture usage from the final chunk
-        if (parsed.usage) {
-          usage = {
-            promptTokens: parsed.usage.prompt_tokens ?? 0,
-            completionTokens: parsed.usage.completion_tokens ?? 0,
-            totalTokens: parsed.usage.total_tokens ?? 0,
-          };
-        }
-      } catch {
-        // Skip malformed JSON lines
       }
     }
-  }
 
-  return { content: fullContent, usage };
+    return { content: fullContent, usage };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Combine multiple AbortSignals — aborts when any one fires.
+ */
+function anySignal(signals: AbortSignal[]): AbortSignal {
+  const controller = new AbortController();
+  for (const sig of signals) {
+    if (sig.aborted) {
+      controller.abort(sig.reason);
+      return controller.signal;
+    }
+    sig.addEventListener("abort", () => controller.abort(sig.reason), { once: true });
+  }
+  return controller.signal;
 }
 
 /**

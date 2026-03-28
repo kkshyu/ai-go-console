@@ -9,6 +9,7 @@
 import type { AgentRole } from "../agents/types";
 import type { ActorMessage, ActorState, ActorStatus } from "./types";
 import { createMessage } from "./types";
+import { actorLog } from "./logger";
 
 export type ActorEventHandler = (event: "died" | "completed", actorId: string, error?: Error) => void;
 
@@ -23,6 +24,7 @@ export abstract class Actor {
   private _lastTaskMessage: ActorMessage | null = null;
   private _heartbeatNotifier: (() => void) | null = null;
   private _systemSend: ((msg: ActorMessage) => void) | null = null;
+  private _traceId: string | undefined;
 
   constructor(id: string, role: AgentRole, maxRestarts = 2) {
     this.id = id;
@@ -44,10 +46,25 @@ export abstract class Actor {
   abstract onStop(): void;
   abstract onRestart(error: Error): Promise<void>;
 
+  // ---- Trace ID ----
+
+  get traceId(): string | undefined {
+    return this._traceId;
+  }
+
+  setTraceId(traceId: string): void {
+    this._traceId = traceId;
+  }
+
   // ---- Mailbox ----
 
   /** Enqueue a message and trigger processing if idle. */
   send(message: ActorMessage): void {
+    // Capture traceId from first incoming message
+    if (message.traceId && !this._traceId) {
+      this._traceId = message.traceId;
+    }
+
     // Auto-respond to heartbeat pings
     if (message.type === "heartbeat_ping") {
       this.updateHeartbeat();
@@ -84,9 +101,17 @@ export abstract class Actor {
       this._lastTaskMessage = message;
       this.updateStatus("processing");
 
+      const startTime = Date.now();
       try {
         const response = await this.onReceive(message);
+        const durationMs = Date.now() - startTime;
+        actorLog("info", this.id, `Processed ${message.type}`, this._traceId, { durationMs });
+
         if (response) {
+          // Propagate traceId to response
+          if (this._traceId && !response.traceId) {
+            (response as { traceId?: string }).traceId = this._traceId;
+          }
           if (this._systemSend) {
             // Route response through the ActorSystem automatically
             this._systemSend(response);
@@ -98,6 +123,8 @@ export abstract class Actor {
         this.updateStatus("idle");
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
+        const durationMs = Date.now() - startTime;
+        actorLog("error", this.id, `Failed processing ${message.type}: ${error.message}`, this._traceId, { durationMs });
         this.updateStatus("dead");
         this._eventHandler?.("died", this.id, error);
         this.processing = false;

@@ -17,6 +17,7 @@ import type { AgentRole, OrchestrationState } from "@/lib/agents/types";
 import { ActorSystem } from "@/lib/actors/actor-system";
 import { PMActor, type PMActorConfig } from "@/lib/actors/pm-actor";
 import { createSpecialistActor } from "@/lib/actors/specialist-actors";
+import { generateTraceId } from "@/lib/actors/logger";
 import type { AgentMessage } from "@/lib/agents/types";
 
 /**
@@ -325,8 +326,9 @@ export async function POST(request: NextRequest) {
         console.warn("[multi-agent] Background system init failed (RAG will be unavailable):", err);
       }
 
-      // 1. Create actor system with supervisor strategy
-      const system = new ActorSystem(sendEvent);
+      // 1. Create actor system with supervisor strategy and trace ID
+      const traceId = generateTraceId();
+      const system = new ActorSystem(sendEvent, undefined, traceId);
 
       // 2. Set actor factory for restarts
       system.setActorFactory((role, index) =>

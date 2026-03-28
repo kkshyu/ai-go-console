@@ -3,10 +3,19 @@
  *
  * Each specialist actor wraps an LLM call with the appropriate prompt.
  * They receive tasks from PM, execute via streamChat, and return results.
+ *
+ * Common onReceive logic lives in BaseSpecialistActor — subclasses
+ * only need to implement buildPrompt().
  */
 
 import { Actor } from "./actor";
-import type { ActorMessage, TaskPayload, TaskResultPayload, ParallelResultPayload } from "./types";
+import type {
+  ActorMessage,
+  TaskPayload,
+  TaskResultPayload,
+  ParallelResultPayload,
+  ParallelTaskPayload,
+} from "./types";
 import { createMessage } from "./types";
 import { streamChat, translateForUser, stripJsonBlocks, type ChatMessage, type TokenUsage } from "../ai";
 import type { AgentRole } from "../agents/types";
@@ -18,6 +27,7 @@ import {
   buildDevOpsPrompt,
   buildAppDevDeveloperPrompt,
 } from "../agents/prompts";
+import { actorLog } from "./logger";
 
 export interface SpecialistConfig {
   model: string;
@@ -84,7 +94,7 @@ abstract class BaseSpecialistActor extends Actor {
   }
 
   async onRestart(error: Error): Promise<void> {
-    console.warn(`[${this.role}Actor] Restarting after error: ${error.message}`);
+    actorLog("warn", this.id, `Restarting after error: ${error.message}`, this.traceId);
   }
 
   protected trackTimer(timer: ReturnType<typeof setInterval>): void {
@@ -98,6 +108,40 @@ abstract class BaseSpecialistActor extends Actor {
 
   /** Build the system prompt for this specialist. */
   protected abstract buildPrompt(task: string): string;
+
+  /**
+   * Default onReceive for regular task messages.
+   * Handles: executeLLM → send usage → translate → parse → return task_result.
+   * Subclasses override only if they need custom behavior (e.g. DeveloperActor for parallel tasks).
+   */
+  async onReceive(message: ActorMessage): Promise<ActorMessage | null> {
+    if (message.type !== "task") return null;
+
+    const payload = message.payload;
+    const result = await this.executeLLM(
+      payload.task,
+      payload.messages || [],
+      payload.context || ""
+    );
+
+    if (result.usage) {
+      await this.config.sendEvent({
+        usage: result.usage,
+        model: this.config.model,
+      });
+    }
+
+    await this.translateAndSend(result.content, this.role);
+
+    const parsed = parseAgentResult(result.content);
+    return createMessage("task_result", this.id, message.from, {
+      agentRole: this.role,
+      content: result.content,
+      summary: parsed.summary,
+      blocked: parsed.blocked,
+      blockedReason: parsed.blockedReason,
+    } satisfies TaskResultPayload);
+  }
 
   /** Execute the LLM call and return the raw result. */
   protected async executeLLM(
@@ -193,39 +237,6 @@ export class ArchitectActor extends BaseSpecialistActor {
     );
     return `${base}\n\n--- TASK FROM PM ---\n${task}`;
   }
-
-  async onReceive(message: ActorMessage): Promise<ActorMessage | null> {
-    if (message.type !== "task") return null;
-
-    const payload = message.payload as TaskPayload;
-    const result = await this.executeLLM(
-      payload.task,
-      payload.messages || [],
-      payload.context || ""
-    );
-
-    // Send usage
-    if (result.usage) {
-      await this.config.sendEvent({
-        usage: result.usage,
-        model: this.config.model,
-      });
-    }
-
-    // Translate and send to user
-    await this.translateAndSend(result.content, "architect");
-
-    // Parse result for PM
-    const parsed = parseAgentResult(result.content);
-
-    return createMessage("task_result", this.id, message.from, {
-      agentRole: "architect",
-      content: result.content,
-      summary: parsed.summary,
-      blocked: parsed.blocked,
-      blockedReason: parsed.blockedReason,
-    } satisfies TaskResultPayload);
-  }
 }
 
 // ---- Developer Actor ----
@@ -249,7 +260,7 @@ export class DeveloperActor extends BaseSpecialistActor {
   async onReceive(message: ActorMessage): Promise<ActorMessage | null> {
     // Handle both regular task and parallel_task
     if (message.type === "task") {
-      return this.handleTask(message);
+      return super.onReceive(message);
     }
     if (message.type === "parallel_task") {
       return this.handleParallelTask(message);
@@ -257,42 +268,8 @@ export class DeveloperActor extends BaseSpecialistActor {
     return null;
   }
 
-  private async handleTask(message: ActorMessage): Promise<ActorMessage> {
-    const payload = message.payload as TaskPayload;
-    const result = await this.executeLLM(
-      payload.task,
-      payload.messages || [],
-      payload.context || ""
-    );
-
-    if (result.usage) {
-      await this.config.sendEvent({
-        usage: result.usage,
-        model: this.config.model,
-      });
-    }
-
-    await this.translateAndSend(result.content, "developer");
-
-    const parsed = parseAgentResult(result.content);
-    return createMessage("task_result", this.id, message.from, {
-      agentRole: "developer",
-      content: result.content,
-      summary: parsed.summary,
-      blocked: parsed.blocked,
-      blockedReason: parsed.blockedReason,
-    } satisfies TaskResultPayload);
-  }
-
-  private async handleParallelTask(message: ActorMessage): Promise<ActorMessage> {
-    const payload = message.payload as {
-      groupId: string;
-      taskId: string;
-      task: string;
-      files: string[];
-      context?: string;
-      messages?: Array<{ role: string; content: string; agentRole?: string }>;
-    };
+  private async handleParallelTask(message: ActorMessage & { type: "parallel_task" }): Promise<ActorMessage> {
+    const payload = message.payload as ParallelTaskPayload;
 
     this.taskId = payload.taskId;
 
@@ -348,35 +325,6 @@ export class ReviewerActor extends BaseSpecialistActor {
     const base = buildReviewerPrompt();
     return `${base}\n\n--- TASK FROM PM ---\n${task}`;
   }
-
-  async onReceive(message: ActorMessage): Promise<ActorMessage | null> {
-    if (message.type !== "task") return null;
-
-    const payload = message.payload as TaskPayload;
-    const result = await this.executeLLM(
-      payload.task,
-      payload.messages || [],
-      payload.context || ""
-    );
-
-    if (result.usage) {
-      await this.config.sendEvent({
-        usage: result.usage,
-        model: this.config.model,
-      });
-    }
-
-    await this.translateAndSend(result.content, "reviewer");
-
-    const parsed = parseAgentResult(result.content);
-    return createMessage("task_result", this.id, message.from, {
-      agentRole: "reviewer",
-      content: result.content,
-      summary: parsed.summary,
-      blocked: parsed.blocked,
-      blockedReason: parsed.blockedReason,
-    } satisfies TaskResultPayload);
-  }
 }
 
 // ---- DevOps Actor ----
@@ -389,35 +337,6 @@ export class DevOpsActor extends BaseSpecialistActor {
   protected buildPrompt(task: string): string {
     const base = buildDevOpsPrompt();
     return `${base}\n\n--- TASK FROM PM ---\n${task}`;
-  }
-
-  async onReceive(message: ActorMessage): Promise<ActorMessage | null> {
-    if (message.type !== "task") return null;
-
-    const payload = message.payload as TaskPayload;
-    const result = await this.executeLLM(
-      payload.task,
-      payload.messages || [],
-      payload.context || ""
-    );
-
-    if (result.usage) {
-      await this.config.sendEvent({
-        usage: result.usage,
-        model: this.config.model,
-      });
-    }
-
-    await this.translateAndSend(result.content, "devops");
-
-    const parsed = parseAgentResult(result.content);
-    return createMessage("task_result", this.id, message.from, {
-      agentRole: "devops",
-      content: result.content,
-      summary: parsed.summary,
-      blocked: parsed.blocked,
-      blockedReason: parsed.blockedReason,
-    } satisfies TaskResultPayload);
   }
 }
 

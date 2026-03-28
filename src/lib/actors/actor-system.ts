@@ -12,9 +12,11 @@ import type {
   ActorMessage,
   SupervisorStrategy,
   ErrorPayload,
+  ActorErrorType,
 } from "./types";
 import { createMessage, DEFAULT_SUPERVISOR_STRATEGY } from "./types";
 import type { AgentRole, OrchestrationState } from "../agents/types";
+import { actorLog } from "./logger";
 
 export type ActorFactory = (role: AgentRole, index: number) => Actor;
 
@@ -24,6 +26,7 @@ export class ActorSystem {
   private strategy: SupervisorStrategy;
   private sendEvent: (data: unknown) => Promise<void>;
   private actorFactory: ActorFactory | null = null;
+  private _traceId: string | undefined;
 
   // Completion signaling
   private _completionResolve: (() => void) | null = null;
@@ -32,10 +35,12 @@ export class ActorSystem {
 
   constructor(
     sendEvent: (data: unknown) => Promise<void>,
-    strategy: SupervisorStrategy = DEFAULT_SUPERVISOR_STRATEGY
+    strategy: SupervisorStrategy = DEFAULT_SUPERVISOR_STRATEGY,
+    traceId?: string,
   ) {
     this.strategy = strategy;
     this.sendEvent = sendEvent;
+    this._traceId = traceId;
 
     this.heartbeat = new HeartbeatMonitor(
       {
@@ -50,6 +55,10 @@ export class ActorSystem {
     });
   }
 
+  get traceId(): string | undefined {
+    return this._traceId;
+  }
+
   /** Set a factory function for creating actor instances (used by supervisor for restarts). */
   setActorFactory(factory: ActorFactory): void {
     this.actorFactory = factory;
@@ -60,6 +69,11 @@ export class ActorSystem {
   /** Spawn an actor and start its lifecycle. */
   async spawn(actor: Actor): Promise<void> {
     this.actors.set(actor.id, actor);
+
+    // Propagate traceId
+    if (this._traceId) {
+      actor.setTraceId(this._traceId);
+    }
 
     actor.setEventHandler((event, actorId, error) => {
       if (event === "died" && error) {
@@ -79,6 +93,8 @@ export class ActorSystem {
 
     // Monitor all request-scoped actors (including PM) for heartbeat
     this.heartbeat.startMonitoring(actor.id);
+
+    actorLog("info", actor.id, `Spawned (role=${actor.role})`, this._traceId);
   }
 
   /** Stop a specific actor. */
@@ -89,6 +105,7 @@ export class ActorSystem {
     actor.onStop();
     this.heartbeat.stopMonitoring(actorId);
     this.actors.delete(actorId);
+    actorLog("info", actorId, "Stopped", this._traceId);
   }
 
   /** Stop all actors and cleanup. */
@@ -107,8 +124,13 @@ export class ActorSystem {
   send(message: ActorMessage): void {
     const target = this.actors.get(message.to);
     if (!target) {
-      console.warn(`[ActorSystem] No actor found with ID: ${message.to}`);
+      actorLog("warn", "system", `No actor found with ID: ${message.to}`, this._traceId);
       return;
+    }
+
+    // Propagate traceId
+    if (this._traceId && !message.traceId) {
+      (message as { traceId?: string }).traceId = this._traceId;
     }
 
     target.send(message);
@@ -150,7 +172,7 @@ export class ActorSystem {
     const actor = this.actors.get(actorId);
     if (!actor) return;
 
-    console.warn(`[ActorSystem] Heartbeat timeout for actor: ${actorId}`);
+    actorLog("warn", actorId, "Heartbeat timeout", this._traceId);
     this.handleActorDeath(actorId, new Error("Heartbeat timeout"));
   }
 
@@ -159,8 +181,11 @@ export class ActorSystem {
     if (!actor) return;
 
     const state = actor.getState();
-    console.warn(
-      `[ActorSystem] Actor died: ${actorId} (role=${state.role}, restarts=${state.restartCount}/${state.maxRestarts}), error: ${error.message}`
+    actorLog(
+      "warn",
+      actorId,
+      `Actor died (role=${state.role}, restarts=${state.restartCount}/${state.maxRestarts}): ${error.message}`,
+      this._traceId,
     );
 
     // Notify client about the restart
@@ -176,8 +201,11 @@ export class ActorSystem {
 
     // Check if we can restart
     if (state.restartCount >= this.strategy.maxRestarts) {
-      console.error(`[ActorSystem] Max restarts exceeded for actor: ${actorId}`);
+      actorLog("error", actorId, "Max restarts exceeded", this._traceId);
       this.stop(actorId);
+
+      // Classify the error for deterministic recovery
+      const errorType = classifyError(error);
 
       // Notify PM about the permanent failure
       const pmActor = this.getActorsByRole("pm")[0];
@@ -186,6 +214,7 @@ export class ActorSystem {
           actorId,
           agentRole: state.role,
           error: `Actor ${actorId} permanently failed after ${state.maxRestarts} restarts: ${error.message}`,
+          errorType,
           recoverable: false,
         } satisfies ErrorPayload);
         this.send(errorMsg);
@@ -248,4 +277,22 @@ export class ActorSystem {
   getAllStates() {
     return Array.from(this.actors.values()).map((a) => a.getState());
   }
+}
+
+// ---- Error Classification ----
+
+/** Classify an error for deterministic recovery decisions. */
+function classifyError(error: Error): ActorErrorType {
+  const msg = error.message.toLowerCase();
+
+  if (msg.includes("timeout") || msg.includes("timed out") || msg.includes("aborted")) {
+    return "api_timeout";
+  }
+  if (msg.includes("rate limit") || msg.includes("429") || msg.includes("too many requests")) {
+    return "rate_limit";
+  }
+  if (msg.includes("invalid") || msg.includes("parse") || msg.includes("json")) {
+    return "invalid_response";
+  }
+  return "unknown";
 }
