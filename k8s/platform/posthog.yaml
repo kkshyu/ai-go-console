@@ -1,0 +1,78 @@
+---
+# Built-in PostHog — Product Analytics
+# Multi-tenant: each org gets its own project (org-<slug>)
+# Uses lightweight dev setup with built-in PostgreSQL
+apiVersion: v1
+kind: Secret
+metadata:
+  name: posthog-credentials
+  namespace: aigo-system
+type: Opaque
+stringData:
+  SECRET_KEY: posthog_dev_secret_key_change_in_prod
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: posthog
+  namespace: aigo-system
+  labels:
+    app: posthog
+    aigo.dev/component: posthog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: posthog
+  template:
+    metadata:
+      labels:
+        app: posthog
+    spec:
+      containers:
+        - name: posthog
+          image: posthog/posthog:release-1.43.1
+          ports:
+            - containerPort: 8000
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: posthog-credentials
+                  key: SECRET_KEY
+            - name: DATABASE_URL
+              value: "postgresql://supabase_admin:supabase_dev_password@supabase-db.aigo-system.svc.cluster.local:5432/posthog"
+            - name: REDIS_URL
+              value: "redis://redis.aigo-system.svc.cluster.local:6379/"
+            - name: DISABLE_SECURE_SSL_REDIRECT
+              value: "true"
+            - name: IS_BEHIND_PROXY
+              value: "true"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+          readinessProbe:
+            httpGet:
+              path: /_health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: posthog
+  namespace: aigo-system
+  labels:
+    app: posthog
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+  selector:
+    app: posthog

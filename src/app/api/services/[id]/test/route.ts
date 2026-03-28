@@ -237,6 +237,59 @@ const testers: Record<ServiceType, ServiceTester> = {
     throw new Error(`Built-in Supabase returned ${res.status}`);
   },
 
+  // --- built-in infrastructure (platform-managed) ---
+  built_in_keycloak: async (_config, endpointUrl) => {
+    const url = endpointUrl || _config.url;
+    if (!url) return { success: true, message: "Built-in Keycloak configuration valid" };
+    const res = await fetch(`${url}/health/ready`, { signal: AbortSignal.timeout(5000) });
+    if (res.ok) return { success: true, message: "Built-in Keycloak connection OK" };
+    throw new Error(`Built-in Keycloak returned ${res.status}`);
+  },
+  built_in_minio: async (_config, endpointUrl) => {
+    const url = endpointUrl || _config.endpoint;
+    if (!url) return { success: true, message: "Built-in MinIO configuration valid" };
+    const res = await fetch(`${url}/minio/health/ready`, { signal: AbortSignal.timeout(5000) });
+    if (res.ok) return { success: true, message: "Built-in MinIO connection OK" };
+    throw new Error(`Built-in MinIO returned ${res.status}`);
+  },
+  built_in_n8n: async (_config, endpointUrl) => {
+    const url = endpointUrl || _config.url;
+    if (!url) return { success: true, message: "Built-in n8n configuration valid" };
+    const res = await fetch(`${url}/healthz`, { signal: AbortSignal.timeout(5000) });
+    if (res.ok) return { success: true, message: "Built-in n8n connection OK" };
+    throw new Error(`Built-in n8n returned ${res.status}`);
+  },
+  built_in_qdrant: async (_config, endpointUrl) => {
+    const url = endpointUrl || _config.url;
+    if (!url) return { success: true, message: "Built-in Qdrant configuration valid" };
+    const res = await fetch(`${url}/readyz`, { signal: AbortSignal.timeout(5000) });
+    if (res.ok) return { success: true, message: "Built-in Qdrant connection OK" };
+    throw new Error(`Built-in Qdrant returned ${res.status}`);
+  },
+  built_in_meilisearch: async (_config, endpointUrl) => {
+    const url = endpointUrl || _config.url;
+    if (!url) return { success: true, message: "Built-in Meilisearch configuration valid" };
+    const headers: Record<string, string> = {};
+    if (_config.apiKey) headers["Authorization"] = `Bearer ${_config.apiKey}`;
+    const res = await fetch(`${url}/health`, { headers, signal: AbortSignal.timeout(5000) });
+    if (res.ok) return { success: true, message: "Built-in Meilisearch connection OK" };
+    throw new Error(`Built-in Meilisearch returned ${res.status}`);
+  },
+  built_in_posthog: async (_config, endpointUrl) => {
+    const url = endpointUrl || _config.url;
+    if (!url) return { success: true, message: "Built-in PostHog configuration valid" };
+    const res = await fetch(`${url}/_health`, { signal: AbortSignal.timeout(5000) });
+    if (res.ok) return { success: true, message: "Built-in PostHog connection OK" };
+    throw new Error(`Built-in PostHog returned ${res.status}`);
+  },
+  built_in_metabase: async (_config, endpointUrl) => {
+    const url = endpointUrl || _config.url;
+    if (!url) return { success: true, message: "Built-in Metabase configuration valid" };
+    const res = await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(5000) });
+    if (res.ok) return { success: true, message: "Built-in Metabase connection OK" };
+    throw new Error(`Built-in Metabase returned ${res.status}`);
+  },
+
   // --- built-in industry (platform-managed, always available) ---
   built_in_restaurant: async () => ({ success: true, message: "Built-in Restaurant service OK" }),
   built_in_medical: async () => ({ success: true, message: "Built-in Medical service OK" }),

@@ -5,6 +5,13 @@ import { prisma } from "@/lib/db";
 import { ALL_SERVICE_TYPES } from "@/lib/service-types";
 import { encrypt } from "@/lib/crypto";
 import { provisionSupabaseProject } from "@/lib/builtin-supabase";
+import { provisionKeycloakRealm } from "@/lib/builtin-keycloak";
+import { provisionMinioBucket } from "@/lib/builtin-minio";
+import { provisionN8nWorkspace } from "@/lib/builtin-n8n";
+import { provisionQdrantCollection } from "@/lib/builtin-qdrant";
+import { provisionMeilisearchIndex } from "@/lib/builtin-meilisearch";
+import { provisionPostHogProject } from "@/lib/builtin-posthog";
+import { provisionMetabaseGroup } from "@/lib/builtin-metabase";
 import type { ServiceType } from "@prisma/client";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -68,6 +75,37 @@ async function createOrganizationWithDefaults(name: string) {
       organizationId: org.id,
     },
   });
+
+  // Auto-provision built-in infrastructure services (graceful degradation)
+  const infraProvisions: { name: string; type: ServiceType; provision: () => Promise<Record<string, unknown>>; endpointUrlKey?: string }[] = [
+    { name: "Built-in Keycloak", type: "built_in_keycloak" as ServiceType, provision: async () => { const c = await provisionKeycloakRealm(orgSlug); return { url: c.url, realm: c.realm, clientId: c.clientId, clientSecret: c.clientSecret }; }, endpointUrlKey: "url" },
+    { name: "Built-in MinIO", type: "built_in_minio" as ServiceType, provision: async () => { const c = await provisionMinioBucket(orgSlug); return { endpoint: c.endpoint, accessKey: c.accessKey, secretKey: c.secretKey, bucket: c.bucket }; }, endpointUrlKey: "endpoint" },
+    { name: "Built-in n8n", type: "built_in_n8n" as ServiceType, provision: async () => { const c = await provisionN8nWorkspace(orgSlug); return { url: c.url, apiKey: c.apiKey, webhookUrl: c.webhookUrl }; }, endpointUrlKey: "url" },
+    { name: "Built-in Qdrant", type: "built_in_qdrant" as ServiceType, provision: async () => { const c = await provisionQdrantCollection(orgSlug); return { url: c.url, apiKey: c.apiKey, collectionPrefix: c.collectionPrefix }; }, endpointUrlKey: "url" },
+    { name: "Built-in Meilisearch", type: "built_in_meilisearch" as ServiceType, provision: async () => { const c = await provisionMeilisearchIndex(orgSlug); return { url: c.url, apiKey: c.apiKey, indexPrefix: c.indexPrefix }; }, endpointUrlKey: "url" },
+    { name: "Built-in PostHog", type: "built_in_posthog" as ServiceType, provision: async () => { const c = await provisionPostHogProject(orgSlug); return { url: c.url, apiKey: c.apiKey, projectId: c.projectId }; }, endpointUrlKey: "url" },
+    { name: "Built-in Metabase", type: "built_in_metabase" as ServiceType, provision: async () => { const c = await provisionMetabaseGroup(orgSlug); return { url: c.url, apiKey: c.apiKey, groupName: c.groupName }; }, endpointUrlKey: "url" },
+  ];
+
+  for (const svc of infraProvisions) {
+    try {
+      const creds = await svc.provision();
+      const cfg = encrypt(JSON.stringify(creds));
+      await prisma.service.create({
+        data: {
+          name: svc.name,
+          type: svc.type,
+          endpointUrl: svc.endpointUrlKey ? (creds[svc.endpointUrlKey] as string) : undefined,
+          configEncrypted: cfg.ciphertext,
+          iv: cfg.iv,
+          authTag: cfg.authTag,
+          organizationId: org.id,
+        },
+      });
+    } catch {
+      // Graceful degradation: service not available yet
+    }
+  }
 
   return org;
 }
