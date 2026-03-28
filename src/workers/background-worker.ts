@@ -12,6 +12,7 @@
 import { createWorker, closeAllQueues } from "../lib/queue";
 import type { Job } from "bullmq";
 import type { QueueJobPayload } from "../lib/queue/types";
+import type { BackgroundMessage, BackgroundMessageType } from "../lib/actors/types";
 
 // Lazy-import actors to avoid loading unnecessary dependencies
 async function createActors() {
@@ -101,10 +102,10 @@ async function main() {
 /**
  * Convert a BullMQ Job to the BackgroundMessage format expected by actors.
  */
-function jobToMessage(job: Job<QueueJobPayload>) {
+function jobToMessage(job: Job<QueueJobPayload>): BackgroundMessage {
   return {
     id: `bg-msg-${job.id}`,
-    type: job.data.type as string,
+    type: job.data.type as BackgroundMessageType,
     requestId: job.data.requestId || `req-${job.id}`,
     payload: job.data.payload,
     timestamp: job.timestamp || Date.now(),

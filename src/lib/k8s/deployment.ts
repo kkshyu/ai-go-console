@@ -30,7 +30,6 @@ export async function tagImage(
 
 /**
  * Deploy a production app as a k8s Deployment + Service.
- * Equivalent to `docker compose up -d --build`.
  */
 export async function startApp(
   orgSlug: string,

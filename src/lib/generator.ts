@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import Handlebars from "handlebars";
@@ -14,11 +13,6 @@ import {
 import type { ServiceType } from "@prisma/client";
 import * as sandbox from "@/lib/k8s/sandbox";
 
-/**
- * Metadata directory on host — only stores docker-compose.yml for production.
- * App source code lives exclusively inside Docker containers.
- */
-const APPS_META_ROOT = path.join(process.cwd(), "apps");
 
 export interface GenerateAppOptions {
   appId: string;
@@ -103,23 +97,7 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
   await sandbox.createDevContainer(orgSlug, slug, template, port, envVars);
 
   // Inject all rendered files into the container
-  // Filter out docker-compose.yml — it stays on host for production
-  const containerFiles = renderedFiles.filter(
-    (f) => f.path !== "docker-compose.yml"
-  );
-  await sandbox.writeFiles(orgSlug, slug, containerFiles);
-
-  // Write docker-compose.yml to host metadata directory (for production use)
-  const composeFile = renderedFiles.find((f) => f.path === "docker-compose.yml");
-  if (composeFile) {
-    const metaDir = path.join(APPS_META_ROOT, slug);
-    await fsp.mkdir(metaDir, { recursive: true });
-    await fsp.writeFile(
-      path.join(metaDir, "docker-compose.yml"),
-      composeFile.content,
-      "utf-8"
-    );
-  }
+  await sandbox.writeFiles(orgSlug, slug, renderedFiles);
 
   return sandbox.devContainerName(orgSlug, slug);
 }
@@ -217,49 +195,11 @@ export async function resolveServiceEnvVars(appId: string): Promise<Record<strin
 }
 
 /**
- * Regenerate only the docker-compose.yml for an app,
- * picking up the latest service bindings without wiping app code.
- */
-export async function regenerateCompose(appId: string, slug: string, orgSlug: string, template: string, prodPort: number): Promise<void> {
-  const tmpl = getTemplate(template);
-  if (!tmpl) throw new Error(`Template "${template}" not found`);
-
-  const composeSrc = path.join(tmpl.directory, "docker-compose.yml.hbs");
-  if (!fs.existsSync(composeSrc)) return;
-
-  const envVars = await resolveServiceEnvVars(appId);
-  const context = { slug, orgSlug, prodPort, envVars };
-
-  const content = await fsp.readFile(composeSrc, "utf-8");
-  const compiled = Handlebars.compile(content);
-  const rendered = compiled(context);
-
-  // Write to host metadata directory
-  const metaDir = path.join(APPS_META_ROOT, slug);
-  await fsp.mkdir(metaDir, { recursive: true });
-  await fsp.writeFile(path.join(metaDir, "docker-compose.yml"), rendered, "utf-8");
-}
-
-/**
- * Removes an app's dev container and image, plus host metadata.
+ * Removes an app's dev container and image.
  */
 export async function removeApp(orgSlug: string, slug: string): Promise<void> {
   await sandbox.removeDevContainer(orgSlug, slug);
   await sandbox.removeDevImage(orgSlug, slug);
-
-  // Clean up host metadata directory
-  const metaDir = path.join(APPS_META_ROOT, slug);
-  if (fs.existsSync(metaDir)) {
-    await fsp.rm(metaDir, { recursive: true, force: true });
-  }
-}
-
-/**
- * Returns the host metadata path for an app (only docker-compose.yml lives here).
- * @deprecated Use docker-sandbox functions for file operations.
- */
-export function getAppPath(slug: string): string {
-  return path.join(APPS_META_ROOT, slug);
 }
 
 /**

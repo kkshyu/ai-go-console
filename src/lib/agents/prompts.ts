@@ -272,7 +272,7 @@ IMPORTANT rules for "files":
 - Each file must have a "path" (relative to app root) and "content" (complete, runnable source code)
 - Files OVERRIDE template defaults if paths match — use this to replace the placeholder page.tsx with your custom implementation
 - You MUST produce ALL source files needed: pages, components, API routes, utility functions, types, etc.
-- Do NOT include infrastructure files (package.json, Dockerfile, docker-compose.yml, tsconfig.json, next.config.ts, vite.config.ts) — the template handles these
+- Do NOT include infrastructure files (package.json, Dockerfile, tsconfig.json, next.config.ts, vite.config.ts) — the template handles these
 - Do NOT include globals.css or layout.tsx unless you need to customize them
 - For "nextjs-fullstack" template: write App Router files (src/app/page.tsx, src/app/api/*/route.ts, src/components/*.tsx)
 - For "react-spa" template: write Vite React files (src/App.tsx, src/components/*.tsx)
@@ -603,7 +603,7 @@ IMPORTANT rules for "modify_files":
 - When modifying an existing file, you MUST include the ENTIRE file content — not just the changed parts. Preserve all unchanged code.
 - Only include files that need to be created or changed — do not re-output unchanged files
 - "npmPackages" is optional — only include when new dependencies are needed
-- Do NOT modify infrastructure files (package.json, Dockerfile, docker-compose.yml, tsconfig.json, next.config.ts, vite.config.ts) — only source code files
+- Do NOT modify infrastructure files (package.json, Dockerfile, tsconfig.json, next.config.ts, vite.config.ts) — only source code files
 - All code must be TypeScript and complete — no placeholder comments like "// TODO" or "// implement here"
 
 When suggesting app configuration changes (services, description), output:

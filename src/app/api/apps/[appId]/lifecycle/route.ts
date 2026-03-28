@@ -6,7 +6,6 @@ import crypto from "node:crypto";
 import { prisma, getOrgSlug } from "@/lib/db";
 import { startDevServer, stopDevServer, getDevServerLogs } from "@/lib/dev-server";
 import { startApp, stopApp, restartApp, getAppLogs, getAppDockerStatus, tagImage, startAppFromImage } from "@/lib/k8s/deployment";
-import { regenerateCompose, getAppPath } from "@/lib/generator";
 import { syncRoutes } from "@/lib/k8s/ingress";
 import * as sandbox from "@/lib/k8s/sandbox";
 import { getTemplate } from "@/lib/templates";
@@ -67,9 +66,6 @@ export async function POST(
           },
         });
 
-        // Regenerate docker-compose.yml with latest service bindings
-        await regenerateCompose(app.id, app.slug, orgSlug, app.template, app.prodPort!);
-
         // Export source from dev container to temp directory for production build
         const tmpDir = path.join(os.tmpdir(), `aigo-publish-${crypto.randomUUID()}`);
         try {
@@ -81,10 +77,6 @@ export async function POST(
             const dockerfileSrc = path.join(tmpl.directory, "Dockerfile");
             await fsp.copyFile(dockerfileSrc, path.join(tmpDir, "Dockerfile"));
           }
-
-          // Copy docker-compose.yml from host metadata directory
-          const composeSrc = path.join(getAppPath(app.slug), "docker-compose.yml");
-          await fsp.copyFile(composeSrc, path.join(tmpDir, "docker-compose.yml"));
 
           // Stop existing production deployment before re-deploying
           try {

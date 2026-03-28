@@ -1,8 +1,4 @@
 import { test, expect } from "@playwright/test";
-import fs from "node:fs";
-import path from "node:path";
-
-const APPS_DIR = path.join(process.cwd(), "apps");
 
 test.describe("App Generator", () => {
   const ts = Date.now();
@@ -16,7 +12,7 @@ test.describe("App Generator", () => {
     expect(userId).toBeDefined();
   });
 
-  test("generates react-spa app with metadata", async ({ request }) => {
+  test("generates react-spa app", async ({ request }) => {
     expect(userId).toBeDefined();
     const res = await request.post("/api/apps", {
       data: {
@@ -29,11 +25,7 @@ test.describe("App Generator", () => {
     expect(res.status()).toBe(201);
     const app = await res.json();
     appIds.push(app.id);
-
-    // Host metadata directory should exist with docker-compose.yml
-    const appDir = path.join(APPS_DIR, app.slug);
-    expect(fs.existsSync(appDir)).toBe(true);
-    expect(fs.existsSync(path.join(appDir, "docker-compose.yml"))).toBe(true);
+    expect(app.slug).toBeDefined();
   });
 
   test("generates node-api app", async ({ request }) => {
@@ -48,9 +40,7 @@ test.describe("App Generator", () => {
     expect(res.status()).toBe(201);
     const app = await res.json();
     appIds.push(app.id);
-
-    const appDir = path.join(APPS_DIR, app.slug);
-    expect(fs.existsSync(path.join(appDir, "docker-compose.yml"))).toBe(true);
+    expect(app.slug).toBeDefined();
   });
 
   test("generates nextjs-fullstack app", async ({ request }) => {
@@ -65,24 +55,7 @@ test.describe("App Generator", () => {
     expect(res.status()).toBe(201);
     const app = await res.json();
     appIds.push(app.id);
-
-    const appDir = path.join(APPS_DIR, app.slug);
-    expect(fs.existsSync(path.join(appDir, "docker-compose.yml"))).toBe(true);
-  });
-
-  test("docker-compose.yml contains app slug and port", async ({ request }) => {
-    if (appIds.length === 0) return;
-    const appRes = await request.get(`/api/apps/${appIds[0]}`);
-    const app = await appRes.json();
-
-    const composePath = path.join(APPS_DIR, app.slug, "docker-compose.yml");
-    expect(fs.existsSync(composePath)).toBe(true);
-
-    const content = fs.readFileSync(composePath, "utf-8");
-    expect(content).toContain(app.slug);
-    // Port mapping is present in docker-compose (format: "XXXX:80")
-    expect(content).toMatch(/ports:/);
-    expect(content).toMatch(/\d+:80/);
+    expect(app.slug).toBeDefined();
   });
 
   test("cleanup", async ({ request }) => {
