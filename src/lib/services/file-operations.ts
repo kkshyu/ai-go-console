@@ -5,11 +5,25 @@
  * based on agent output.
  */
 
+import path from "node:path";
+
 import { writeFiles } from "../k8s/sandbox";
 
 export interface FileOperationResult {
   filesWritten: number;
   paths: string[];
+}
+
+/**
+ * Sanitize a file path to prevent path traversal attacks.
+ * Returns the normalized path if safe, or null if the path is rejected.
+ */
+export function sanitizeFilePath(filePath: string): string | null {
+  if (filePath.includes("\0")) return null;
+  if (filePath.startsWith("/") || filePath.startsWith("\\")) return null;
+  const normalized = path.normalize(filePath);
+  if (normalized.includes("..")) return null;
+  return normalized;
 }
 
 /**
@@ -43,9 +57,12 @@ export async function executeFileOperations(
     return null;
   }
 
-  await writeFiles(orgSlug, appSlug, files);
+  const safeFiles = files.filter((f) => sanitizeFilePath(f.path) !== null);
+  if (safeFiles.length === 0) return null;
+
+  await writeFiles(orgSlug, appSlug, safeFiles);
   return {
-    filesWritten: files.length,
-    paths: files.map((f) => f.path),
+    filesWritten: safeFiles.length,
+    paths: safeFiles.map((f) => f.path),
   };
 }

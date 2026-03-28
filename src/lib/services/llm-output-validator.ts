@@ -5,6 +5,8 @@
  * instead of relying purely on regex + JSON.parse.
  */
 
+import { sanitizeFilePath } from "./file-operations";
+
 // ---- JSON Extraction ----
 
 /**
@@ -230,12 +232,15 @@ export function validateAgentFileOutput(content: string): AgentOutputFiles | nul
   if (!parsed.action || typeof parsed.action !== "string") return null;
   if (!Array.isArray(parsed.files)) return null;
 
-  // Validate each file has path and content
-  for (const file of parsed.files) {
+  // Validate each file has path and content, and sanitize paths
+  parsed.files = parsed.files.filter((file) => {
     if (typeof file.path !== "string" || typeof file.content !== "string") {
-      return null;
+      return false;
     }
-  }
+    return sanitizeFilePath(file.path) !== null;
+  });
+
+  if (parsed.files.length === 0) return null;
 
   return parsed;
 }
