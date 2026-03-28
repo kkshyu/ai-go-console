@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,8 +21,7 @@ import {
   Search,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { AgentChatPanel } from "@/components/chat/agent-chat-panel";
-import type { AgentRole } from "@/lib/agents/types";
+import { ChatPanel } from "@/components/chat/chat-panel";
 
 type CreateMode = "quick" | "chat";
 
@@ -107,7 +105,6 @@ const CATEGORIES = ["finance", "legal", "sales", "hr", "marketing", "pm", "it", 
 
 export default function CreateAppPage() {
   const t = useTranslations("create");
-  const tAgents = useTranslations("agents");
   const router = useRouter();
 
   const [mode, setMode] = useState<CreateMode>("quick");
@@ -117,11 +114,11 @@ export default function CreateAppPage() {
   const [presetError, setPresetError] = useState<string | null>(null);
 
   // Chat mode state
-  const [previewPort, setPreviewPort] = useState<number | null>(null);
   const [creatingApp, setCreatingApp] = useState(false);
   const [serviceWarning, setServiceWarning] = useState<string | null>(null);
   const [allowedServices, setAllowedServices] = useState<string[]>([]);
-  const [pipelineId, setPipelineId] = useState<string | null>(null);
+  const [serviceInstances, setServiceInstances] = useState<Array<{ id: string; name: string; type: string }>>([]);
+  const chatMessagesRef = useRef<{ role: string; content: string }[]>([]);
 
   useEffect(() => {
     fetch("/api/organizations")
@@ -135,23 +132,25 @@ export default function CreateAppPage() {
         }
       })
       .catch(() => {});
-  }, []);
-
-  // Only create pipeline when chat mode is first selected
-  useEffect(() => {
-    if (mode !== "chat" || pipelineId) return;
-    fetch("/api/pipelines", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    })
+    // Also fetch service instances to resolve types to IDs
+    fetch("/api/services")
       .then((r) => r.json())
-      .then((pipeline) => setPipelineId(pipeline.id))
+      .then((services) => {
+        if (Array.isArray(services)) {
+          setServiceInstances(services.map((s: { id: string; name: string; type: string }) => ({
+            id: s.id,
+            name: s.name,
+            type: s.type,
+          })));
+        }
+      })
       .catch(() => {});
-  }, [mode, pipelineId]);
+  }, []);
 
   const handleCreateApp = useCallback(
     async (action: CreateAppAction) => {
+      // Resolve required services: check authorization and map types to instance IDs
+      let serviceIds: string[] | undefined;
       if (action.requiredServices && action.requiredServices.length > 0) {
         const getServiceType = (s: string | ServiceRef): string =>
           typeof s === "string" ? s : s.type;
@@ -165,6 +164,28 @@ export default function CreateAppPage() {
           setServiceWarning(`${t("serviceNotAuthorized")}: ${names.join(", ")}`);
           return;
         }
+
+        // Resolve service types to instance IDs (prefer matching by instanceId if provided)
+        const resolvedIds: string[] = [];
+        const missingTypes: string[] = [];
+        for (const svc of action.requiredServices) {
+          if (typeof svc !== "string" && svc.instanceId) {
+            resolvedIds.push(svc.instanceId);
+          } else {
+            const svcType = getServiceType(svc);
+            const instance = serviceInstances.find((si) => si.type === svcType);
+            if (instance) {
+              resolvedIds.push(instance.id);
+            } else {
+              missingTypes.push(svcType);
+            }
+          }
+        }
+        if (missingTypes.length > 0) {
+          setServiceWarning(`${t("serviceNotAuthorized")}: ${missingTypes.join(", ")}`);
+          return;
+        }
+        serviceIds = resolvedIds;
       }
 
       setCreatingApp(true);
@@ -180,28 +201,37 @@ export default function CreateAppPage() {
             config: action.config || {},
             files: action.files,
             npmPackages: action.npmPackages,
+            serviceIds,
           }),
         });
         if (!res.ok) throw new Error("Failed to create app");
         const app = await res.json();
-        // Start dev server then navigate to app detail page
+        // Save creation chat messages to the app
+        for (const msg of chatMessagesRef.current) {
+          await fetch(`/api/apps/${app.id}/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ role: msg.role, content: msg.content }),
+          }).catch(() => {});
+        }
+        // Start dev server then navigate to app detail page with develop flag
         await fetch(`/api/apps/${app.id}/lifecycle`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "dev-start" }),
         }).catch(() => {});
-        router.push(`/apps/${app.id}`);
+        router.push(`/apps/${app.id}?develop=true`);
       } catch {
         // Error handled via chat message
       } finally {
         setCreatingApp(false);
       }
     },
-    [allowedServices, t]
+    [allowedServices, serviceInstances, t, router]
   );
 
   const handleAssistantResponse = useCallback(
-    (content: string, _agentRole?: AgentRole) => {
+    (content: string) => {
       const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
       if (!jsonMatch) return;
       try {
@@ -212,7 +242,13 @@ export default function CreateAppPage() {
     [handleCreateApp]
   );
 
-  const handleOrchestrationUpdate = useCallback(() => {}, []);
+  const handleUserMessage = useCallback((content: string) => {
+    chatMessagesRef.current.push({ role: "user", content });
+  }, []);
+
+  const handleAssistantComplete = useCallback((content: string) => {
+    chatMessagesRef.current.push({ role: "assistant", content });
+  }, []);
 
   const handlePresetCreate = useCallback(
     async (preset: AppPreset) => {
@@ -238,7 +274,7 @@ export default function CreateAppPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "dev-start" }),
         });
-        router.push(`/apps/${app.id}`);
+        router.push(`/apps/${app.id}?develop=true`);
       } catch (err) {
         setPresetError(err instanceof Error ? err.message : t("createFailed"));
         setCreatingPreset(null);
@@ -388,45 +424,24 @@ export default function CreateAppPage() {
 
       {/* Chat Mode */}
       {mode === "chat" && (
-        <div className="flex flex-1 gap-4 min-h-0">
-          <div className="flex flex-1 flex-col min-h-0">
+        <div className="flex flex-1 min-h-0">
+          <div className="flex flex-1 flex-col min-h-0 max-w-3xl">
             {serviceWarning && (
               <div className="mb-3 flex items-center gap-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-700 dark:bg-yellow-950 dark:text-yellow-200">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 <span>{serviceWarning}</span>
               </div>
             )}
-            <AgentChatPanel
+            <ChatPanel
               placeholder={t("placeholder")}
-              emptyStateText={tAgents("emptyState")}
+              emptyStateText={t("chatEmptyState")}
               generatingText={t("generating")}
               totalTokensLabel={t("totalTokens")}
               externalLoading={creatingApp}
               onAssistantResponse={handleAssistantResponse}
-              onOrchestrationUpdate={handleOrchestrationUpdate}
-              pipelineId={pipelineId || undefined}
-              showProgress={true}
+              onUserMessage={handleUserMessage}
+              onAssistantComplete={handleAssistantComplete}
             />
-          </div>
-
-          {/* Preview Panel */}
-          <div className="hidden lg:flex w-1/2">
-            <Card className="flex flex-1 flex-col overflow-hidden">
-              {previewPort ? (
-                <iframe
-                  src={`http://localhost:${previewPort}`}
-                  className="flex-1 w-full border-0"
-                  title="App Preview"
-                />
-              ) : (
-                <CardContent className="flex flex-1 items-center justify-center text-center text-muted-foreground">
-                  <div>
-                    <p className="text-lg font-medium">{t("preview")}</p>
-                    <p className="text-sm mt-1">{tAgents("previewHint")}</p>
-                  </div>
-                </CardContent>
-              )}
-            </Card>
           </div>
         </div>
       )}

@@ -115,6 +115,7 @@
     "creating": "Creating...",
     "createFailed": "Failed to create application. Please try again later.",
     "allCategories": "All",
+    "chatEmptyState": "Describe the app you want to build and AI will help analyze requirements",
     "presets": {
       "finance-expense-report": {
         "name": "Expense Report System",
