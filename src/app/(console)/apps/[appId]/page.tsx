@@ -75,6 +75,7 @@ export default function AppDetailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const t = useTranslations("apps");
+  const tc = useTranslations("common");
   const [app, setApp] = useState<AppData | null>(null);
   const [devLogs, setDevLogs] = useState("");
   const [loading, setLoading] = useState(false);
@@ -353,7 +354,7 @@ export default function AppDetailPage() {
       });
       const data = await res.json();
       if (action === "publish") {
-        setBuildOutput(data.output || (data.error ? `Error: ${data.error}` : "Build completed"));
+        setBuildOutput(data.output || (data.error ? `${tc("error")}: ${data.error}` : t("buildCompleted")));
         fetchDeployments();
       }
       if (action === "dev-start") {
@@ -366,7 +367,7 @@ export default function AppDetailPage() {
       setApp(await appRes.json());
     } catch (err) {
       if (action === "publish") {
-        setBuildOutput("Build failed: " + (err instanceof Error ? err.message : "Unknown error"));
+        setBuildOutput(t("buildFailed", { error: err instanceof Error ? err.message : "Unknown error" }));
       }
       console.error(err);
     } finally {
@@ -385,19 +386,19 @@ export default function AppDetailPage() {
         body: JSON.stringify({ action: "rollback", deploymentId }),
       });
       const data = await res.json();
-      setBuildOutput(data.output || (data.error ? `Error: ${data.error}` : "Rollback completed"));
+      setBuildOutput(data.output || (data.error ? `${tc("error")}: ${data.error}` : t("rollbackCompleted")));
       fetchDeployments();
       const appRes = await fetch(`/api/apps/${appId}`);
       setApp(await appRes.json());
     } catch (err) {
-      setBuildOutput("Rollback failed: " + (err instanceof Error ? err.message : "Unknown error"));
+      setBuildOutput(t("rollbackFailed", { error: err instanceof Error ? err.message : "Unknown error" }));
     } finally {
       setRollingBack(false);
     }
   }
 
   async function handleDelete() {
-    if (!confirm("Are you sure?")) return;
+    if (!confirm(tc("confirmAction"))) return;
     await fetch(`/api/apps/${appId}`, { method: "DELETE" });
     router.push("/apps");
   }
@@ -484,7 +485,7 @@ export default function AppDetailPage() {
       setEditingSlug(false);
     } else {
       const data = await res.json();
-      setSlugError(data.error || "Failed to update slug");
+      setSlugError(data.error || t("slugUpdateFailed"));
     }
     setSavingSlug(false);
   }
@@ -644,7 +645,7 @@ export default function AppDetailPage() {
     );
   }
 
-  if (!app) return <div className="p-8">Loading...</div>;
+  if (!app) return <div className="p-8">{tc("loading")}</div>;
 
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col">
@@ -856,7 +857,7 @@ export default function AppDetailPage() {
                           setPreviewUrlMode((m) => m === "local" ? "proxy" : "local");
                           setIframeKey((k) => k + 1);
                         }}
-                        title={previewUrlMode === "local" ? "Switch to Traefik proxy" : "Switch to localhost"}
+                        title={previewUrlMode === "local" ? t("switchToTraefik") : t("switchToLocalhost")}
                       >
                         <ArrowLeftRight className="h-3 w-3" />
                       </Button>
@@ -865,7 +866,7 @@ export default function AppDetailPage() {
                         size="icon"
                         className="h-5 w-5 shrink-0"
                         onClick={() => setIframeKey((k) => k + 1)}
-                        title="Refresh"
+                        title={tc("refresh")}
                       >
                         <RotateCw className="h-3 w-3" />
                       </Button>
@@ -879,7 +880,7 @@ export default function AppDetailPage() {
                       size="icon"
                       className="h-6 w-6 shrink-0"
                       onClick={() => window.open(previewUrl!, "_blank")}
-                      title="Open in browser"
+                      title={t("openInBrowser")}
                     >
                       <ExternalLink className="h-3 w-3" />
                     </Button>
@@ -900,7 +901,7 @@ export default function AppDetailPage() {
                       key={iframeKey}
                       src={`${previewUrl || `http://localhost:${app.port}`}${devPath}`}
                       className="flex-1 w-full border-0"
-                      title="App Preview"
+                      title={t("appPreview")}
                     />
                   )}
                 </>
@@ -983,7 +984,7 @@ export default function AppDetailPage() {
                         size="icon"
                         className="h-5 w-5 shrink-0"
                         onClick={() => setProdIframeKey((k) => k + 1)}
-                        title="Refresh"
+                        title={tc("refresh")}
                       >
                         <RotateCw className="h-3 w-3" />
                       </Button>
@@ -994,7 +995,7 @@ export default function AppDetailPage() {
                       size="icon"
                       className="h-6 w-6 shrink-0"
                       onClick={() => window.open(`http://localhost:${app.prodPort}`, "_blank")}
-                      title="Open in browser"
+                      title={t("openInBrowser")}
                     >
                       <ExternalLink className="h-3 w-3" />
                     </Button>
@@ -1010,7 +1011,7 @@ export default function AppDetailPage() {
                       key={prodIframeKey}
                       src={`${prodUrl || `http://localhost:${app.prodPort}`}${prodPath}`}
                       className="flex-1 w-full border-0"
-                      title="Production Preview"
+                      title={t("productionPreview")}
                     />
                   )}
                 </>
@@ -1055,7 +1056,7 @@ export default function AppDetailPage() {
                       size="icon"
                       className="h-5 w-5 shrink-0"
                       onClick={() => setDeployUrlMode((m) => m === "local" ? "proxy" : "local")}
-                      title={deployUrlMode === "local" ? "Switch to Traefik proxy" : "Switch to localhost"}
+                      title={deployUrlMode === "local" ? t("switchToTraefik") : t("switchToLocalhost")}
                     >
                       <ArrowLeftRight className="h-3 w-3" />
                     </Button>
@@ -1064,7 +1065,7 @@ export default function AppDetailPage() {
                       size="icon"
                       className="h-5 w-5 shrink-0"
                       onClick={() => window.open(prodUrl, "_blank")}
-                      title="Open in browser"
+                      title={t("openInBrowser")}
                     >
                       <ExternalLink className="h-3 w-3" />
                     </Button>
@@ -1219,7 +1220,7 @@ export default function AppDetailPage() {
             <iframe
               src={`${previewUrl || `http://localhost:${app.port}`}${devPath}`}
               className="flex-1 w-full border-0"
-              title="App Preview Fullscreen"
+              title={t("appPreviewFullscreen")}
             />
             {/* Bottom toolbar in fullscreen */}
             {renderBottomToolbar(fullscreenBottomPanel, setFullscreenBottomPanel, fullscreenPanelCollapsed, setFullscreenPanelCollapsed, "fullscreen")}

@@ -110,6 +110,7 @@ const FEATURED_PRESET_IDS = [
 
 export default function CreateAppPage() {
   const t = useTranslations("create");
+  const tCat = useTranslations("presetCategories");
   const router = useRouter();
 
   const [showChat, setShowChat] = useState(false);
@@ -473,7 +474,7 @@ export default function CreateAppPage() {
                   onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
                 >
                   <Icon className="h-3.5 w-3.5" />
-                  {t(`presetCategories.${cat}`)}
+                  {tCat(cat)}
                 </Button>
               );
             })}
@@ -502,7 +503,7 @@ export default function CreateAppPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm">{t(`presets.${preset.id}.name`)}</span>
                       <Badge variant="outline" className="text-xs font-normal">
-                        {t(`presetCategories.${preset.category}`)}
+                        {tCat(preset.category)}
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-snug">

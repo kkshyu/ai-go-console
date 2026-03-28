@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { RotateCw, Folder, File, FolderOpen } from "lucide-react";
 
 export interface FileEntry {
@@ -23,11 +24,14 @@ function formatFileSize(bytes: number): string {
 }
 
 export function FileList({ files, loading, onNavigateDir, onOpenFile }: FileListProps) {
+  const t = useTranslations("fileManager");
+  const tc = useTranslations("common");
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
         <RotateCw className="h-4 w-4 animate-spin mr-2" />
-        Loading...
+        {tc("loading")}
       </div>
     );
   }
@@ -36,7 +40,7 @@ export function FileList({ files, loading, onNavigateDir, onOpenFile }: FileList
     return (
       <div className="flex flex-1 flex-col items-center justify-center py-12 text-muted-foreground">
         <FolderOpen className="h-10 w-10 mb-3 opacity-20" />
-        <p className="text-sm font-medium">Empty directory</p>
+        <p className="text-sm font-medium">{t("emptyDirectory")}</p>
       </div>
     );
   }
@@ -45,8 +49,8 @@ export function FileList({ files, loading, onNavigateDir, onOpenFile }: FileList
     <table className="w-full text-xs">
       <thead>
         <tr className="border-b bg-muted/30">
-          <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">Name</th>
-          <th className="text-right px-3 py-1.5 font-medium text-muted-foreground w-20">Size</th>
+          <th className="text-left px-3 py-1.5 font-medium text-muted-foreground">{t("name")}</th>
+          <th className="text-right px-3 py-1.5 font-medium text-muted-foreground w-20">{t("size")}</th>
         </tr>
       </thead>
       <tbody>

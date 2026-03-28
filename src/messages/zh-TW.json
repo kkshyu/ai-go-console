@@ -13,7 +13,10 @@
     "search": "搜尋",
     "actions": "操作",
     "back": "返回",
-    "submit": "送出"
+    "submit": "送出",
+    "switchLanguage": "切換語言",
+    "confirmAction": "確定要執行嗎？",
+    "refresh": "重新整理"
   },
   "nav": {
     "dashboard": "儀表板",
@@ -98,7 +101,18 @@
     "devPort": "開發",
     "prodPort": "生產",
     "noApps": "尚未建立任何應用程式",
-    "loading": "載入中..."
+    "loading": "載入中...",
+    "buildCompleted": "建置完成",
+    "buildFailed": "建置失敗：{error}",
+    "rollbackCompleted": "回滾完成",
+    "rollbackFailed": "回滾失敗：{error}",
+    "slugUpdateFailed": "更新網址代碼失敗",
+    "switchToTraefik": "切換至 Traefik 代理",
+    "switchToLocalhost": "切換至本機",
+    "openInBrowser": "在瀏覽器中開啟",
+    "appPreview": "應用預覽",
+    "appPreviewFullscreen": "應用預覽全螢幕",
+    "productionPreview": "正式環境預覽"
   },
   "create": {
     "title": "建立應用",
@@ -575,7 +589,8 @@
     "proxyNotDetected": "未偵測到 Traefik，請執行：bash scripts/k3d-setup.sh",
     "productionEnv": "生產環境",
     "developmentEnv": "開發環境",
-    "appAccessPattern": "應用程式存取路徑：{url}/{appSlug}"
+    "appAccessPattern": "應用程式存取路徑：{url}/{appSlug}",
+    "slugUpdateFailed": "更新網址代碼失敗"
   },
   "users": {
     "title": "使用者管理",
@@ -601,7 +616,8 @@
     "allOrgServices": "組織全部服務",
     "servicesUpdated": "服務授權已更新",
     "setAdmin": "設為管理員",
-    "setUser": "設為一般使用者"
+    "setUser": "設為一般使用者",
+    "noUsers": "尚無使用者"
   },
   "auth": {
     "login": "登入",
@@ -614,7 +630,9 @@
     "loginTitle": "登入 AI Go",
     "registerTitle": "註冊 AI Go",
     "noAccount": "還沒有帳號？",
-    "hasAccount": "已有帳號？"
+    "hasAccount": "已有帳號？",
+    "registrationFailed": "註冊失敗",
+    "unexpectedError": "發生未預期的錯誤"
   },
   "settings": {
     "title": "設定",
@@ -717,5 +735,22 @@
     "active": "啟用中",
     "pending": "等待中",
     "dnsInstructions": "請將您的網域 DNS A 記錄指向伺服器 IP"
+  },
+  "fileManager": {
+    "uploadFiles": "上傳檔案",
+    "uploadFolder": "上傳資料夾",
+    "refresh": "重新整理",
+    "dropFilesHere": "拖曳檔案至此上傳",
+    "uploading": "正在上傳 {done}/{total} 個檔案...",
+    "failedToLoadFile": "載入檔案失敗",
+    "unsavedChanges": "您有未儲存的變更，確定要離開嗎？",
+    "emptyDirectory": "空目錄",
+    "name": "名稱",
+    "size": "大小",
+    "save": "儲存",
+    "saving": "儲存中...",
+    "saved": "已儲存",
+    "saveFailed": "儲存失敗",
+    "back": "返回"
   }
 }

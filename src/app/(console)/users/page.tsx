@@ -35,6 +35,7 @@ interface ServiceItem {
 
 export default function UsersPage() {
   const t = useTranslations("users");
+  const tc = useTranslations("common");
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -287,12 +288,12 @@ export default function UsersPage() {
       )}
 
       {loading ? (
-        <div className="text-center py-16 text-muted-foreground">Loading...</div>
+        <div className="text-center py-16 text-muted-foreground">{tc("loading")}</div>
       ) : users.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Users className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-lg text-muted-foreground">No users yet</p>
+            <p className="text-lg text-muted-foreground">{t("noUsers")}</p>
           </CardContent>
         </Card>
       ) : (
