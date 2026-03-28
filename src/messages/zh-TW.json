@@ -131,6 +131,14 @@
     "createFailed": "應用程式建立失敗，請稍後再試",
     "allCategories": "全部",
     "chatEmptyState": "描述您想建立的應用程式，AI 將協助分析需求並建立",
+    "prdTitle": "需求摘要",
+    "prdEmpty": "AI 正在了解您的需求...",
+    "servicesTitle": "所需服務",
+    "serviceNotEnabled": "尚未開通",
+    "serviceNoInstance": "尚未建立",
+    "serviceConnected": "已連線",
+    "serviceFailed": "連線失敗",
+    "serviceTesting": "測試中...",
     "presets": {
       "finance-expense-report": {
         "name": "費用報銷系統",

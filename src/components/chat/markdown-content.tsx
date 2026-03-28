@@ -82,6 +82,10 @@ const components: Components = {
       const codeProps = child.props as { children?: ReactNode; className?: string };
       const text = typeof codeProps.children === "string" ? codeProps.children : String(codeProps.children ?? "");
       const lang = codeProps.className?.replace("language-", "");
+      // Hide prd blocks — they are rendered in the side panel
+      if (lang === "prd") {
+        return null;
+      }
       if (lang === "json" || (!lang && isJsonLike(text))) {
         return <CollapsibleCodeBlock>{codeProps.children}</CollapsibleCodeBlock>;
       }
