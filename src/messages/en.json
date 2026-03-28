@@ -104,11 +104,13 @@
     "heroSubtitle": "Just tell us what you need, and AI will build a professional website or app for you in minutes",
     "heroInputPlaceholder": "Tell me what you want to build, e.g. a CRM system...",
     "suggestionCRM": "Build me a customer management system",
-    "suggestionInvoice": "I need an invoice management platform",
-    "suggestionLeave": "Create an employee leave system",
-    "orChooseTemplate": "or start from a template",
-    "viewAllTemplates": "Browse all templates",
-    "allTemplatesTitle": "All Templates",
+    "suggestionEcommerce": "I need an e-commerce platform",
+    "suggestionBooking": "Create a booking system",
+    "orChooseTemplate": "or choose a system type",
+    "viewAllTemplates": "Browse all systems",
+    "allTemplatesTitle": "All Systems",
+    "presetCount": "presets",
+    "choosePreset": "Choose a scenario",
     "collapse": "Collapse",
     "backToHome": "Back to home",
     "placeholder": "Describe the app you want to create...",
@@ -139,194 +141,101 @@
     "serviceConnected": "Connected",
     "serviceFailed": "Connection failed",
     "serviceTesting": "Testing...",
+    "templates": {
+      "crm": { "name": "CRM" },
+      "erp": { "name": "ERP / Inventory" },
+      "linebot": { "name": "LINE Bot" },
+      "website": { "name": "Website" },
+      "ecommerce": { "name": "E-Commerce" },
+      "booking": { "name": "Booking" },
+      "internal": { "name": "Internal Tools" },
+      "dashboard": { "name": "Dashboard" }
+    },
     "presets": {
-      "finance-expense-report": {
-        "name": "Expense Report System",
-        "description": "Submit expense reports online, manager approval, finance reimbursement tracking"
+      "crm-sales-pipeline": {
+        "name": "Sales Pipeline CRM",
+        "description": "Customer tracking, deal Kanban board, sales funnel analytics, and performance dashboard"
       },
-      "finance-invoice-manager": {
-        "name": "Invoice Manager",
-        "description": "Invoice entry, reconciliation, overdue reminders, and report export"
+      "crm-realestate": {
+        "name": "Real Estate Client CRM",
+        "description": "Client needs registration, property matching, viewing records, and feedback tracking"
       },
-      "finance-budget-tracker": {
-        "name": "Budget Tracker Dashboard",
-        "description": "Department budgeting, real-time spending monitoring, and budget utilization visualization"
+      "crm-client-portal": {
+        "name": "Client Self-Service Portal",
+        "description": "Self-service ticket submission, invoice status, and document downloads"
       },
-      "finance-accounts-receivable": {
-        "name": "Accounts Receivable",
-        "description": "Customer payment tracking, aging analysis, collection reminders, and receipt records"
+      "erp-retail": {
+        "name": "Retail Inventory",
+        "description": "Product management, purchase orders, sales orders, stock tracking, and low-stock alerts"
       },
-      "finance-accounts-payable": {
-        "name": "Accounts Payable",
-        "description": "Vendor payment scheduling, approval workflows, and payment status tracking"
+      "erp-realestate": {
+        "name": "Property Management",
+        "description": "Property listings, owner management, transaction records, and commission tracking"
       },
-      "finance-payroll": {
-        "name": "Payroll Calculator",
-        "description": "Employee salary calculation, overtime and bonus computation, and payslip generation"
-      },
-      "finance-tax-filing": {
-        "name": "Tax Filing Assistant",
-        "description": "Tax data preparation, tax amount estimation, and filing deadline reminders"
-      },
-      "finance-cashflow": {
-        "name": "Cash Flow Forecast",
-        "description": "Daily cash inflow/outflow tracking, future cash flow projection, and funding gap alerts"
-      },
-      "legal-contract-manager": {
-        "name": "Contract Manager",
-        "description": "Contract creation, review workflow, expiry reminders, and e-signatures"
-      },
-      "legal-case-tracker": {
-        "name": "Case Tracker",
-        "description": "Litigation progress tracking, document management, and deadline reminders"
-      },
-      "legal-compliance-checklist": {
-        "name": "Compliance Checklist",
-        "description": "Regulatory compliance checklists, audit logs, and compliance report generation"
-      },
-      "sales-crm": {
-        "name": "CRM",
-        "description": "Customer data management, sales funnel tracking, and performance dashboard"
-      },
-      "sales-quote-generator": {
-        "name": "Quote Generator",
-        "description": "Quick quote creation, product catalog selection, and PDF export"
-      },
-      "sales-lead-tracker": {
-        "name": "Lead Tracker Board",
-        "description": "Lead management, follow-up reminders, and deal stage board"
-      },
-      "sales-order-management": {
-        "name": "Order Management",
-        "description": "Order creation, shipment tracking, returns handling, and order status lookup"
-      },
-      "sales-commission": {
-        "name": "Commission Calculator",
-        "description": "Sales rep performance stats, commission rules, payout calculation, and disbursement records"
-      },
-      "sales-visit-log": {
-        "name": "Client Visit Log",
-        "description": "Visit scheduling, visit notes, client feedback tracking, and visit reports"
-      },
-      "sales-territory-map": {
-        "name": "Sales Territory Manager",
-        "description": "Territory assignment, regional performance comparison, and customer distribution visualization"
-      },
-      "sales-product-catalog": {
-        "name": "Product Catalog",
-        "description": "Product info management, spec comparison, pricing lookup, and catalog sharing"
-      },
-      "hr-leave-system": {
-        "name": "Leave Management",
-        "description": "Online leave requests, leave type management, approvals, and attendance stats"
-      },
-      "hr-recruitment": {
-        "name": "Recruitment Platform",
-        "description": "Job posting, resume collection, interview scheduling, and hiring pipeline"
-      },
-      "hr-onboarding": {
-        "name": "Onboarding System",
-        "description": "New hire onboarding workflow, document checklist, and training schedule"
-      },
-      "marketing-campaign": {
-        "name": "Campaign Manager",
-        "description": "Campaign planning, budget allocation, performance tracking, and ROI analysis"
-      },
-      "marketing-content-calendar": {
-        "name": "Content Calendar",
-        "description": "Social post scheduling, content review workflow, and multi-platform publishing"
-      },
-      "pm-task-board": {
-        "name": "Task Board",
-        "description": "Task creation and assignment, board view, progress tracking, and milestones"
-      },
-      "pm-meeting-notes": {
-        "name": "Meeting Notes",
-        "description": "Meeting minutes, action item tracking, and decision archiving"
-      },
-      "it-helpdesk": {
-        "name": "IT Helpdesk",
-        "description": "IT issue reporting, ticket assignment, progress tracking, and knowledge base"
-      },
-      "ops-inventory": {
-        "name": "Inventory Manager",
-        "description": "Real-time inventory lookup, stock-in/out records, and low-stock alerts"
-      },
-      "linebot-payment-notify": {
-        "name": "LINE Payment Reminder Bot",
-        "description": "Accounts receivable/payable due reminders, payment confirmations, and overdue collection alerts"
-      },
-      "linebot-contract-alert": {
-        "name": "LINE Contract Alert Bot",
-        "description": "Auto contract expiry reminders, renewal notifications, and important legal matter alerts"
+      "erp-accounting": {
+        "name": "Accounting System",
+        "description": "Journal entries, invoice management, revenue/expense trends, and tax reports"
       },
       "linebot-customer-service": {
-        "name": "LINE Customer Service Bot",
-        "description": "Auto-reply to common questions, hand off to live agents, and conversation log management"
-      },
-      "linebot-ecommerce": {
-        "name": "LINE E-Commerce Bot",
-        "description": "Product browsing, cart management, checkout, and order inquiry all-in-one"
-      },
-      "linebot-order-tracking": {
-        "name": "LINE Order Tracking Bot",
-        "description": "Real-time logistics status, delivery progress, and estimated arrival by order number"
-      },
-      "linebot-leave": {
-        "name": "LINE Leave Request Bot",
-        "description": "Submit leave requests via LINE, check leave balance, and instant manager approval notifications"
-      },
-      "linebot-member-card": {
-        "name": "LINE Member Card Bot",
-        "description": "Digital membership card, points earning/redemption, tier lookup, and exclusive offers"
-      },
-      "linebot-survey": {
-        "name": "LINE Survey Bot",
-        "description": "Interactive surveys, satisfaction rating collection, and real-time result statistics"
-      },
-      "linebot-notification": {
-        "name": "LINE Notification Bot",
-        "description": "Push task progress, meeting reminders, system alerts, and scheduled messages"
-      },
-      "linebot-faq": {
-        "name": "LINE FAQ Bot",
-        "description": "Keyword-matched auto answers for FAQs with rich menus and quick reply support"
+        "name": "AI Customer Service Bot",
+        "description": "FAQ auto-reply, AI smart conversation, and handoff to live agents"
       },
       "linebot-booking": {
-        "name": "LINE Booking Bot",
-        "description": "Online slot lookup, booking confirmation notifications, and reschedule/cancel handling"
+        "name": "Booking Bot",
+        "description": "Browse services, select time slots, make/cancel/reschedule reservations"
       },
-      "realestate-listing": {
-        "name": "Property Listing Manager",
-        "description": "Manage property listings, track rental/sale status, and maintain owner information"
+      "linebot-order-notify": {
+        "name": "Order Notification Bot",
+        "description": "Order status queries, shipping and delivery push notifications, and tracking"
       },
-      "realestate-client-matching": {
-        "name": "Client Matching System",
-        "description": "Register buyer/renter requirements, match properties by criteria, and track viewing feedback"
+      "linebot-membership": {
+        "name": "Membership Bot",
+        "description": "Points balance/redemption, membership tiers, coupons, and rewards catalog"
       },
-      "realestate-commission": {
-        "name": "Commission Tracker",
-        "description": "Calculate deal commissions, manage agent share ratios, and track payment status"
+      "website-corporate": {
+        "name": "Corporate Website",
+        "description": "Hero homepage, about us, services, and contact page for a complete business site"
       },
-      "realestate-owner-negotiation": {
-        "name": "Owner Negotiation Manager",
-        "description": "Track owner meetings, compare asking price vs market value, and manage listing progress"
+      "website-portfolio": {
+        "name": "Portfolio Website",
+        "description": "Personal brand showcase, filterable project gallery, and blog"
       },
-      "linebot-property-inquiry": {
-        "name": "LINE Property Inquiry Bot",
-        "description": "Property search notifications, viewing appointments, and agent contact features"
+      "website-realestate": {
+        "name": "Real Estate Website",
+        "description": "Featured listings, property search, team showcase, and inquiry form"
+      },
+      "ecommerce-storefront": {
+        "name": "Online Store",
+        "description": "Product browsing, shopping cart, checkout flow with Zustand state management"
+      },
+      "ecommerce-order-mgmt": {
+        "name": "Order Management Backend",
+        "description": "Order list/details, shipment management, customer records, and revenue stats"
+      },
+      "booking-appointment": {
+        "name": "Appointment Booking",
+        "description": "Calendar slot management, booking records, service settings, and client directory"
+      },
+      "booking-restaurant": {
+        "name": "Restaurant Reservation",
+        "description": "Table timeline, reservation management, table configuration, and menu display"
+      },
+      "internal-hr": {
+        "name": "HR Management",
+        "description": "Employee directory, leave approvals, attendance records, and department stats dashboard"
+      },
+      "internal-project": {
+        "name": "Project Management",
+        "description": "Project list, Kanban task board, timeline view, and team workload analysis"
+      },
+      "internal-helpdesk": {
+        "name": "IT Helpdesk",
+        "description": "Ticket management, conversation threads, SLA tracking, and knowledge base"
+      },
+      "dashboard-analytics": {
+        "name": "Business Analytics Dashboard",
+        "description": "KPI cards, sales trend charts, customer analytics, and report generation"
       }
-    },
-    "presetCategories": {
-      "finance": "Finance",
-      "legal": "Legal",
-      "sales": "Sales",
-      "hr": "HR",
-      "marketing": "Marketing",
-      "pm": "Project Mgmt",
-      "it": "IT",
-      "ops": "Operations",
-      "realestate": "Real Estate"
     }
   },
   "services": {

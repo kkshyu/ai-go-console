@@ -37,7 +37,11 @@ export async function POST(request: NextRequest) {
   const organizationId = session?.user?.organizationId;
 
   const body = await request.json();
-  const { name, slug: requestedSlug, description, template, config, serviceIds, userId, files, npmPackages, presetId } = body;
+  const { name, slug: requestedSlug, description, template: bodyTemplate, config, serviceIds, userId, files, npmPackages, presetId } = body;
+
+  // When presetId is provided, resolve template from the preset overlay
+  const overlay = presetId && !files ? getPresetOverlay(presetId) : null;
+  const template = overlay?.templateId || bodyTemplate;
 
   if (!name || !template) {
     return NextResponse.json(
@@ -145,7 +149,6 @@ export async function POST(request: NextRequest) {
   const orgSlug = user?.organization?.slug || "default";
 
   try {
-    const overlay = presetId && !files ? getPresetOverlay(presetId) : null;
     await generateApp({
       appId: app.id,
       slug,

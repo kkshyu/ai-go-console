@@ -5,7 +5,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 TEMPLATES_DIR="$ROOT_DIR/templates"
 
+# Legacy templates
 TEMPLATES=("react-spa" "nextjs-fullstack" "node-api" "line-bot")
+
+# New system-type templates
+TEMPLATES+=("crm" "erp" "linebot" "website" "ecommerce" "booking" "internal" "dashboard")
 
 for tmpl in "${TEMPLATES[@]}"; do
   echo "=== Building dev base image: aigo-dev-base-${tmpl} ==="

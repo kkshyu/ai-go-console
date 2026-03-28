@@ -1,0 +1,81 @@
+import express from "express";
+import cors from "cors";
+import {
+  messagingApi,
+  middleware,
+  webhook,
+  HTTPFetchError,
+} from "@line/bot-sdk";
+
+const PORT = parseInt(process.env.PORT || "{{port}}", 10);
+
+const config = {
+  channelSecret: process.env.LINE_CHANNEL_SECRET || "",
+};
+
+const clientConfig = {
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "",
+};
+
+const client = new messagingApi.MessagingApiClient(clientConfig);
+const app = express();
+
+// Health check (before middleware — no signature verification needed)
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
+app.get("/", (_req, res) => {
+  res.json({
+    name: "{{name}}",
+    status: "running",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// LINE webhook endpoint
+app.post("/webhook", middleware(config), async (req, res) => {
+  const events: webhook.Event[] = req.body.events;
+
+  const results = await Promise.allSettled(
+    events.map(async (event) => {
+      if (event.type !== "message" || event.message.type !== "text") {
+        return;
+      }
+
+      const { replyToken } = event;
+      const userMessage = event.message.text;
+
+      // Echo back the user's message — replace with your own logic
+      await client.replyMessage({
+        replyToken,
+        messages: [{ type: "text", text: userMessage }],
+      });
+    })
+  );
+
+  const errors = results.filter((r) => r.status === "rejected");
+  if (errors.length > 0) {
+    for (const e of errors) {
+      if (e.status === "rejected") {
+        const err = e.reason;
+        if (err instanceof HTTPFetchError) {
+          console.error(err.status, err.body);
+        } else if (err instanceof Error) {
+          console.error(err.message);
+        }
+      }
+    }
+  }
+
+  res.json({ received: true });
+});
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`{{name}} LINE Bot running on http://localhost:${PORT}`);
+  if (!config.channelSecret || !clientConfig.channelAccessToken) {
+    console.warn(
+      "WARNING: LINE_CHANNEL_SECRET or LINE_CHANNEL_ACCESS_TOKEN is not set."
+    );
+  }
+});
