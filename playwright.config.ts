@@ -1,4 +1,5 @@
 import { defineConfig } from "@playwright/test";
+import { STORAGE_STATE } from "./e2e/constants";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -15,8 +16,17 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "chromium",
+      name: "setup",
+      testMatch: /auth\.setup\.ts/,
       use: { browserName: "chromium" },
+    },
+    {
+      name: "chromium",
+      use: {
+        browserName: "chromium",
+        storageState: STORAGE_STATE,
+      },
+      dependencies: ["setup"],
     },
   ],
 });

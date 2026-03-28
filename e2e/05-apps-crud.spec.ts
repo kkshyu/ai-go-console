@@ -5,14 +5,10 @@ test.describe("Apps CRUD", () => {
   let appId: string;
   let userId: string;
 
-  test("setup: create test user", async ({ request }) => {
-    const email = `apps-${ts}@test.com`;
-    const res = await request.post("/api/auth/register", {
-      data: { email, password: "Test1234!", name: "Apps User" },
-    });
-    expect(res.status()).toBe(201);
-    const user = await res.json();
-    userId = user.id;
+  test("setup: get current user", async ({ request }) => {
+    const res = await request.get("/api/auth/session");
+    const session = await res.json();
+    userId = session.user.id;
     expect(userId).toBeDefined();
   });
 

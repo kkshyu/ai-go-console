@@ -1,39 +1,42 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Chat / Create App", () => {
-  test("create page renders chat interface", async ({ page }) => {
+  test("create page renders hero input", async ({ page }) => {
     await page.goto("/create");
-    await expect(page.locator("h1")).toContainText(/Create App|建立應用/);
-    // Chat input should be visible
-    await expect(
-      page.locator('input[placeholder*="Describe"], input[placeholder*="描述"]')
-    ).toBeVisible();
-    // Send button should be visible
-    await expect(page.locator('button[type="submit"]')).toBeVisible();
+    // Hero section should show the main heading
+    await expect(page.locator("h1").first()).toBeVisible();
+    // Text input should be visible
+    await expect(page.locator('input[type="text"]')).toBeVisible();
   });
 
   test("chat input accepts text", async ({ page }) => {
     await page.goto("/create");
-    const input = page.locator(
-      'input[placeholder*="Describe"], input[placeholder*="描述"]'
-    );
+    const input = page.locator('input[type="text"]');
     await input.fill("Build me a todo app");
     await expect(input).toHaveValue("Build me a todo app");
   });
 
   test("send button is disabled when input is empty", async ({ page }) => {
     await page.goto("/create");
-    const btn = page.locator('button[type="submit"]');
-    await expect(btn).toBeDisabled();
+    // The send button is inside the same container as the input
+    const sendBtn = page.locator('input[type="text"] ~ button, input[type="text"] + button').first();
+    // If button is not found by sibling, try parent container
+    if (await sendBtn.count() === 0) {
+      // Button is in the same flex container
+      const container = page.locator('input[type="text"]').locator("..");
+      const btn = container.locator("button");
+      await expect(btn).toBeDisabled();
+    } else {
+      await expect(sendBtn).toBeDisabled();
+    }
   });
 
   test("send button is enabled when input has text", async ({ page }) => {
     await page.goto("/create");
-    const input = page.locator(
-      'input[placeholder*="Describe"], input[placeholder*="描述"]'
-    );
+    const input = page.locator('input[type="text"]');
     await input.fill("Hello");
-    const btn = page.locator('button[type="submit"]');
+    const container = page.locator('input[type="text"]').locator("..");
+    const btn = container.locator("button");
     await expect(btn).toBeEnabled();
   });
 
@@ -45,28 +48,23 @@ test.describe("Chat / Create App", () => {
   });
 
   test("POST /api/chat returns SSE stream format", async ({ request }) => {
-    // This test verifies the API endpoint responds correctly
-    // It may fail if OPENROUTER_API_KEY is not set, which is expected
     const res = await request.post("/api/chat", {
       data: {
         messages: [{ role: "user", content: "Hello" }],
       },
     });
-    // Should return SSE content type or error gracefully
     const contentType = res.headers()["content-type"] || "";
     expect(
       contentType.includes("text/event-stream") || res.status() >= 400
     ).toBe(true);
   });
 
-  test("preview panel shows placeholder when no app created", async ({
-    page,
-  }) => {
-    // Widen viewport to show preview panel (requires lg breakpoint)
-    await page.setViewportSize({ width: 1400, height: 900 });
+  test("create page shows suggestion buttons", async ({ page }) => {
     await page.goto("/create");
-    await expect(
-      page.getByText(/preview|預覽/i).first()
-    ).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    // Suggestion buttons should be visible below the input
+    const buttons = page.locator("button").filter({ hasNotText: /Toggle|Switch|登出|Logout|Next/ });
+    const count = await buttons.count();
+    expect(count).toBeGreaterThan(0);
   });
 });

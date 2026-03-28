@@ -6,24 +6,19 @@ test.describe("Organization Domains", () => {
   let domainId: string;
   const testDomain = `e2e-${ts}.example.com`;
 
-  test("setup: create user and get org", async ({ request }) => {
-    const userRes = await request.post("/api/auth/register", {
-      data: {
-        email: `orgdom-${ts}@test.com`,
-        password: "Test1234!",
-        name: "OrgDomain User",
-      },
-    });
-    expect(userRes.status()).toBe(201);
-    const user = await userRes.json();
-    orgId = user.organizationId;
+  test("setup: get current user org", async ({ request }) => {
+    const res = await request.get("/api/auth/session");
+    expect(res.status()).toBe(200);
+    const session = await res.json();
+    orgId = session.user.organizationId;
+    expect(orgId).toBeDefined();
   });
 
-  test("GET domains returns empty array", async ({ request }) => {
+  test("GET domains returns array", async ({ request }) => {
     expect(orgId).toBeDefined();
     const res = await request.get(`/api/organizations/${orgId}/domains`);
     expect(res.status()).toBe(200);
-    expect(await res.json()).toEqual([]);
+    expect(Array.isArray(await res.json())).toBe(true);
   });
 
   test("POST domains adds a domain", async ({ request }) => {
@@ -59,8 +54,8 @@ test.describe("Organization Domains", () => {
     expect(orgId).toBeDefined();
     const res = await request.get(`/api/organizations/${orgId}/domains`);
     const body = await res.json();
-    expect(body.length).toBe(1);
-    expect(body[0].id).toBe(domainId);
+    const found = body.find((d: { id: string }) => d.id === domainId);
+    expect(found).toBeDefined();
   });
 
   test("DELETE domains removes domain", async ({ request }) => {
@@ -71,6 +66,8 @@ test.describe("Organization Domains", () => {
     });
     expect(res.status()).toBe(200);
     const getRes = await request.get(`/api/organizations/${orgId}/domains`);
-    expect((await getRes.json()).length).toBe(0);
+    const body = await getRes.json();
+    const found = body.find((d: { id: string }) => d.id === domainId);
+    expect(found).toBeUndefined();
   });
 });

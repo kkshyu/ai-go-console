@@ -8,7 +8,6 @@ test.describe("Users Management", () => {
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(Array.isArray(body)).toBe(true);
-    // Should have users from previous tests
     if (body.length > 0) {
       expect(body[0]).toHaveProperty("id");
       expect(body[0]).toHaveProperty("email");
@@ -19,8 +18,8 @@ test.describe("Users Management", () => {
     }
   });
 
-  test("create a user for management tests", async ({ request }) => {
-    const res = await request.post("/api/auth/register", {
+  test("POST /api/users creates a user", async ({ request }) => {
+    const res = await request.post("/api/users", {
       data: {
         email: `mgmt-user-${Date.now()}@test.com`,
         password: "Test1234!",

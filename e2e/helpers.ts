@@ -1,15 +1,17 @@
 import { type Page, type APIRequestContext } from "@playwright/test";
 
-export const TEST_USER = {
-  email: `e2e-admin-${Date.now()}@test.com`,
-  password: "Test1234!",
-  name: "E2E Admin",
+/** Seed admin account — always available after `npx prisma db seed` */
+export const SEED_ADMIN = {
+  email: "admin@example.com",
+  password: "password123",
+  name: "Admin User",
 };
 
-export const TEST_USER_2 = {
-  email: `e2e-user-${Date.now()}@test.com`,
-  password: "Test1234!",
-  name: "E2E User",
+/** Seed regular user */
+export const SEED_USER = {
+  email: "alice@example.com",
+  password: "password123",
+  name: "Alice Chen",
 };
 
 /**
@@ -26,7 +28,7 @@ export async function registerUser(
 }
 
 /**
- * Login via the UI
+ * Login via the UI — waits until redirected away from /login
  */
 export async function loginViaUI(
   page: Page,
@@ -37,8 +39,9 @@ export async function loginViaUI(
   await page.fill('input[type="email"]', email);
   await page.fill('input[type="password"]', password);
   await page.click('button[type="submit"]');
-  // Wait for redirect to dashboard
-  await page.waitForURL("/", { timeout: 10_000 }).catch(() => {});
+  await page.waitForURL((url) => !url.pathname.includes("/login"), {
+    timeout: 10_000,
+  });
 }
 
 /**

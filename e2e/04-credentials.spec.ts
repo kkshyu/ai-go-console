@@ -3,9 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Services", () => {
   let createdId: string;
 
-  test("GET /api/services returns empty array initially", async ({
-    request,
-  }) => {
+  test("GET /api/services returns array", async ({ request }) => {
     const res = await request.get("/api/services");
     expect(res.status()).toBe(200);
     const body = await res.json();
@@ -94,9 +92,10 @@ test.describe("Services", () => {
     page,
   }) => {
     await page.goto("/services");
+    // Click "Add Service" button
     await page.click("button:has-text('Add Service'), button:has-text('新增服務')");
-    // Form should appear
-    await expect(page.locator('input[placeholder="My Service"]')).toBeVisible();
+    // Category select should appear
+    await expect(page.locator("select").first()).toBeVisible();
   });
 
   test("DELETE /api/services/:id removes service", async ({

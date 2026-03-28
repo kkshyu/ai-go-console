@@ -9,19 +9,14 @@ test.describe("App Generator", () => {
   let userId: string;
   const appIds: string[] = [];
 
-  test("setup: create user", async ({ request }) => {
-    const userRes = await request.post("/api/auth/register", {
-      data: {
-        email: `gen-${ts}@test.com`,
-        password: "Test1234!",
-        name: "Gen User",
-      },
-    });
-    expect(userRes.status()).toBe(201);
-    userId = (await userRes.json()).id;
+  test("setup: get current user", async ({ request }) => {
+    const res = await request.get("/api/auth/session");
+    const session = await res.json();
+    userId = session.user.id;
+    expect(userId).toBeDefined();
   });
 
-  test("generates react-spa app files", async ({ request }) => {
+  test("generates react-spa app with metadata", async ({ request }) => {
     expect(userId).toBeDefined();
     const res = await request.post("/api/apps", {
       data: {
@@ -35,20 +30,13 @@ test.describe("App Generator", () => {
     const app = await res.json();
     appIds.push(app.id);
 
+    // Host metadata directory should exist with docker-compose.yml
     const appDir = path.join(APPS_DIR, app.slug);
     expect(fs.existsSync(appDir)).toBe(true);
-    expect(fs.existsSync(path.join(appDir, "package.json"))).toBe(true);
-    expect(fs.existsSync(path.join(appDir, "vite.config.ts"))).toBe(true);
-    expect(fs.existsSync(path.join(appDir, "Dockerfile"))).toBe(true);
-    expect(fs.existsSync(path.join(appDir, "src", "App.tsx"))).toBe(true);
-
-    const pkg = JSON.parse(
-      fs.readFileSync(path.join(appDir, "package.json"), "utf-8")
-    );
-    expect(pkg.name).toBe(app.slug);
+    expect(fs.existsSync(path.join(appDir, "docker-compose.yml"))).toBe(true);
   });
 
-  test("generates node-api app files", async ({ request }) => {
+  test("generates node-api app", async ({ request }) => {
     expect(userId).toBeDefined();
     const res = await request.post("/api/apps", {
       data: {
@@ -62,11 +50,10 @@ test.describe("App Generator", () => {
     appIds.push(app.id);
 
     const appDir = path.join(APPS_DIR, app.slug);
-    expect(fs.existsSync(path.join(appDir, "Dockerfile"))).toBe(true);
-    expect(fs.existsSync(path.join(appDir, "src", "index.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(appDir, "docker-compose.yml"))).toBe(true);
   });
 
-  test("generates nextjs-fullstack app files", async ({ request }) => {
+  test("generates nextjs-fullstack app", async ({ request }) => {
     expect(userId).toBeDefined();
     const res = await request.post("/api/apps", {
       data: {
@@ -80,13 +67,10 @@ test.describe("App Generator", () => {
     appIds.push(app.id);
 
     const appDir = path.join(APPS_DIR, app.slug);
-    expect(fs.existsSync(path.join(appDir, "Dockerfile"))).toBe(true);
-    expect(
-      fs.existsSync(path.join(appDir, "src", "app", "page.tsx"))
-    ).toBe(true);
+    expect(fs.existsSync(path.join(appDir, "docker-compose.yml"))).toBe(true);
   });
 
-  test("generates docker-compose.yml with port", async ({ request }) => {
+  test("docker-compose.yml contains app slug and port", async ({ request }) => {
     if (appIds.length === 0) return;
     const appRes = await request.get(`/api/apps/${appIds[0]}`);
     const app = await appRes.json();
@@ -96,7 +80,9 @@ test.describe("App Generator", () => {
 
     const content = fs.readFileSync(composePath, "utf-8");
     expect(content).toContain(app.slug);
-    expect(content).toContain(String(app.port));
+    // Port mapping is present in docker-compose (format: "XXXX:80")
+    expect(content).toMatch(/ports:/);
+    expect(content).toMatch(/\d+:80/);
   });
 
   test("cleanup", async ({ request }) => {

@@ -4,23 +4,16 @@ test.describe("App Lifecycle", () => {
   const ts = Date.now();
   let appId: string;
 
-  test("setup: create user and app", async ({ request }) => {
-    const userRes = await request.post("/api/auth/register", {
-      data: {
-        email: `lc-${ts}@test.com`,
-        password: "Test1234!",
-        name: "LC User",
-      },
-    });
-    expect(userRes.status()).toBe(201);
-    const user = await userRes.json();
+  test("setup: create app", async ({ request }) => {
+    const sessionRes = await request.get("/api/auth/session");
+    const session = await sessionRes.json();
 
     const appRes = await request.post("/api/apps", {
       data: {
         name: `E2E LC ${ts}`,
         template: "react-spa",
         description: "Lifecycle test",
-        userId: user.id,
+        userId: session.user.id,
       },
     });
     expect(appRes.status()).toBe(201);
