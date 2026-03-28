@@ -125,35 +125,38 @@ async function main() {
 
   // ── 2b. Built-in services for each org ────────────────────────────────
 
-  for (const org of [acme, startup]) {
-    // Built-in Supabase
-    const supabaseCreds = await provisionSupabaseProject(org.slug);
-    const supabaseCfg = encrypt(JSON.stringify({
-      projectUrl: supabaseCreds.projectUrl,
-      apiKey: supabaseCreds.apiKey,
-      serviceRoleKey: supabaseCreds.serviceRoleKey,
-    }));
+  try {
+    for (const org of [acme, startup]) {
+      // Built-in Supabase
+      const supabaseCreds = await provisionSupabaseProject(org.slug);
+      const supabaseCfg = encrypt(JSON.stringify({
+        projectUrl: supabaseCreds.projectUrl,
+        apiKey: supabaseCreds.apiKey,
+        serviceRoleKey: supabaseCreds.serviceRoleKey,
+      }));
 
-    await prisma.service.upsert({
-      where: { id: `builtin-supabase-${org.slug}` },
-      update: {
-        endpointUrl: supabaseCreds.projectUrl,
-        configEncrypted: supabaseCfg.ciphertext,
-        iv: supabaseCfg.iv,
-        authTag: supabaseCfg.authTag,
-      },
-      create: {
-        id: `builtin-supabase-${org.slug}`,
-        name: "Built-in Supabase",
-        type: ServiceType.built_in_supabase,
-        endpointUrl: supabaseCreds.projectUrl,
-        configEncrypted: supabaseCfg.ciphertext,
-        iv: supabaseCfg.iv,
-        authTag: supabaseCfg.authTag,
-        organizationId: org.id,
-      },
-    });
-
+      await prisma.service.upsert({
+        where: { id: `builtin-supabase-${org.slug}` },
+        update: {
+          endpointUrl: supabaseCreds.projectUrl,
+          configEncrypted: supabaseCfg.ciphertext,
+          iv: supabaseCfg.iv,
+          authTag: supabaseCfg.authTag,
+        },
+        create: {
+          id: `builtin-supabase-${org.slug}`,
+          name: "Built-in Supabase",
+          type: ServiceType.built_in_supabase,
+          endpointUrl: supabaseCreds.projectUrl,
+          configEncrypted: supabaseCfg.ciphertext,
+          iv: supabaseCfg.iv,
+          authTag: supabaseCfg.authTag,
+          organizationId: org.id,
+        },
+      });
+    }
+  } catch (err) {
+    console.log(`  ⚠ Skipping built-in Supabase provisioning: ${err instanceof Error ? err.message : err}`);
   }
 
   // Industry built-in services for each org
