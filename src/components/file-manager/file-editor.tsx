@@ -46,9 +46,10 @@ interface FileEditorProps {
   appId: string;
   filePath: string;
   onBack: () => void;
+  containerType?: "dev" | "prod";
 }
 
-export function FileEditor({ appId, filePath, onBack }: FileEditorProps) {
+export function FileEditor({ appId, filePath, onBack, containerType = "dev" }: FileEditorProps) {
   const [content, setContent] = useState<string | null>(null);
   const [savedContent, setSavedContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,7 +65,9 @@ export function FileEditor({ appId, filePath, onBack }: FileEditorProps) {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    fetch(`/api/apps/${appId}/files/content?path=${encodeURIComponent(filePath)}`)
+    const qs = new URLSearchParams({ path: filePath });
+    if (containerType !== "dev") qs.set("containerType", containerType);
+    fetch(`/api/apps/${appId}/files/content?${qs.toString()}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.error) {
@@ -76,15 +79,17 @@ export function FileEditor({ appId, filePath, onBack }: FileEditorProps) {
       })
       .catch(() => setError("Failed to load file"))
       .finally(() => setLoading(false));
-  }, [appId, filePath]);
+  }, [appId, filePath, containerType]);
 
   const handleSave = useCallback(async () => {
     if (content === null || saving) return;
     setSaving(true);
     setSaveStatus("idle");
     try {
+      const saveQs = new URLSearchParams({ path: filePath });
+      if (containerType !== "dev") saveQs.set("containerType", containerType);
       const res = await fetch(
-        `/api/apps/${appId}/files/content?path=${encodeURIComponent(filePath)}`,
+        `/api/apps/${appId}/files/content?${saveQs.toString()}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -104,7 +109,7 @@ export function FileEditor({ appId, filePath, onBack }: FileEditorProps) {
     } finally {
       setSaving(false);
     }
-  }, [appId, filePath, content, saving]);
+  }, [appId, filePath, content, saving, containerType]);
 
   const handleEditorMount: OnMount = (editor) => {
     editorRef.current = editor;

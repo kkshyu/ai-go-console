@@ -16,13 +16,24 @@ const BUILD_TIMEOUT = 300_000; // 5 minutes
 // Naming helpers
 // ---------------------------------------------------------------------------
 
+export type ContainerType = "dev" | "prod";
+
 export function devContainerName(orgSlug: string, slug: string): string {
   return `aigo-${orgSlug}-${slug}-dev`;
+}
+
+export function prodContainerName(orgSlug: string, slug: string): string {
+  return `aigo-${orgSlug}-${slug}-prod`;
 }
 
 /** Legacy naming: aigo-dev-{slug} (before orgSlug was introduced) */
 function legacyDevContainerName(slug: string): string {
   return `aigo-dev-${slug}`;
+}
+
+/** Legacy naming: aigo-{orgSlug}-{slug} (before -prod suffix was added) */
+function legacyProdContainerName(orgSlug: string, slug: string): string {
+  return `aigo-${orgSlug}-${slug}`;
 }
 
 /**
@@ -45,6 +56,35 @@ async function resolveDevContainerName(orgSlug: string, slug: string): Promise<s
       return newName;
     }
   }
+}
+
+/**
+ * Resolve the actual prod container name by checking new-style first,
+ * falling back to legacy name.
+ */
+async function resolveProdContainerName(orgSlug: string, slug: string): Promise<string> {
+  const newName = prodContainerName(orgSlug, slug);
+  try {
+    await execFileAsync("docker", ["inspect", "--format", "{{.Name}}", newName], { timeout: 5_000 });
+    return newName;
+  } catch {
+    const oldName = legacyProdContainerName(orgSlug, slug);
+    try {
+      await execFileAsync("docker", ["inspect", "--format", "{{.Name}}", oldName], { timeout: 5_000 });
+      return oldName;
+    } catch {
+      return newName;
+    }
+  }
+}
+
+/**
+ * Resolve container name based on container type (dev or prod).
+ */
+export async function resolveContainerName(orgSlug: string, slug: string, type: ContainerType = "dev"): Promise<string> {
+  return type === "prod"
+    ? resolveProdContainerName(orgSlug, slug)
+    : resolveDevContainerName(orgSlug, slug);
 }
 
 // ---------------------------------------------------------------------------
@@ -154,6 +194,33 @@ export async function getDevContainerStatus(
 }
 
 /**
+ * Get the status of a container by type (dev or prod).
+ */
+export async function getContainerStatus(
+  orgSlug: string,
+  slug: string,
+  type: ContainerType = "dev"
+): Promise<"running" | "stopped" | "not_found"> {
+  if (type === "dev") return getDevContainerStatus(orgSlug, slug);
+
+  // Check prod container: new-style first, then legacy
+  for (const name of [prodContainerName(orgSlug, slug), legacyProdContainerName(orgSlug, slug)]) {
+    try {
+      const { stdout } = await execFileAsync(
+        "docker",
+        ["inspect", "--format", "{{.State.Status}}", name],
+        { timeout: 10_000 }
+      );
+      const status = stdout.trim();
+      return status === "running" ? "running" : "stopped";
+    } catch {
+      // Try next name
+    }
+  }
+  return "not_found";
+}
+
+/**
  * Get logs from a dev container.
  */
 export async function getDevContainerLogs(
@@ -213,17 +280,18 @@ export async function recreateDevContainer(
 // ---------------------------------------------------------------------------
 
 /**
- * Write files into a running or created dev container via docker cp.
+ * Write files into a running or created container via docker cp.
  * Files are written to a temp directory first, then copied in bulk.
  */
 export async function writeFiles(
   orgSlug: string,
   slug: string,
-  files: Array<{ path: string; content: string }>
+  files: Array<{ path: string; content: string }>,
+  containerType: ContainerType = "dev"
 ): Promise<void> {
   if (files.length === 0) return;
 
-  const name = await resolveDevContainerName(orgSlug, slug);
+  const name = await resolveContainerName(orgSlug, slug, containerType);
   const tmpDir = path.join(os.tmpdir(), `aigo-cp-${crypto.randomUUID()}`);
   try {
     // Write files to temp directory
@@ -245,15 +313,16 @@ export async function writeFiles(
 }
 
 /**
- * Write binary files (e.g., from upload) into a dev container.
+ * Write binary files (e.g., from upload) into a container.
  */
 export async function writeFileBuffer(
   orgSlug: string,
   slug: string,
   targetPath: string,
-  buffer: Buffer
+  buffer: Buffer,
+  containerType: ContainerType = "dev"
 ): Promise<void> {
-  const name = await resolveDevContainerName(orgSlug, slug);
+  const name = await resolveContainerName(orgSlug, slug, containerType);
   const tmpDir = path.join(os.tmpdir(), `aigo-cp-${crypto.randomUUID()}`);
   try {
     const filePath = path.join(tmpDir, targetPath);
@@ -271,10 +340,10 @@ export async function writeFileBuffer(
 }
 
 /**
- * Read a single file from the dev container.
+ * Read a single file from a container.
  */
-export async function readFile(orgSlug: string, slug: string, filePath: string): Promise<string> {
-  const name = await resolveDevContainerName(orgSlug, slug);
+export async function readFile(orgSlug: string, slug: string, filePath: string, containerType: ContainerType = "dev"): Promise<string> {
+  const name = await resolveContainerName(orgSlug, slug, containerType);
   const safePath = filePath.replace(/\.\./g, "");
   const { stdout } = await execFileAsync(
     "docker",
@@ -285,18 +354,19 @@ export async function readFile(orgSlug: string, slug: string, filePath: string):
 }
 
 /**
- * Read directory listing from the dev container.
+ * Read directory listing from a container.
  * Returns structured entries compatible with the files API response.
  */
 export async function readDirectory(
   orgSlug: string,
   slug: string,
-  dirPath: string
+  dirPath: string,
+  containerType: ContainerType = "dev"
 ): Promise<Array<{ name: string; type: "file" | "directory"; size: number; mtime: string }>> {
   const safePath = (dirPath || "").replace(/\.\./g, "");
   const targetDir = safePath ? `/app/${safePath}` : "/app";
 
-  const name = await resolveDevContainerName(orgSlug, slug);
+  const name = await resolveContainerName(orgSlug, slug, containerType);
 
   // Use a script that outputs JSON-like data
   const { stdout } = await execFileAsync(

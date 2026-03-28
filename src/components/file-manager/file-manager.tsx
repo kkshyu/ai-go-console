@@ -8,6 +8,7 @@ import { FileEditor } from "./file-editor";
 
 interface FileManagerProps {
   appId: string;
+  containerType?: "dev" | "prod";
 }
 
 interface UploadProgress {
@@ -55,7 +56,7 @@ async function readEntryFiles(
   return [];
 }
 
-export function FileManager({ appId }: FileManagerProps) {
+export function FileManager({ appId, containerType = "dev" }: FileManagerProps) {
   const [fileList, setFileList] = useState<FileEntry[]>([]);
   const [filePath, setFilePath] = useState("");
   const [fileLoading, setFileLoading] = useState(false);
@@ -82,7 +83,10 @@ export function FileManager({ appId }: FileManagerProps) {
     async (subpath = "") => {
       setFileLoading(true);
       try {
-        const params = subpath ? `?path=${encodeURIComponent(subpath)}` : "";
+        const qs = new URLSearchParams();
+        if (subpath) qs.set("path", subpath);
+        if (containerType !== "dev") qs.set("containerType", containerType);
+        const params = qs.toString() ? `?${qs.toString()}` : "";
         const res = await fetch(`/api/apps/${appId}/files${params}`);
         const data = await res.json();
         if (data.files) {
@@ -95,10 +99,10 @@ export function FileManager({ appId }: FileManagerProps) {
         setFileLoading(false);
       }
     },
-    [appId]
+    [appId, containerType]
   );
 
-  // Load root on mount
+  // Load root on mount (or when containerType changes)
   useEffect(() => {
     fetchFiles("");
   }, [fetchFiles]);
@@ -141,7 +145,8 @@ export function FileManager({ appId }: FileManagerProps) {
       }
 
       try {
-        const res = await fetch(`/api/apps/${appId}/files`, {
+        const uploadQs = containerType !== "dev" ? `?containerType=${containerType}` : "";
+        const res = await fetch(`/api/apps/${appId}/files${uploadQs}`, {
           method: "POST",
           body: formData,
         });
@@ -159,7 +164,7 @@ export function FileManager({ appId }: FileManagerProps) {
         }, 1000);
       }
     },
-    [appId, filePath, fetchFiles]
+    [appId, filePath, fetchFiles, containerType]
   );
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -228,7 +233,7 @@ export function FileManager({ appId }: FileManagerProps) {
       onDrop={handleDrop}
     >
       {view === "editor" && editingFile ? (
-        <FileEditor appId={appId} filePath={editingFile} onBack={backToList} />
+        <FileEditor appId={appId} filePath={editingFile} onBack={backToList} containerType={containerType} />
       ) : (
         <>
           {/* Path bar */}

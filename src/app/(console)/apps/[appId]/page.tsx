@@ -108,8 +108,12 @@ export default function AppDetailPage() {
   const prodLogsEndRef = useRef<HTMLDivElement>(null);
 
   // Right panel tab state
-  const [rightPanel, setRightPanel] = useState<"preview" | "deploy" | "files">("preview");
+  const [rightPanel, setRightPanel] = useState<"preview" | "deploy">("preview");
   const [fileManagerKey, setFileManagerKey] = useState(0);
+  // Sub-panel for preview/deploy: browser view or file manager
+  const [previewSubPanel, setPreviewSubPanel] = useState<"browser" | "files">("browser");
+  const [deploySubPanel, setDeploySubPanel] = useState<"browser" | "files">("browser");
+  const [prodIframeKey, setProdIframeKey] = useState(0);
 
   // Auto-develop: when redirected from /create with ?develop=true
   const isDevelop = searchParams.get("develop") === "true";
@@ -750,17 +754,6 @@ export default function AppDetailPage() {
                 </Badge>
               )}
             </button>
-            <button
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${
-                rightPanel === "files"
-                  ? "text-foreground bg-background border-b-2 border-primary -mb-px"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-              onClick={() => setRightPanel("files")}
-            >
-              <FolderOpen className="h-3 w-3" />
-              {t("fileManager")}
-            </button>
             <div className="flex-1" />
             <Button size="sm" variant="ghost" className="h-7 w-7 mr-1 text-muted-foreground hover:text-destructive" onClick={handleDelete} disabled={loading}>
               <Trash2 className="h-3.5 w-3.5" />
@@ -787,6 +780,13 @@ export default function AppDetailPage() {
                     </div>
                     {/* Address bar */}
                     <div className="flex flex-1 items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 min-w-0">
+                      <button
+                        className={`shrink-0 rounded p-0.5 transition-colors ${previewSubPanel === "files" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"}`}
+                        onClick={() => setPreviewSubPanel(previewSubPanel === "files" ? "browser" : "files")}
+                        title={t("fileManager")}
+                      >
+                        <FolderOpen className="h-3 w-3" />
+                      </button>
                       <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
                       <span className="flex-1 text-xs font-mono text-muted-foreground truncate">
                         {previewUrl}
@@ -836,12 +836,16 @@ export default function AppDetailPage() {
                       <Maximize2 className="h-3 w-3" />
                     </Button>
                   </div>
-                  <iframe
-                    key={iframeKey}
-                    src={previewUrl || `http://localhost:${app.port}`}
-                    className="flex-1 w-full border-0"
-                    title="App Preview"
-                  />
+                  {previewSubPanel === "files" ? (
+                    <FileManager key={`dev-${fileManagerKey}`} appId={app.id} containerType="dev" />
+                  ) : (
+                    <iframe
+                      key={iframeKey}
+                      src={previewUrl || `http://localhost:${app.port}`}
+                      className="flex-1 w-full border-0"
+                      title="App Preview"
+                    />
+                  )}
                 </>
               ) : (
                 <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
@@ -870,34 +874,109 @@ export default function AppDetailPage() {
           {/* Deployments Panel */}
           {rightPanel === "deploy" && (
             <div className="flex flex-1 flex-col rounded-b-lg border border-t-0 overflow-hidden bg-background min-h-0">
-              {/* Deploy action bar */}
-              <div className="flex items-center gap-1.5 px-3 py-1.5 border-b bg-muted/30">
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => doAction("publish")} disabled={loading}>
-                  <Upload className="h-3 w-3" />
-                  {t("publish")}
-                </Button>
-                {isProdRunning ? (
-                  <>
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => doAction("restart")} disabled={loading}>
-                      <RotateCw className="h-3 w-3" />
-                      {t("restart")}
+              {isProdRunning ? (
+                <>
+                  {/* Browser toolbar */}
+                  <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/40">
+                    {/* Traffic lights */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        className="h-3 w-3 rounded-full bg-[#FF5F57] hover:brightness-110 transition-all disabled:opacity-50"
+                        onClick={() => doAction("stop")}
+                        disabled={loading}
+                        title={t("stop")}
+                      />
+                      <button
+                        className="h-3 w-3 rounded-full bg-[#FEBC2E] hover:brightness-110 transition-all disabled:opacity-50"
+                        onClick={() => doAction("restart")}
+                        disabled={loading}
+                        title={t("restart")}
+                      />
+                      <span className="h-3 w-3 rounded-full bg-[#28C840]" />
+                    </div>
+                    {/* Address bar */}
+                    <div className="flex flex-1 items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 min-w-0">
+                      <button
+                        className={`shrink-0 rounded p-0.5 transition-colors ${deploySubPanel === "files" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"}`}
+                        onClick={() => setDeploySubPanel(deploySubPanel === "files" ? "browser" : "files")}
+                        title={t("fileManager")}
+                      >
+                        <FolderOpen className="h-3 w-3" />
+                      </button>
+                      <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
+                      <span className="flex-1 text-xs font-mono text-muted-foreground truncate">
+                        http://localhost:{app.prodPort}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 shrink-0"
+                        onClick={() => setProdIframeKey((k) => k + 1)}
+                        title="Refresh"
+                      >
+                        <RotateCw className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    {/* Actions */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => window.open(`http://localhost:${app.prodPort}`, "_blank")}
+                      title="Open in browser"
+                    >
+                      <ExternalLink className="h-3 w-3" />
                     </Button>
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => doAction("stop")} disabled={loading}>
-                      <Square className="h-3 w-3" />
-                      {t("stop")}
+                    <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => doAction("publish")} disabled={loading}>
+                      <Upload className="h-3 w-3" />
+                      {t("publish")}
                     </Button>
-                  </>
-                ) : (
-                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => doAction("start")} disabled={loading}>
-                    <Play className="h-3 w-3" />
-                    {t("start")}
+                  </div>
+                  {deploySubPanel === "files" ? (
+                    <FileManager key={`prod-${fileManagerKey}`} appId={app.id} containerType="prod" />
+                  ) : (
+                    <iframe
+                      key={prodIframeKey}
+                      src={prodUrl || `http://localhost:${app.prodPort}`}
+                      className="flex-1 w-full border-0"
+                      title="Production Preview"
+                    />
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => doAction("publish")}
+                    disabled={loading}
+                  >
+                    <Upload className="h-4 w-4" />
+                    {t("publish")}
                   </Button>
-                )}
+                  {deployments.length > 0 && (
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => doAction("start")}
+                      disabled={loading}
+                    >
+                      <Play className="h-4 w-4" />
+                      {t("start")}
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Bottom toolbar — deploy logs */}
+              <div className="flex items-center border-t bg-muted/40">
                 {/* Prod address bar */}
                 {prodUrl && (
-                  <div className="flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1 min-w-0 ml-auto">
+                  <div className="flex items-center gap-1.5 rounded-md border bg-background px-2 py-0.5 min-w-0 mr-auto">
                     <Globe className="h-3 w-3 text-muted-foreground shrink-0" />
-                    <span className="text-xs font-mono text-muted-foreground truncate max-w-[200px]">
+                    <span className="text-xs font-mono text-muted-foreground truncate max-w-[180px]">
                       {prodUrl}
                     </span>
                     <Button
@@ -920,9 +999,6 @@ export default function AppDetailPage() {
                     </Button>
                   </div>
                 )}
-              </div>
-              {/* Deploy sub-tabs */}
-              <div className="flex items-center border-b bg-muted/40">
                 <button
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${
                     deployPanel === "systemLog"
@@ -956,24 +1032,26 @@ export default function AppDetailPage() {
                   <History className="h-3 w-3" />
                   {t("deploymentHistory")}
                 </button>
+                <div className="flex-1" />
               </div>
 
               {/* Deploy panel content */}
-              {deployPanel === "systemLog" ? (
-                <div className="flex-1 overflow-auto bg-muted/20">
+              {deployPanel === "systemLog" && (
+                <div className="max-h-48 overflow-auto bg-muted/20">
                   {isProdRunning ? (
                     <pre className="p-3 text-xs font-mono whitespace-pre-wrap">
                       {prodLogs || "No logs available"}
                       <div ref={prodLogsEndRef} />
                     </pre>
                   ) : (
-                    <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
+                    <div className="flex items-center justify-center py-6 text-xs text-muted-foreground">
                       {t("noDeployments")}
                     </div>
                   )}
                 </div>
-              ) : deployPanel === "buildLog" ? (
-                <div className="flex-1 overflow-auto bg-muted/20">
+              )}
+              {deployPanel === "buildLog" && (
+                <div className="max-h-48 overflow-auto bg-muted/20">
                   {loading && (app?.status === "building" || rollingBack) && buildOutput === null ? (
                     <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
                       <RotateCw className="h-3 w-3 animate-spin" />
@@ -984,15 +1062,16 @@ export default function AppDetailPage() {
                   ) : currentDeployment?.buildLog ? (
                     <pre className="p-3 text-xs font-mono whitespace-pre-wrap">{currentDeployment.buildLog}</pre>
                   ) : (
-                    <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
+                    <div className="flex items-center justify-center py-6 text-xs text-muted-foreground">
                       {t("noDeployments")}
                     </div>
                   )}
                 </div>
-              ) : deployPanel === "history" ? (
-                <div className="flex-1 overflow-auto bg-muted/20">
+              )}
+              {deployPanel === "history" && (
+                <div className="max-h-48 overflow-auto bg-muted/20">
                   {deployments.length === 0 ? (
-                    <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
+                    <div className="flex items-center justify-center py-6 text-xs text-muted-foreground">
                       {t("noDeployments")}
                     </div>
                   ) : (
@@ -1044,18 +1123,10 @@ export default function AppDetailPage() {
                     </table>
                   )}
                 </div>
-              ) : (
-                <div className="flex flex-1 items-center justify-center text-muted-foreground">
-                  <p className="text-xs">{t("noDeployments")}</p>
-                </div>
               )}
             </div>
           )}
 
-          {/* Files Panel */}
-          {rightPanel === "files" && (
-            <FileManager key={fileManagerKey} appId={app.id} />
-          )}
         </div>
       </div>
 

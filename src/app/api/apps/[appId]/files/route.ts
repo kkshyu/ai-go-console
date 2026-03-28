@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, getOrgSlug } from "@/lib/db";
 import * as sandbox from "@/lib/docker-sandbox";
+import type { ContainerType } from "@/lib/docker-sandbox";
 
 /** Paths that cannot be written to */
 const WRITE_BLOCKED_PREFIXES = ["node_modules/", ".git/"];
@@ -25,9 +26,10 @@ export async function GET(
   }
 
   const orgSlug = await getOrgSlug(app.userId);
+  const containerType = (request.nextUrl.searchParams.get("containerType") || "dev") as ContainerType;
 
   // Check container exists
-  const status = await sandbox.getDevContainerStatus(orgSlug, app.slug);
+  const status = await sandbox.getContainerStatus(orgSlug, app.slug, containerType);
   if (status === "not_found") {
     return NextResponse.json({ error: "App container not found" }, { status: 404 });
   }
@@ -42,7 +44,7 @@ export async function GET(
   // Read single file content
   if (wantContent) {
     try {
-      const content = await sandbox.readFile(orgSlug, app.slug, subpath);
+      const content = await sandbox.readFile(orgSlug, app.slug, subpath, containerType);
       return NextResponse.json({
         path: subpath,
         content,
@@ -55,7 +57,7 @@ export async function GET(
 
   // Read directory listing
   try {
-    const files = await sandbox.readDirectory(orgSlug, app.slug, subpath);
+    const files = await sandbox.readDirectory(orgSlug, app.slug, subpath, containerType);
     return NextResponse.json({ path: subpath || "/", files });
   } catch {
     return NextResponse.json({ error: "Failed to read directory" }, { status: 500 });
@@ -74,9 +76,10 @@ export async function POST(
   }
 
   const orgSlug = await getOrgSlug(app.userId);
+  const containerType = (request.nextUrl.searchParams.get("containerType") || "dev") as ContainerType;
 
   // Check container exists
-  const status = await sandbox.getDevContainerStatus(orgSlug, app.slug);
+  const status = await sandbox.getContainerStatus(orgSlug, app.slug, containerType);
   if (status === "not_found") {
     return NextResponse.json({ error: "App container not found" }, { status: 404 });
   }
@@ -119,7 +122,7 @@ export async function POST(
     }
 
     try {
-      await sandbox.writeFiles(orgSlug, app.slug, validFiles);
+      await sandbox.writeFiles(orgSlug, app.slug, validFiles, containerType);
     } catch (err) {
       errors.push(`Failed to write files: ${err instanceof Error ? err.message : "unknown"}`);
     }
@@ -168,12 +171,12 @@ export async function POST(
 
     // Write text files in bulk
     if (filesToWrite.length > 0) {
-      await sandbox.writeFiles(orgSlug, app.slug, filesToWrite);
+      await sandbox.writeFiles(orgSlug, app.slug, filesToWrite, containerType);
     }
 
     // Write binary files individually
     for (const bf of binaryFiles) {
-      await sandbox.writeFileBuffer(orgSlug, app.slug, bf.path, bf.buffer);
+      await sandbox.writeFileBuffer(orgSlug, app.slug, bf.path, bf.buffer, containerType);
     }
 
     return NextResponse.json({ uploaded, files: uploadedFileNames });

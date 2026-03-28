@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, getOrgSlug } from "@/lib/db";
 import * as sandbox from "@/lib/docker-sandbox";
+import type { ContainerType } from "@/lib/docker-sandbox";
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 
@@ -23,8 +24,9 @@ export async function GET(
   }
 
   const orgSlug = await getOrgSlug(app.userId);
+  const containerType = (request.nextUrl.searchParams.get("containerType") || "dev") as ContainerType;
 
-  const status = await sandbox.getDevContainerStatus(orgSlug, app.slug);
+  const status = await sandbox.getContainerStatus(orgSlug, app.slug, containerType);
   if (status === "not_found") {
     return NextResponse.json({ error: "App container not found" }, { status: 404 });
   }
@@ -35,7 +37,7 @@ export async function GET(
   }
 
   try {
-    const content = await sandbox.readFile(orgSlug, app.slug, filePath);
+    const content = await sandbox.readFile(orgSlug, app.slug, filePath, containerType);
     const size = Buffer.byteLength(content, "utf-8");
     if (size > MAX_FILE_SIZE) {
       return NextResponse.json({ error: "File too large", size }, { status: 413 });
@@ -58,8 +60,9 @@ export async function PUT(
   }
 
   const orgSlug = await getOrgSlug(app.userId);
+  const containerType = (request.nextUrl.searchParams.get("containerType") || "dev") as ContainerType;
 
-  const status = await sandbox.getDevContainerStatus(orgSlug, app.slug);
+  const status = await sandbox.getContainerStatus(orgSlug, app.slug, containerType);
   if (status === "not_found") {
     return NextResponse.json({ error: "App container not found" }, { status: 404 });
   }
@@ -76,7 +79,7 @@ export async function PUT(
       return NextResponse.json({ error: "Content must be a string" }, { status: 400 });
     }
 
-    await sandbox.writeFiles(orgSlug, app.slug, [{ path: filePath, content }]);
+    await sandbox.writeFiles(orgSlug, app.slug, [{ path: filePath, content }], containerType);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Failed to write file" }, { status: 500 });
