@@ -3,7 +3,6 @@
 import { useTranslations } from "next-intl";
 import { Loader2 } from "lucide-react";
 import type { AgentRole, OrchestrationState } from "@/lib/agents/types";
-import { AGENT_DEFINITIONS } from "@/lib/agents/types";
 
 type AgentPhase = "thinking" | "translating" | "progress" | null;
 
@@ -29,6 +28,7 @@ export function PipelineProgress({
   generatingText,
 }: AgentProgressProps) {
   const t = useTranslations("chat");
+  const tAgents = useTranslations("agents");
   const resolvedGeneratingText = generatingText ?? t("generating");
 
   if (!isLoading) {
@@ -40,10 +40,10 @@ export function PipelineProgress({
   if (agentPhase === "progress" && statusMessage) {
     text = statusMessage;
   } else if (currentAgent && currentAgent !== "pm") {
-    const label = AGENT_DEFINITIONS[currentAgent]?.label || currentAgent;
+    const label = tAgents(`roles.${currentAgent}`);
     text = agentPhase === "translating" ? `${label} ...` : `${label} ${resolvedGeneratingText}`;
   } else if (currentAgent === "pm") {
-    text = statusMessage || `PM ${resolvedGeneratingText}`;
+    text = statusMessage || `${tAgents("roles.pm")} ${resolvedGeneratingText}`;
   }
 
   if (!text) {

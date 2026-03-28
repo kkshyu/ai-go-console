@@ -27,6 +27,23 @@ const ACTION_LABELS: Record<string, string> = {
   complete: "流程完成",
 };
 
+const LANG_LABELS: Record<string, string> = {
+  json: "系統資訊",
+  typescript: "程式碼",
+  ts: "程式碼",
+  javascript: "程式碼",
+  js: "程式碼",
+  tsx: "程式碼",
+  jsx: "程式碼",
+  sql: "資料庫查詢",
+  prisma: "資料結構",
+  html: "頁面結構",
+  css: "樣式設定",
+  bash: "指令",
+  sh: "指令",
+  shell: "指令",
+};
+
 function getFriendlyLabel(text: string): string {
   try {
     const parsed = JSON.parse(text);
@@ -43,10 +60,10 @@ function getFriendlyLabel(text: string): string {
   return "系統資訊";
 }
 
-function CollapsibleCodeBlock({ children }: { children: ReactNode }) {
+function CollapsibleCodeBlock({ children, label }: { children: ReactNode; label?: string }) {
   const [open, setOpen] = useState(false);
   const text = typeof children === "string" ? children : String(children ?? "");
-  const label = getFriendlyLabel(text);
+  const resolvedLabel = label ?? getFriendlyLabel(text);
 
   return (
     <div className="rounded border border-current/10 bg-black/5 text-xs">
@@ -59,7 +76,7 @@ function CollapsibleCodeBlock({ children }: { children: ReactNode }) {
           className={`h-3 w-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
         />
         <Settings2 className="h-3 w-3 shrink-0 opacity-50" />
-        <span>{label}</span>
+        <span>{resolvedLabel}</span>
       </button>
       {open && (
         <pre className="overflow-x-auto border-t border-current/10 p-2">
@@ -72,7 +89,6 @@ function CollapsibleCodeBlock({ children }: { children: ReactNode }) {
 
 const components: Components = {
   pre: ({ children }) => {
-    // Check if the child is a code element with JSON-like content
     const child = Array.isArray(children) ? children[0] : children;
     if (
       child &&
@@ -80,20 +96,17 @@ const components: Components = {
       "props" in child
     ) {
       const codeProps = child.props as { children?: ReactNode; className?: string };
-      const text = typeof codeProps.children === "string" ? codeProps.children : String(codeProps.children ?? "");
       const lang = codeProps.className?.replace("language-", "");
       // Hide prd blocks — they are rendered in the side panel
       if (lang === "prd") {
         return null;
       }
-      if (lang === "json" || (!lang && isJsonLike(text))) {
-        return <CollapsibleCodeBlock>{codeProps.children}</CollapsibleCodeBlock>;
-      }
+      // Collapse all code blocks with a friendly label
+      const label = lang ? (LANG_LABELS[lang] || "程式碼") : undefined;
+      return <CollapsibleCodeBlock label={label}>{codeProps.children}</CollapsibleCodeBlock>;
     }
     return (
-      <pre className="overflow-x-auto rounded bg-black/10 p-2 text-xs">
-        {children}
-      </pre>
+      <CollapsibleCodeBlock>{children}</CollapsibleCodeBlock>
     );
   },
   code: ({ children, className }) => {
