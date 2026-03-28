@@ -20,7 +20,7 @@ import type {
   ReportPayload,
 } from "./types";
 import { createMessage } from "./types";
-import { streamChat, translateForUser, stripJsonBlocks, type ChatMessage, type TokenUsage } from "../ai";
+import { streamChat, translateForUser, stripJsonBlocks, getModelForAgent, getOutputModel, type ChatMessage, type TokenUsage } from "../ai";
 import type { AgentRole } from "../agents/types";
 import { parseAgentResult } from "../agents/orchestrator";
 import {
@@ -183,10 +183,12 @@ abstract class BaseSpecialistActor extends Actor {
       payload.context || ""
     );
 
+    const effectiveModel = getModelForAgent(this.role, this.config.model);
+
     if (result.usage) {
       await this.config.sendEvent({
         usage: result.usage,
-        model: this.config.model,
+        model: effectiveModel,
       });
     }
 
@@ -205,7 +207,7 @@ abstract class BaseSpecialistActor extends Actor {
           payload.context || ""
         );
         if (finalResult.usage) {
-          await this.config.sendEvent({ usage: finalResult.usage, model: this.config.model });
+          await this.config.sendEvent({ usage: finalResult.usage, model: effectiveModel });
         }
         await this.translateAndSend(finalResult.content, this.role);
         const parsed = parseAgentResult(finalResult.content);
@@ -275,7 +277,7 @@ Respond with your perspective on this topic. Be concise and technical.`;
     const result = await streamChat(
       [{ role: "user", content: discussPrompt }],
       () => { this.updateHeartbeat(); },
-      this.config.model,
+      getModelForAgent(this.role, this.config.model),
       this.config.allowedServices,
       this.buildPrompt("")
     );
@@ -458,6 +460,7 @@ Respond with your perspective on this topic. Be concise and technical.`;
   ): Promise<{ content: string; usage: TokenUsage | null }> {
     const systemPrompt = this.buildPrompt(task) + artifactContext;
     const { sendEvent } = this.config;
+    const effectiveModel = getModelForAgent(this.role, this.config.model);
 
     // Reset heartbeat before LLM call (may take long before first token)
     this.updateHeartbeat();
@@ -507,7 +510,7 @@ Respond with your perspective on this topic. Be concise and technical.`;
           // Update heartbeat on each chunk
           this.updateHeartbeat();
         },
-        this.config.model,
+        effectiveModel,
         this.config.allowedServices,
         fullSystemPrompt
       );
@@ -536,7 +539,7 @@ Respond with your perspective on this topic. Be concise and technical.`;
     await sendEvent({ content: displayContent, agentRole });
 
     if (translated.usage) {
-      await sendEvent({ usage: translated.usage, model: "anthropic/claude-haiku-4.5" });
+      await sendEvent({ usage: translated.usage, model: getOutputModel() });
     }
 
     return translated;
@@ -648,7 +651,7 @@ export class DeveloperActor extends BaseSpecialistActor {
     if (result.usage) {
       await this.config.sendEvent({
         usage: result.usage,
-        model: this.config.model,
+        model: getModelForAgent(this.role, this.config.model),
       });
     }
 

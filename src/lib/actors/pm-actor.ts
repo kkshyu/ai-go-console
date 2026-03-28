@@ -25,6 +25,8 @@ import {
   streamChat,
   translateForUser,
   stripJsonBlocks,
+  getModelForAgent,
+  getOutputModel,
   type ChatMessage,
   DEFAULT_MODEL,
   OUTPUT_MODEL,
@@ -543,13 +545,14 @@ export class PMActor extends Actor {
       }, PROGRESS_INTERVAL_MS);
       this.activeTimers.add(progressTimer);
 
+      const pmModel = getModelForAgent("pm", this.config.model);
       let result;
       try {
         const systemPrompt = this.config.pmPrompt + this.config.artifactContext + (this.config.fileContext || "");
         result = await streamChat(
           chatMessages,
           () => { this.updateHeartbeat(); },
-          this.config.model || DEFAULT_MODEL,
+          pmModel,
           this.config.allowedServices,
           systemPrompt
         );
@@ -569,7 +572,7 @@ export class PMActor extends Actor {
 
       // Send usage
       if (result.usage) {
-        await sendEvent({ usage: result.usage, model: this.config.model || DEFAULT_MODEL });
+        await sendEvent({ usage: result.usage, model: pmModel });
       }
 
       // Add PM response to history
@@ -896,7 +899,7 @@ export class PMActor extends Actor {
     const displayContent = translated.content || stripJsonBlocks(mergedContent) || "所有開發者已完成工作。";
     await sendEvent({ content: displayContent, agentRole: "developer" });
     if (translated.usage) {
-      await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
+      await sendEvent({ usage: translated.usage, model: getOutputModel() });
     }
 
     // Add merged result to message history
@@ -960,7 +963,7 @@ export class PMActor extends Actor {
       getFallbackMessage(action);
 
     if (translated.usage) {
-      await sendEvent({ usage: translated.usage, model: OUTPUT_MODEL });
+      await sendEvent({ usage: translated.usage, model: getOutputModel() });
     }
 
     return displayContent;
