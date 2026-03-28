@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
   const organizationId = session?.user?.organizationId;
 
   const body = await request.json();
-  const { name, description, template, config, serviceIds, userId, files, npmPackages, presetId } = body;
+  const { name, slug: requestedSlug, description, template, config, serviceIds, userId, files, npmPackages, presetId } = body;
 
   if (!name || !template) {
     return NextResponse.json(
@@ -93,7 +93,9 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  let slug = slugify(name);
+  // Use AI-provided slug if available, otherwise fallback to slugify(name)
+  let slug = requestedSlug ? slugify(requestedSlug) : slugify(name);
+  if (!slug) slug = `app-${Date.now().toString(36)}`;
   const existing = await prisma.app.findUnique({ where: { slug } });
   if (existing) {
     slug = `${slug}-${Date.now().toString(36)}`;
