@@ -24,6 +24,10 @@ import {
   buildAppDevDeveloperPrompt,
   buildAppDevReviewerPrompt,
   buildAppDevDevOpsPrompt,
+  buildUXDesignerPrompt,
+  buildTesterPrompt,
+  buildDBMigratorPrompt,
+  buildDocWriterPrompt,
 } from "./prompts";
 
 export interface ServiceInstance {
@@ -303,6 +307,10 @@ function buildSpecialistDispatch(
       context.appContext
         ? buildAppDevDevOpsPrompt(context.appContext)
         : buildDevOpsPrompt(),
+    ux_designer: () => buildUXDesignerPrompt(),
+    tester: () => buildTesterPrompt(),
+    db_migrator: () => buildDBMigratorPrompt(),
+    doc_writer: () => buildDocWriterPrompt(),
   };
 
   // Prepend PM's task description to the system prompt

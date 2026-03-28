@@ -230,7 +230,17 @@ export type BackgroundMessageType =
   | "process_file"
   | "process_file_result"
   | "analyze_file"
-  | "analyze_file_result";
+  | "analyze_file_result"
+  | "validate_code"
+  | "validate_code_result"
+  | "resolve_deps"
+  | "resolve_deps_result"
+  | "template_lookup"
+  | "template_lookup_result"
+  | "progress_init"
+  | "progress_update"
+  | "progress_query"
+  | "progress_result";
 
 export interface BackgroundMessage {
   id: string;
