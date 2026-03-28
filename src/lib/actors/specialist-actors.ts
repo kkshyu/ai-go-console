@@ -117,6 +117,13 @@ const MAX_DISCUSSION_ROUNDS = 2;
 /** Discussion reply timeout */
 const DISCUSSION_TIMEOUT_MS = 30_000;
 
+/** Regex patterns that indicate the LLM output contains uncertainty worth discussing */
+const UNCERTAINTY_MARKERS = [
+  /\b(unclear|ambiguous|assumption|unsure|not sure|uncertain)\b/i,
+  /\b(need clarification|missing information|depends on)\b/i,
+  /"status":\s*"blocked"/,
+];
+
 abstract class BaseSpecialistActor extends Actor {
   protected config: SpecialistConfig;
   private activeTimers: Set<ReturnType<typeof setInterval>> = new Set();
@@ -192,8 +199,9 @@ abstract class BaseSpecialistActor extends Actor {
       });
     }
 
-    // Check if LLM wants to discuss with a peer
-    const discussRequest = this.parseDiscussRequest(result.content);
+    // Check if LLM wants to discuss with a peer (explicit request or auto-detected uncertainty)
+    const discussRequest = this.parseDiscussRequest(result.content)
+      ?? this.detectUncertainty(result.content);
     if (discussRequest && this.config.peerRegistry) {
       const enrichedContent = await this.conductDiscussion(
         discussRequest,
@@ -324,6 +332,27 @@ Respond with your perspective on this topic. Be concise and technical.`;
       // Not a valid discuss request
     }
     return null;
+  }
+
+  /** Detect uncertainty markers in LLM output that suggest peer discussion would help */
+  private detectUncertainty(content: string): { target: AgentRole; topic: string; content: string } | null {
+    if (!this.config.peerRegistry || this.config.peerRegistry.size === 0) return null;
+
+    const hasUncertainty = UNCERTAINTY_MARKERS.some(marker => marker.test(content));
+    if (!hasUncertainty) return null;
+
+    // Developer → Architect, Architect → Developer
+    const targetRole: AgentRole | null =
+      this.role === "developer" ? "architect" :
+      this.role === "architect" ? "developer" :
+      null;
+    if (!targetRole || !this.config.peerRegistry.has(targetRole)) return null;
+
+    return {
+      target: targetRole,
+      topic: "Clarification needed on specifications",
+      content: `I detected uncertainty in my analysis. Here is my current output for your review:\n${content.slice(0, 500)}`,
+    };
   }
 
   /** Conduct a discussion with a peer worker */

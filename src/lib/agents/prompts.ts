@@ -218,6 +218,18 @@ CRITICAL — Service instance validation:
 }
 \`\`\`
 
+PEER DISCUSSION: If you need clarification on implementation feasibility or technical constraints, you can request a discussion with the developer agent. Output a "discuss" block:
+\`\`\`json
+{
+  "discuss": {
+    "target": "developer",
+    "topic": "Brief topic description",
+    "content": "Your question or concern"
+  }
+}
+\`\`\`
+The developer will respond, and you can then finalize your design. Use this when you are uncertain about whether your architecture can be implemented as planned.
+
 Guidelines:
 - Be concise. Your output will be rewritten by an output model for the user.
 - Choose the simplest template that meets requirements
@@ -296,6 +308,18 @@ When updating an existing app, output:
 }
 \`\`\`
 ${FAILURE_CLAUSE}
+
+PEER DISCUSSION: If you need clarification on architectural decisions or service configuration, you can request a discussion with the architect agent. Output a "discuss" block:
+\`\`\`json
+{
+  "discuss": {
+    "target": "architect",
+    "topic": "Brief topic description",
+    "content": "Your question or concern"
+  }
+}
+\`\`\`
+The architect will respond, and you can then proceed with implementation. Use this when the architect's design is ambiguous or you encounter a technical conflict.
 
 Guidelines:
 - Write COMPLETE, PRODUCTION-QUALITY code. Your files will be written directly to the app.
