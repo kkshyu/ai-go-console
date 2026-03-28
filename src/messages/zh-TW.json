@@ -104,11 +104,13 @@
     "heroSubtitle": "只要告訴我你想要什麼，AI 就能幫你快速建立專業的網站與應用程式",
     "heroInputPlaceholder": "告訴我你想建立什麼，例如：客戶管理系統...",
     "suggestionCRM": "幫我建立一個客戶管理系統",
-    "suggestionInvoice": "我需要一個發票管理平台",
-    "suggestionLeave": "建立員工請假系統",
-    "orChooseTemplate": "或從範本開始",
-    "viewAllTemplates": "瀏覽所有範本",
-    "allTemplatesTitle": "所有範本",
+    "suggestionEcommerce": "我需要一個電商平台",
+    "suggestionBooking": "建立預約管理系統",
+    "orChooseTemplate": "或選擇系統類型",
+    "viewAllTemplates": "瀏覽所有系統",
+    "allTemplatesTitle": "所有系統",
+    "presetCount": "個情境",
+    "choosePreset": "選擇情境",
     "collapse": "收合",
     "backToHome": "返回首頁",
     "placeholder": "描述您想建立的應用程式...",
@@ -139,194 +141,101 @@
     "serviceConnected": "已連線",
     "serviceFailed": "連線失敗",
     "serviceTesting": "測試中...",
+    "templates": {
+      "crm": { "name": "客戶管理 CRM" },
+      "erp": { "name": "進銷存 ERP" },
+      "linebot": { "name": "LINE Bot" },
+      "website": { "name": "形象網頁" },
+      "ecommerce": { "name": "電商平台" },
+      "booking": { "name": "預約系統" },
+      "internal": { "name": "內部工具" },
+      "dashboard": { "name": "儀表板" }
+    },
     "presets": {
-      "finance-expense-report": {
-        "name": "費用報銷系統",
-        "description": "員工線上提交費用報銷單，主管審核，財務撥款追蹤"
+      "crm-sales-pipeline": {
+        "name": "銷售管線 CRM",
+        "description": "客戶追蹤、商機 Kanban 看板、銷售漏斗分析與業績儀表板"
       },
-      "finance-invoice-manager": {
-        "name": "發票管理平台",
-        "description": "進銷項發票登錄、對帳、逾期提醒與報表匯出"
+      "crm-realestate": {
+        "name": "房仲客戶管理",
+        "description": "客戶需求登記、物件配對推薦、帶看紀錄與回饋追蹤"
       },
-      "finance-budget-tracker": {
-        "name": "預算追蹤儀表板",
-        "description": "部門預算編列、即時花費監控與預算達成率視覺化"
+      "crm-client-portal": {
+        "name": "客戶自助入口",
+        "description": "客戶自助提交工單、查看發票狀態與下載文件"
       },
-      "finance-accounts-receivable": {
-        "name": "應收帳款管理",
-        "description": "客戶帳款追蹤、帳齡分析、催收提醒與收款紀錄"
+      "erp-retail": {
+        "name": "零售進銷存",
+        "description": "商品管理、進貨單、銷貨單、庫存追蹤與低庫存警示"
       },
-      "finance-accounts-payable": {
-        "name": "應付帳款管理",
-        "description": "供應商付款排程、付款審核流程與付款狀態追蹤"
+      "erp-realestate": {
+        "name": "房仲物件管理",
+        "description": "物件刊登、業主管理、成交記錄與佣金追蹤"
       },
-      "finance-payroll": {
-        "name": "薪資計算系統",
-        "description": "員工薪資計算、加班費與獎金試算、薪資條產出"
-      },
-      "finance-tax-filing": {
-        "name": "稅務申報助手",
-        "description": "營業稅、所得稅申報資料整理、稅額試算與申報時程提醒"
-      },
-      "finance-cashflow": {
-        "name": "現金流量預測",
-        "description": "每日現金流入流出追蹤、未來現金流預測與資金缺口警示"
-      },
-      "legal-contract-manager": {
-        "name": "合約管理系統",
-        "description": "合約建立、審閱流程、到期提醒與電子簽核"
-      },
-      "legal-case-tracker": {
-        "name": "案件追蹤系統",
-        "description": "訴訟案件進度追蹤、文件管理與時程提醒"
-      },
-      "legal-compliance-checklist": {
-        "name": "法遵檢核平台",
-        "description": "法規遵循檢核清單、稽核紀錄與合規報告產出"
-      },
-      "sales-crm": {
-        "name": "客戶關係管理",
-        "description": "客戶資料管理、銷售漏斗追蹤與業績儀表板"
-      },
-      "sales-quote-generator": {
-        "name": "報價單產生器",
-        "description": "快速建立報價單、產品目錄選擇與 PDF 匯出"
-      },
-      "sales-lead-tracker": {
-        "name": "商機追蹤看板",
-        "description": "潛在客戶管理、跟進提醒與商機階段看板"
-      },
-      "sales-order-management": {
-        "name": "訂單管理系統",
-        "description": "訂單建立、出貨追蹤、退換貨處理與訂單狀態查詢"
-      },
-      "sales-commission": {
-        "name": "業績獎金計算",
-        "description": "業務員業績統計、獎金規則設定、佣金試算與發放紀錄"
-      },
-      "sales-visit-log": {
-        "name": "客戶拜訪紀錄",
-        "description": "業務拜訪排程、拜訪紀錄填寫、客戶回饋追蹤與拜訪報表"
-      },
-      "sales-territory-map": {
-        "name": "銷售區域管理",
-        "description": "業務區域劃分、區域業績對比、客戶分佈視覺化"
-      },
-      "sales-product-catalog": {
-        "name": "產品型錄系統",
-        "description": "產品資訊管理、規格比較、價格查詢與型錄分享"
-      },
-      "hr-leave-system": {
-        "name": "請假管理系統",
-        "description": "線上請假申請、假別管理、主管審核與假勤統計"
-      },
-      "hr-recruitment": {
-        "name": "招募管理平台",
-        "description": "職缺發布、履歷收集、面試排程與錄取流程追蹤"
-      },
-      "hr-onboarding": {
-        "name": "新人報到系統",
-        "description": "新進員工報到流程、文件繳交清單與教育訓練排程"
-      },
-      "marketing-campaign": {
-        "name": "行銷活動管理",
-        "description": "行銷活動規劃、預算分配、成效追蹤與 ROI 分析"
-      },
-      "marketing-content-calendar": {
-        "name": "內容行事曆",
-        "description": "社群貼文排程、內容審核流程與多平台發布管理"
-      },
-      "pm-task-board": {
-        "name": "專案任務看板",
-        "description": "任務建立與指派、看板視圖、進度追蹤與里程碑管理"
-      },
-      "pm-meeting-notes": {
-        "name": "會議記錄系統",
-        "description": "會議紀錄、待辦事項追蹤與會議決議歸檔"
-      },
-      "it-helpdesk": {
-        "name": "IT 服務台",
-        "description": "IT 問題回報、工單指派、處理進度追蹤與知識庫"
-      },
-      "ops-inventory": {
-        "name": "庫存管理系統",
-        "description": "商品庫存即時查詢、進出貨紀錄與低庫存警示"
-      },
-      "linebot-payment-notify": {
-        "name": "LINE 帳款通知機器人",
-        "description": "應收應付帳款到期提醒、付款確認通知與逾期催收推播"
-      },
-      "linebot-contract-alert": {
-        "name": "LINE 合約提醒機器人",
-        "description": "合約到期自動提醒、續約通知推播與重要法務事項即時通知"
+      "erp-accounting": {
+        "name": "記帳系統",
+        "description": "借貸分錄、發票管理、收支趨勢圖與稅務報表"
       },
       "linebot-customer-service": {
-        "name": "LINE 客服機器人",
-        "description": "自動回覆客戶常見問題、轉接真人客服與對話紀錄管理"
-      },
-      "linebot-ecommerce": {
-        "name": "LINE 電商機器人",
-        "description": "商品瀏覽、加入購物車、下單結帳與訂單查詢一站式服務"
-      },
-      "linebot-order-tracking": {
-        "name": "LINE 訂單查詢機器人",
-        "description": "透過訂單編號即時查詢物流狀態、配送進度與預計到貨時間"
-      },
-      "linebot-leave": {
-        "name": "LINE 請假機器人",
-        "description": "LINE 上直接申請請假、查詢假別餘額、主管即時審核通知"
-      },
-      "linebot-member-card": {
-        "name": "LINE 會員卡機器人",
-        "description": "電子會員卡、點數累積兌換、會員等級查詢與專屬優惠推播"
-      },
-      "linebot-survey": {
-        "name": "LINE 問卷機器人",
-        "description": "互動式問卷調查、滿意度評分收集與統計結果即時查看"
-      },
-      "linebot-notification": {
-        "name": "LINE 通知機器人",
-        "description": "主動推播任務進度、會議提醒、系統通知與排程訊息"
-      },
-      "linebot-faq": {
-        "name": "LINE FAQ 機器人",
-        "description": "關鍵字比對自動回答常見問題，支援圖文選單與快速回覆"
+        "name": "AI 客服機器人",
+        "description": "FAQ 自動回覆、AI 智慧對話、無法回答時轉接真人客服"
       },
       "linebot-booking": {
-        "name": "LINE 預約機器人",
-        "description": "線上預約時段查詢、預約確認通知與取消改期處理"
+        "name": "預約機器人",
+        "description": "瀏覽服務項目、選擇時段、完成預約與取消改期"
       },
-      "realestate-listing": {
-        "name": "物件管理系統",
-        "description": "房屋物件刊登管理、租售狀態追蹤與屋主資訊維護"
+      "linebot-order-notify": {
+        "name": "訂單通知機器人",
+        "description": "查詢訂單狀態、推送出貨與配送通知、物流追蹤"
       },
-      "realestate-client-matching": {
-        "name": "客戶配對系統",
-        "description": "買租屋需求登記、物件條件配對與看屋回饋紀錄"
+      "linebot-membership": {
+        "name": "會員卡機器人",
+        "description": "點數查詢與兌換、會員等級、優惠券與獎品目錄"
       },
-      "realestate-commission": {
-        "name": "佣金追蹤系統",
-        "description": "成交佣金計算、個人分潤比例管理與撥款狀態追蹤"
+      "website-corporate": {
+        "name": "企業形象網頁",
+        "description": "Hero 首頁、關於我們、服務項目、聯絡我們的完整企業網站"
       },
-      "realestate-owner-negotiation": {
-        "name": "業主開發管理",
-        "description": "業主洽談紀錄、開價與行情比較、委託進度追蹤與跟進排程"
+      "website-portfolio": {
+        "name": "作品集網站",
+        "description": "個人品牌展示、作品集篩選瀏覽與部落格"
       },
-      "linebot-property-inquiry": {
-        "name": "LINE 房屋諮詢機器人",
-        "description": "物件查詢推播、看屋預約與經紀人聯絡功能"
+      "website-realestate": {
+        "name": "房仲形象網頁",
+        "description": "精選物件展示、物件搜尋、團隊介紹與諮詢表單"
+      },
+      "ecommerce-storefront": {
+        "name": "線上商店",
+        "description": "商品瀏覽、購物車、結帳流程與 Zustand 狀態管理"
+      },
+      "ecommerce-order-mgmt": {
+        "name": "訂單管理後台",
+        "description": "訂單列表與詳情、出貨管理、客戶管理與營收統計"
+      },
+      "booking-appointment": {
+        "name": "通用預約系統",
+        "description": "日曆時段管理、預約紀錄、服務項目設定與客戶名冊"
+      },
+      "booking-restaurant": {
+        "name": "餐廳訂位系統",
+        "description": "桌位時間軸、訂位管理、桌位設定與菜單展示"
+      },
+      "internal-hr": {
+        "name": "人事管理系統",
+        "description": "員工名冊、請假審核、出勤記錄與部門統計儀表板"
+      },
+      "internal-project": {
+        "name": "專案管理工具",
+        "description": "專案列表、Kanban 任務看板、時程表與團隊工作量分析"
+      },
+      "internal-helpdesk": {
+        "name": "IT 服務台",
+        "description": "工單管理、對話紀錄、SLA 追蹤與知識庫"
+      },
+      "dashboard-analytics": {
+        "name": "營運分析儀表板",
+        "description": "KPI 卡片、銷售趨勢圖、客戶分析與報表產出"
       }
-    },
-    "presetCategories": {
-      "finance": "財務",
-      "legal": "法務",
-      "sales": "業務",
-      "hr": "人資",
-      "marketing": "行銷",
-      "pm": "專案管理",
-      "it": "資訊",
-      "ops": "營運",
-      "realestate": "房仲"
     }
   },
   "services": {

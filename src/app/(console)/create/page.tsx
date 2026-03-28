@@ -8,15 +8,14 @@ import { Button } from "@/components/ui/button";
 import {
   AlertTriangle,
   Loader2,
-  DollarSign,
-  Scale,
-  Briefcase,
   Users,
-  Megaphone,
-  ClipboardList,
-  Monitor,
   Package,
-  Home,
+  MessageCircle,
+  Globe,
+  ShoppingCart,
+  Calendar,
+  Building2,
+  BarChart3,
   Sparkles,
   ArrowRight,
   ChevronDown,
@@ -47,81 +46,58 @@ interface CreateAppAction {
 
 interface AppPreset {
   id: string;
-  category: string;
-  template: string;
+  templateId: string;
 }
 
-const APP_PRESETS: AppPreset[] = [
-  { id: "finance-expense-report", category: "finance", template: "nextjs-fullstack" },
-  { id: "finance-invoice-manager", category: "finance", template: "nextjs-fullstack" },
-  { id: "finance-budget-tracker", category: "finance", template: "nextjs-fullstack" },
-  { id: "finance-accounts-receivable", category: "finance", template: "nextjs-fullstack" },
-  { id: "finance-accounts-payable", category: "finance", template: "nextjs-fullstack" },
-  { id: "finance-payroll", category: "finance", template: "nextjs-fullstack" },
-  { id: "finance-tax-filing", category: "finance", template: "nextjs-fullstack" },
-  { id: "finance-cashflow", category: "finance", template: "nextjs-fullstack" },
-  { id: "linebot-payment-notify", category: "finance", template: "line-bot" },
-  { id: "legal-contract-manager", category: "legal", template: "nextjs-fullstack" },
-  { id: "legal-case-tracker", category: "legal", template: "nextjs-fullstack" },
-  { id: "legal-compliance-checklist", category: "legal", template: "nextjs-fullstack" },
-  { id: "linebot-contract-alert", category: "legal", template: "line-bot" },
-  { id: "sales-crm", category: "sales", template: "nextjs-fullstack" },
-  { id: "sales-quote-generator", category: "sales", template: "nextjs-fullstack" },
-  { id: "sales-lead-tracker", category: "sales", template: "nextjs-fullstack" },
-  { id: "sales-order-management", category: "sales", template: "nextjs-fullstack" },
-  { id: "sales-commission", category: "sales", template: "nextjs-fullstack" },
-  { id: "sales-visit-log", category: "sales", template: "nextjs-fullstack" },
-  { id: "sales-territory-map", category: "sales", template: "nextjs-fullstack" },
-  { id: "sales-product-catalog", category: "sales", template: "nextjs-fullstack" },
-  { id: "linebot-customer-service", category: "sales", template: "line-bot" },
-  { id: "linebot-ecommerce", category: "sales", template: "line-bot" },
-  { id: "linebot-order-tracking", category: "sales", template: "line-bot" },
-  { id: "hr-leave-system", category: "hr", template: "nextjs-fullstack" },
-  { id: "hr-recruitment", category: "hr", template: "nextjs-fullstack" },
-  { id: "hr-onboarding", category: "hr", template: "nextjs-fullstack" },
-  { id: "linebot-leave", category: "hr", template: "line-bot" },
-  { id: "marketing-campaign", category: "marketing", template: "nextjs-fullstack" },
-  { id: "marketing-content-calendar", category: "marketing", template: "nextjs-fullstack" },
-  { id: "linebot-member-card", category: "marketing", template: "line-bot" },
-  { id: "linebot-survey", category: "marketing", template: "line-bot" },
-  { id: "pm-task-board", category: "pm", template: "nextjs-fullstack" },
-  { id: "pm-meeting-notes", category: "pm", template: "nextjs-fullstack" },
-  { id: "linebot-notification", category: "pm", template: "line-bot" },
-  { id: "it-helpdesk", category: "it", template: "nextjs-fullstack" },
-  { id: "linebot-faq", category: "it", template: "line-bot" },
-  { id: "ops-inventory", category: "ops", template: "nextjs-fullstack" },
-  { id: "linebot-booking", category: "ops", template: "line-bot" },
-  { id: "realestate-listing", category: "realestate", template: "nextjs-fullstack" },
-  { id: "realestate-client-matching", category: "realestate", template: "nextjs-fullstack" },
-  { id: "realestate-commission", category: "realestate", template: "nextjs-fullstack" },
-  { id: "realestate-owner-negotiation", category: "realestate", template: "nextjs-fullstack" },
-  { id: "linebot-property-inquiry", category: "realestate", template: "line-bot" },
-];
+/* ---------- System templates (categories) ---------- */
 
-const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  finance: DollarSign,
-  legal: Scale,
-  sales: Briefcase,
-  hr: Users,
-  marketing: Megaphone,
-  pm: ClipboardList,
-  it: Monitor,
-  ops: Package,
-  realestate: Home,
+const SYSTEM_TEMPLATES = [
+  "crm", "erp", "linebot", "website", "ecommerce", "booking", "internal", "dashboard",
+] as const;
+
+const TEMPLATE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  crm: Users,
+  erp: Package,
+  linebot: MessageCircle,
+  website: Globe,
+  ecommerce: ShoppingCart,
+  booking: Calendar,
+  internal: Building2,
+  dashboard: BarChart3,
 };
 
-const CATEGORIES = ["finance", "legal", "sales", "hr", "marketing", "pm", "it", "ops", "realestate"];
+/* ---------- Presets organized by template ---------- */
 
-// Featured presets to show on the homepage (one per category for variety)
-const FEATURED_PRESET_IDS = [
-  "sales-crm",
-  "finance-expense-report",
-  "hr-leave-system",
-  "pm-task-board",
-  "marketing-campaign",
-  "legal-contract-manager",
-  "it-helpdesk",
-  "ops-inventory",
+const APP_PRESETS: AppPreset[] = [
+  // CRM
+  { id: "crm-sales-pipeline", templateId: "crm" },
+  { id: "crm-realestate", templateId: "crm" },
+  { id: "crm-client-portal", templateId: "crm" },
+  // ERP
+  { id: "erp-retail", templateId: "erp" },
+  { id: "erp-realestate", templateId: "erp" },
+  { id: "erp-accounting", templateId: "erp" },
+  // LINE Bot
+  { id: "linebot-customer-service", templateId: "linebot" },
+  { id: "linebot-booking", templateId: "linebot" },
+  { id: "linebot-order-notify", templateId: "linebot" },
+  { id: "linebot-membership", templateId: "linebot" },
+  // Website
+  { id: "website-corporate", templateId: "website" },
+  { id: "website-portfolio", templateId: "website" },
+  { id: "website-realestate", templateId: "website" },
+  // E-commerce
+  { id: "ecommerce-storefront", templateId: "ecommerce" },
+  { id: "ecommerce-order-mgmt", templateId: "ecommerce" },
+  // Booking
+  { id: "booking-appointment", templateId: "booking" },
+  { id: "booking-restaurant", templateId: "booking" },
+  // Internal
+  { id: "internal-hr", templateId: "internal" },
+  { id: "internal-project", templateId: "internal" },
+  { id: "internal-helpdesk", templateId: "internal" },
+  // Dashboard
+  { id: "dashboard-analytics", templateId: "dashboard" },
 ];
 
 export default function CreateAppPage() {
@@ -129,8 +105,7 @@ export default function CreateAppPage() {
   const router = useRouter();
 
   const [showChat, setShowChat] = useState(false);
-  const [showAllTemplates, setShowAllTemplates] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
   const [creatingPreset, setCreatingPreset] = useState<string | null>(null);
   const [presetError, setPresetError] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
@@ -189,7 +164,6 @@ export default function CreateAppPage() {
     testService(svcType, instanceId);
   }, [testService]);
 
-  // Auto-select service instances when PRD updates
   const autoSelectServices = useCallback((prd: PRDData) => {
     const newSelected = { ...selectedServices };
     let changed = false;
@@ -208,10 +182,7 @@ export default function CreateAppPage() {
 
   const handleCreateApp = useCallback(
     async (action: CreateAppAction) => {
-      // Use service instances selected in the right panel
       const serviceIds = Object.values(selectedServices).filter(Boolean);
-
-      // Check for failed service tests
       const failedServices = Object.entries(serviceTestResults)
         .filter(([, result]) => result && !result.success)
         .map(([svcType]) => {
@@ -223,14 +194,11 @@ export default function CreateAppPage() {
         setServiceWarning(t("serviceConnectionFailed", { services: failedServices.join(", ") }));
         return;
       }
-
       setCreatingApp(true);
       setServiceWarning(null);
       try {
-        // Inject PRD.md into initial files
         const prdFile = prdData ? { path: "PRD.md", content: prdToMarkdown(prdData) } : null;
         const allFiles = [...(action.files || []), ...(prdFile ? [prdFile] : [])];
-
         const res = await fetch("/api/apps", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -271,13 +239,11 @@ export default function CreateAppPage() {
 
   const handleAssistantResponse = useCallback(
     (content: string) => {
-      // Extract PRD data from response
       const prd = extractPRD(content);
       if (prd) {
         setPrdData(prd);
         autoSelectServices(prd);
       }
-
       const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
       if (!jsonMatch) return;
       try {
@@ -307,7 +273,7 @@ export default function CreateAppPage() {
         const res = await fetch("/api/apps", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, description, template: preset.template, presetId: preset.id }),
+          body: JSON.stringify({ name, description, presetId: preset.id }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -333,14 +299,10 @@ export default function CreateAppPage() {
     setShowChat(true);
   };
 
-  const featuredPresets = APP_PRESETS.filter((p) => FEATURED_PRESET_IDS.includes(p.id));
+  const getPresetsForTemplate = (templateId: string) =>
+    APP_PRESETS.filter((p) => p.templateId === templateId);
 
-  const filteredPresets = APP_PRESETS.filter((p) => {
-    if (selectedCategory && p.category !== selectedCategory) return false;
-    return true;
-  });
-
-  // When in full chat mode, show the chat interface
+  // Chat mode
   if (showChat) {
     return (
       <div className="flex h-[calc(100vh-7rem)] flex-col">
@@ -430,7 +392,7 @@ export default function CreateAppPage() {
             </Button>
           </div>
           <div className="flex flex-wrap gap-2 mt-3 justify-center">
-            {[t("suggestionCRM"), t("suggestionInvoice"), t("suggestionLeave")].map((suggestion) => (
+            {[t("suggestionCRM"), t("suggestionEcommerce"), t("suggestionBooking")].map((suggestion) => (
               <button
                 key={suggestion}
                 onClick={() => {
@@ -464,134 +426,89 @@ export default function CreateAppPage() {
         </div>
       )}
 
-      {/* Featured Templates */}
-      {!showAllTemplates && (
-        <div className="mx-auto w-full max-w-4xl px-4 pb-6">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {featuredPresets.map((preset) => {
-              const Icon = CATEGORY_ICONS[preset.category];
-              const isCreating = creatingPreset === preset.id;
-              return (
-                <button
-                  key={preset.id}
-                  onClick={() => handlePresetCreate(preset)}
-                  disabled={!!creatingPreset}
-                  className="group flex flex-col items-center gap-3 rounded-2xl border bg-card p-5 text-center transition-all hover:shadow-lg hover:border-primary/40 hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <div className="rounded-xl bg-primary/10 p-3 group-hover:bg-primary/15 transition-colors">
-                    {isCreating ? (
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                    ) : (
-                      <Icon className="h-5 w-5 text-primary" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">{t(`presets.${preset.id}.name`)}</p>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-snug">
-                      {t(`presets.${preset.id}.description`)}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex justify-center mt-6">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowAllTemplates(true)}
-              className="rounded-full gap-2"
-            >
-              {t("viewAllTemplates")}
-              <ChevronDown className="h-3.5 w-3.5" />
-            </Button>
-          </div>
+      {/* System Template Cards */}
+      <div className="mx-auto w-full max-w-4xl px-4 pb-8">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {SYSTEM_TEMPLATES.map((tmplId) => {
+            const Icon = TEMPLATE_ICONS[tmplId];
+            const isExpanded = expandedTemplate === tmplId;
+            const presets = getPresetsForTemplate(tmplId);
+            return (
+              <button
+                key={tmplId}
+                onClick={() => setExpandedTemplate(isExpanded ? null : tmplId)}
+                className={`group flex flex-col items-center gap-3 rounded-2xl border p-5 text-center transition-all hover:shadow-lg hover:-translate-y-0.5 ${
+                  isExpanded
+                    ? "border-primary bg-primary/5 shadow-md"
+                    : "bg-card hover:border-primary/40"
+                }`}
+              >
+                <div className={`rounded-xl p-3 transition-colors ${
+                  isExpanded ? "bg-primary/15" : "bg-primary/10 group-hover:bg-primary/15"
+                }`}>
+                  <Icon className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">{t(`templates.${tmplId}.name`)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {presets.length} {t("presetCount")}
+                  </p>
+                </div>
+                <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${
+                  isExpanded ? "rotate-180" : ""
+                }`} />
+              </button>
+            );
+          })}
         </div>
-      )}
 
-      {/* All Templates */}
-      {showAllTemplates && (
-        <div className="mx-auto w-full max-w-4xl px-4 pb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">{t("allTemplatesTitle")}</h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setShowAllTemplates(false);
-                setSelectedCategory(null);
-              }}
-              className="gap-1"
-            >
-              <ChevronUp className="h-3.5 w-3.5" />
-              {t("collapse")}
-            </Button>
-          </div>
-
-          {/* Category Filter */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            <Button
-              variant={selectedCategory === null ? "default" : "outline"}
-              size="sm"
-              className="rounded-full"
-              onClick={() => setSelectedCategory(null)}
-            >
-              {t("allCategories")}
-            </Button>
-            {CATEGORIES.map((cat) => {
-              const Icon = CATEGORY_ICONS[cat];
-              return (
-                <Button
-                  key={cat}
-                  variant={selectedCategory === cat ? "default" : "outline"}
-                  size="sm"
-                  className="rounded-full"
-                  onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {t(`presetCategories.${cat}`)}
-                </Button>
-              );
-            })}
-          </div>
-
-          {/* All Preset Grid */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredPresets.map((preset) => {
-              const Icon = CATEGORY_ICONS[preset.category];
-              const isCreating = creatingPreset === preset.id;
-              return (
-                <button
-                  key={preset.id}
-                  onClick={() => handlePresetCreate(preset)}
-                  disabled={!!creatingPreset}
-                  className="group flex items-start gap-3 rounded-xl border bg-card p-4 text-left transition-all hover:shadow-md hover:border-primary/40 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <div className="rounded-lg bg-primary/10 p-2 shrink-0 mt-0.5 group-hover:bg-primary/15 transition-colors">
-                    {isCreating ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    ) : (
-                      <Icon className="h-4 w-4 text-primary" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm">{t(`presets.${preset.id}.name`)}</span>
-                      <Badge variant="outline" className="text-xs font-normal">
-                        {t(`presetCategories.${preset.category}`)}
-                      </Badge>
+        {/* Expanded Preset List */}
+        {expandedTemplate && (
+          <div className="mt-4 rounded-xl border bg-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-sm">
+                {t(`templates.${expandedTemplate}.name`)} — {t("choosePreset")}
+              </h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExpandedTemplate(null)}
+                className="gap-1 h-7"
+              >
+                <ChevronUp className="h-3.5 w-3.5" />
+                {t("collapse")}
+              </Button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {getPresetsForTemplate(expandedTemplate).map((preset) => {
+                const isCreating = creatingPreset === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    onClick={() => handlePresetCreate(preset)}
+                    disabled={!!creatingPreset}
+                    className="group flex items-start gap-3 rounded-xl border bg-background p-4 text-left transition-all hover:shadow-md hover:border-primary/40 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <div className="rounded-lg bg-primary/10 p-2 shrink-0 mt-0.5 group-hover:bg-primary/15 transition-colors">
+                      {isCreating ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      ) : (
+                        <ArrowRight className="h-4 w-4 text-primary" />
+                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-snug">
-                      {t(`presets.${preset.id}.description`)}
-                    </p>
-                  </div>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
-                </button>
-              );
-            })}
+                    <div className="min-w-0">
+                      <span className="font-medium text-sm">{t(`presets.${preset.id}.name`)}</span>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-snug">
+                        {t(`presets.${preset.id}.description`)}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
