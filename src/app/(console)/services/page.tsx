@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,11 +12,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Server, Plus, Trash2, TestTube, Pencil, Loader2, CheckCircle2, XCircle, CircleDashed } from "lucide-react";
+import { Server, Plus, Trash2, TestTube, Pencil, Loader2, CheckCircle2, XCircle, CircleDashed, Search } from "lucide-react";
 import {
   CATEGORY_SERVICE_TYPES,
   SERVICE_TYPE_CONFIG_FIELDS,
   SERVICE_TYPE_HTTP_MODE,
+  SERVICE_TYPE_CATEGORY,
   isBuiltInServiceType,
   type ConfigFieldDef,
   ServiceCategory,
@@ -39,6 +40,10 @@ type ConnectionStatus = "untested" | "connected" | "failed";
 
 export default function ServicesPage() {
   const t = useTranslations("services");
+
+  // --- Filter state --- ("industry" | "infra" | null)
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // --- Add form state ---
   const [showForm, setShowForm] = useState(false);
@@ -81,6 +86,54 @@ export default function ServicesPage() {
       .catch(() => {});
   }, []);
 
+  // --- Filtered services ---
+  const filteredServices = useMemo(() => {
+    let items = services;
+    if (selectedGroup === "industry") {
+      items = items.filter((svc) => {
+        const cat = SERVICE_TYPE_CATEGORY[svc.type as ServiceType];
+        return cat === ServiceCategory.industry;
+      });
+    } else if (selectedGroup === "infra") {
+      items = items.filter((svc) => {
+        const cat = SERVICE_TYPE_CATEGORY[svc.type as ServiceType];
+        return cat && cat !== ServiceCategory.industry;
+      });
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      items = items.filter(
+        (svc) =>
+          svc.name.toLowerCase().includes(q) ||
+          svc.type.toLowerCase().includes(q)
+      );
+    }
+    // Sort: industry services first
+    items.sort((a, b) => {
+      const aIsIndustry = SERVICE_TYPE_CATEGORY[a.type as ServiceType] === ServiceCategory.industry;
+      const bIsIndustry = SERVICE_TYPE_CATEGORY[b.type as ServiceType] === ServiceCategory.industry;
+      if (aIsIndustry && !bIsIndustry) return -1;
+      if (!aIsIndustry && bIsIndustry) return 1;
+      return 0;
+    });
+    return items;
+  }, [services, selectedGroup, searchQuery]);
+
+  // --- Simplified category groups: "行業服務" first, then "基礎服務" for infra ---
+  const infraCount = useMemo(() => {
+    return services.filter((svc) => {
+      const cat = SERVICE_TYPE_CATEGORY[svc.type as ServiceType];
+      return cat && cat !== ServiceCategory.industry;
+    }).length;
+  }, [services]);
+
+  const industryCount = useMemo(() => {
+    return services.filter((svc) => {
+      const cat = SERVICE_TYPE_CATEGORY[svc.type as ServiceType];
+      return cat === ServiceCategory.industry;
+    }).length;
+  }, [services]);
+
   // --- Add form helpers ---
   function resetForm() {
     setFormCategory("");
@@ -107,8 +160,7 @@ export default function ServicesPage() {
       )
     : [];
 
-  // Categories that have at least one allowed type
-  const availableCategories = allCategories.filter(
+  const availableFormCategories = allCategories.filter(
     (cat) =>
       CATEGORY_SERVICE_TYPES[cat].some((st) => allowedTypes.has(st))
   );
@@ -189,7 +241,6 @@ export default function ServicesPage() {
     if (editName && editName !== svc.name) body.name = editName;
     if (editEndpointUrl !== (svc.endpointUrl || ""))
       body.endpointUrl = editEndpointUrl;
-    // Include config fields that have values
     for (const [k, v] of Object.entries(editConfig)) {
       if (v) body[k] = v;
     }
@@ -210,7 +261,6 @@ export default function ServicesPage() {
       setServices((prev) =>
         prev.map((s) => (s.id === svc.id ? { ...s, ...updated } : s))
       );
-      // Reset connection status since config changed
       setConnectionStatus((prev) => {
         const next = { ...prev };
         delete next[svc.id];
@@ -262,6 +312,7 @@ export default function ServicesPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
           {t("title")}
@@ -290,7 +341,7 @@ export default function ServicesPage() {
                   className="flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 >
                   <option value="">{t("selectCategory")}</option>
-                  {availableCategories.map((cat) => (
+                  {availableFormCategories.map((cat) => (
                     <option key={cat} value={cat}>
                       {t(`categories.${cat}`)}
                     </option>
@@ -298,7 +349,7 @@ export default function ServicesPage() {
                 </select>
               </div>
 
-              {/* Step 2: Service type (only after category selected) */}
+              {/* Step 2: Service type */}
               {formCategory && (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">{t("type")}</label>
@@ -317,7 +368,7 @@ export default function ServicesPage() {
                 </div>
               )}
 
-              {/* Step 3: Name and config (only after type selected) */}
+              {/* Step 3: Name and config */}
               {formType && (
                 <>
                   <div className="space-y-2">
@@ -330,7 +381,6 @@ export default function ServicesPage() {
                     />
                   </div>
 
-                  {/* Endpoint URL - only for user-provided httpMode */}
                   {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] ===
                     "user-provided" && (
                     <div className="space-y-2">
@@ -345,26 +395,22 @@ export default function ServicesPage() {
                       />
                     </div>
                   )}
-                  {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] ===
-                    "proxy" && (
+                  {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] === "proxy" && (
                     <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
                       {t("proxyHint")}
                     </p>
                   )}
-                  {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] ===
-                    "fixed" && (
+                  {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] === "fixed" && (
                     <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
                       {t("fixedHint")}
                     </p>
                   )}
-                  {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] ===
-                    "sdk" && (
+                  {SERVICE_TYPE_HTTP_MODE[formType as ServiceType] === "sdk" && (
                     <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
                       {t("sdkHint")}
                     </p>
                   )}
 
-                  {/* Dynamic config fields */}
                   {configFields.length > 0 && (
                     <div className="grid gap-4 md:grid-cols-2">
                       {configFields.map((field) => (
@@ -415,7 +461,59 @@ export default function ServicesPage() {
         </Card>
       )}
 
-      {/* --- Service list --- */}
+      {/* --- Filter bar --- */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        {/* Search */}
+        <div className="relative max-w-xs flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder={t("filterPlaceholder")}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+
+        {/* Category pills: industry first */}
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            variant={selectedGroup === null ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSelectedGroup(null)}
+          >
+            {t("allCategories")}
+            <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-xs">
+              {services.length}
+            </Badge>
+          </Button>
+          <Button
+            variant={selectedGroup === "industry" ? "default" : "outline"}
+            size="sm"
+            onClick={() =>
+              setSelectedGroup(selectedGroup === "industry" ? null : "industry")
+            }
+          >
+            {t("categories.industry")}
+            <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-xs">
+              {industryCount}
+            </Badge>
+          </Button>
+          <Button
+            variant={selectedGroup === "infra" ? "default" : "outline"}
+            size="sm"
+            onClick={() =>
+              setSelectedGroup(selectedGroup === "infra" ? null : "infra")
+            }
+          >
+            {t("infraServices")}
+            <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-xs">
+              {infraCount}
+            </Badge>
+          </Button>
+        </div>
+      </div>
+
+      {/* --- Table --- */}
       {services.length === 0 && !showForm ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
@@ -424,166 +522,225 @@ export default function ServicesPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {services.map((svc) => {
-            const isEditing = editingId === svc.id;
-            const editFields: ConfigFieldDef[] =
-              SERVICE_TYPE_CONFIG_FIELDS[svc.type as ServiceType] || [];
+        <div className="rounded-lg border bg-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    {t("name")}
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    {t("type")}
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    {t("category")}
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    {t("endpointUrl")}
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    {t("statusUntested")}
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    {/* Actions */}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {filteredServices.map((svc) => {
+                  const isEditing = editingId === svc.id;
+                  const editFields: ConfigFieldDef[] =
+                    SERVICE_TYPE_CONFIG_FIELDS[svc.type as ServiceType] || [];
+                  const category = SERVICE_TYPE_CATEGORY[svc.type as ServiceType];
 
-            return (
-              <Card key={svc.id}>
-                <CardContent className="p-4">
-                  {isEditing ? (
-                    /* --- Edit mode --- */
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium text-sm text-muted-foreground">
-                          {t("editService")}
-                        </p>
-                        <Badge variant="secondary">{t(`types.${svc.type}`)}</Badge>
-                      </div>
-
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">
-                            {t("name")}
-                          </label>
-                          <Input
-                            value={editName}
-                            onChange={(e) => setEditName(e.target.value)}
-                          />
-                        </div>
-
-                        {SERVICE_TYPE_HTTP_MODE[svc.type as ServiceType] ===
-                          "user-provided" && (
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">
-                              {t("endpointUrl")}
-                            </label>
-                            <Input
-                              value={editEndpointUrl}
-                              onChange={(e) =>
-                                setEditEndpointUrl(e.target.value)
-                              }
-                              placeholder="https://..."
-                            />
-                          </div>
-                        )}
-                      </div>
-
-                      {editFields.length > 0 && (
-                        <div className="grid gap-4 md:grid-cols-2">
-                          {editFields.map((field) => (
-                            <div
-                              key={field.key}
-                              className={`space-y-2 ${
-                                editFields.length === 1 ? "md:col-span-2" : ""
-                              }`}
-                            >
-                              <label className="text-sm font-medium">
-                                {t(field.key)}
-                              </label>
-                              <Input
-                                type={field.type}
-                                value={editConfig[field.key] || ""}
-                                onChange={(e) =>
-                                  setEditConfig((prev) => ({
-                                    ...prev,
-                                    [field.key]: e.target.value,
-                                  }))
-                                }
-                                placeholder={field.placeholder}
-                              />
+                  if (isEditing) {
+                    return (
+                      <tr key={svc.id}>
+                        <td colSpan={6} className="px-4 py-4">
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <p className="font-medium text-sm text-muted-foreground">
+                                {t("editService")}
+                              </p>
+                              <Badge variant="secondary">{t(`types.${svc.type}`)}</Badge>
                             </div>
-                          ))}
-                        </div>
-                      )}
 
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => handleSaveEdit(svc)}
-                        >
-                          {t("saveChanges")}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={cancelEdit}
-                        >
-                          {t("cancelEdit")}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    /* --- Display mode --- */
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Server className="h-5 w-5 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">{svc.name}</p>
-                            {getStatusBadge(svc.id)}
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <Badge variant="secondary">{t(`types.${svc.type}`)}</Badge>
-                            {svc.builtIn && (
-                              <Badge variant="default" className="text-xs">{t("builtIn")}</Badge>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div className="space-y-2">
+                                <label className="text-sm font-medium">
+                                  {t("name")}
+                                </label>
+                                <Input
+                                  value={editName}
+                                  onChange={(e) => setEditName(e.target.value)}
+                                />
+                              </div>
+
+                              {SERVICE_TYPE_HTTP_MODE[svc.type as ServiceType] ===
+                                "user-provided" && (
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium">
+                                    {t("endpointUrl")}
+                                  </label>
+                                  <Input
+                                    value={editEndpointUrl}
+                                    onChange={(e) =>
+                                      setEditEndpointUrl(e.target.value)
+                                    }
+                                    placeholder="https://..."
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            {editFields.length > 0 && (
+                              <div className="grid gap-4 md:grid-cols-2">
+                                {editFields.map((field) => (
+                                  <div
+                                    key={field.key}
+                                    className={`space-y-2 ${
+                                      editFields.length === 1 ? "md:col-span-2" : ""
+                                    }`}
+                                  >
+                                    <label className="text-sm font-medium">
+                                      {t(field.key)}
+                                    </label>
+                                    <Input
+                                      type={field.type}
+                                      value={editConfig[field.key] || ""}
+                                      onChange={(e) =>
+                                        setEditConfig((prev) => ({
+                                          ...prev,
+                                          [field.key]: e.target.value,
+                                        }))
+                                      }
+                                      placeholder={field.placeholder}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
                             )}
-                            {SERVICE_TYPE_HTTP_MODE[svc.type as ServiceType] ===
-                            "proxy" ? (
-                              <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                                Proxy: /api/proxy/{svc.id}/query
-                              </span>
-                            ) : svc.endpointUrl ? (
-                              <span className="text-xs text-muted-foreground truncate max-w-[200px]">
-                                {svc.endpointUrl}
-                              </span>
-                            ) : null}
+
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleSaveEdit(svc)}
+                              >
+                                {t("saveChanges")}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={cancelEdit}
+                              >
+                                {t("cancelEdit")}
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 shrink-0">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleTest(svc.id)}
-                          disabled={testingIds.has(svc.id)}
-                        >
-                          {testingIds.has(svc.id) ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <TestTube className="h-4 w-4" />
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return (
+                    <tr key={svc.id} className="hover:bg-muted/30 transition-colors">
+                      {/* Name */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{svc.name}</span>
+                          {svc.builtIn && (
+                            <Badge variant="default" className="text-xs">{t("builtIn")}</Badge>
                           )}
-                          <span className="hidden sm:inline">
-                            {t("testConnection")}
+                        </div>
+                      </td>
+
+                      {/* Type */}
+                      <td className="px-4 py-3">
+                        <Badge variant="secondary" className="text-xs font-normal">
+                          {t(`types.${svc.type}`)}
+                        </Badge>
+                      </td>
+
+                      {/* Category */}
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-muted-foreground">
+                          {category ? t(`categories.${category}`) : "-"}
+                        </span>
+                      </td>
+
+                      {/* Endpoint */}
+                      <td className="px-4 py-3">
+                        {SERVICE_TYPE_HTTP_MODE[svc.type as ServiceType] === "proxy" ? (
+                          <span className="text-xs text-muted-foreground font-mono truncate block max-w-[220px]">
+                            /api/proxy/{svc.id}/query
                           </span>
-                        </Button>
-                        {!svc.builtIn && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => startEdit(svc)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
+                        ) : svc.endpointUrl ? (
+                          <span className="text-xs text-muted-foreground truncate block max-w-[220px]">
+                            {svc.endpointUrl}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
                         )}
-                        {!svc.builtIn && (
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-4 py-3">
+                        {getStatusBadge(svc.id)}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex gap-1.5 justify-end">
                           <Button
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
-                            onClick={() => handleDelete(svc.id)}
+                            onClick={() => handleTest(svc.id)}
+                            disabled={testingIds.has(svc.id)}
+                            title={t("testConnection")}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            {testingIds.has(svc.id) ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <TestTube className="h-4 w-4" />
+                            )}
                           </Button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+                          {!svc.builtIn && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => startEdit(svc)}
+                              title={t("editService")}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {!svc.builtIn && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(svc.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredServices.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                      {searchQuery || selectedCategory
+                        ? t("emptyState")
+                        : t("emptyState")}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

@@ -228,6 +228,23 @@ const testers: Record<ServiceType, ServiceTester> = {
   built_in_disk: configOnlyTester("Built-in Disk Storage", ["basePath"]),
   built_in_real_estate: configOnlyTester("Built-in Real Estate", ["apiBaseUrl"]),
 
+  // --- built-in industry (platform-managed, always available) ---
+  built_in_restaurant: async () => ({ success: true, message: "Built-in Restaurant service OK" }),
+  built_in_medical: async () => ({ success: true, message: "Built-in Medical service OK" }),
+  built_in_beauty: async () => ({ success: true, message: "Built-in Beauty service OK" }),
+  built_in_education: async () => ({ success: true, message: "Built-in Education service OK" }),
+  built_in_realestate: async () => ({ success: true, message: "Built-in Real Estate service OK" }),
+  built_in_fitness: async () => ({ success: true, message: "Built-in Fitness service OK" }),
+  built_in_retail: async () => ({ success: true, message: "Built-in Retail service OK" }),
+  built_in_hospitality: async () => ({ success: true, message: "Built-in Hospitality service OK" }),
+  built_in_legal: async () => ({ success: true, message: "Built-in Legal service OK" }),
+  built_in_accounting: async () => ({ success: true, message: "Built-in Accounting service OK" }),
+  built_in_auto_repair: async () => ({ success: true, message: "Built-in Auto Repair service OK" }),
+  built_in_pet_care: async () => ({ success: true, message: "Built-in Pet Care service OK" }),
+  built_in_photography: async () => ({ success: true, message: "Built-in Photography service OK" }),
+  built_in_cleaning: async () => ({ success: true, message: "Built-in Cleaning service OK" }),
+  built_in_logistics: async () => ({ success: true, message: "Built-in Logistics service OK" }),
+
   // --- platform ---
   supabase: async (config, endpointUrl) => {
     const url = endpointUrl || config.projectUrl;

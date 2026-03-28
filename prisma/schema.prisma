@@ -58,6 +58,22 @@ enum ServiceType {
   built_in_pg
   built_in_disk
   built_in_real_estate
+  // built-in industry services
+  built_in_restaurant
+  built_in_medical
+  built_in_beauty
+  built_in_education
+  built_in_realestate
+  built_in_fitness
+  built_in_retail
+  built_in_hospitality
+  built_in_legal
+  built_in_accounting
+  built_in_auto_repair
+  built_in_pet_care
+  built_in_photography
+  built_in_cleaning
+  built_in_logistics
   // ai_model
   openai
   gemini
