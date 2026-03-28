@@ -53,7 +53,6 @@ export interface AgentChatPanelProps {
   conversationId?: string;
   showProgress?: boolean;
   autoSendMessage?: string;
-  pipelineId?: string;
 }
 
 type AgentPhase = "thinking" | "translating" | "progress" | null;
@@ -74,7 +73,6 @@ export function AgentChatPanel({
   conversationId,
   showProgress = true,
   autoSendMessage,
-  pipelineId,
 }: AgentChatPanelProps) {
   const t = useTranslations("chat");
   const tAgents = useTranslations("agents");
@@ -610,7 +608,6 @@ export function AgentChatPanel({
               attachments={attachments}
               onAttachmentsChange={setAttachments}
               disabled={disabled}
-              pipelineId={pipelineId}
             />
             <div className="flex items-center gap-2">
               <div className="relative flex flex-1 items-center rounded-md border bg-background focus-within:ring-1 focus-within:ring-ring">

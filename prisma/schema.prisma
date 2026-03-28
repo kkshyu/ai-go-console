@@ -257,7 +257,6 @@ model ChatFile {
   extractedText  String?  @map("extracted_text") @db.Text
   summary        String?  @db.Text
   status         String   @default("uploaded") // "uploaded" | "processing" | "ready" | "error"
-  pipelineId     String?  @map("pipeline_id")
   createdAt      DateTime @default(now()) @map("created_at")
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -265,7 +264,6 @@ model ChatFile {
 
   @@index([userId])
   @@index([organizationId])
-  @@index([pipelineId])
   @@map("chat_files")
 }
 
@@ -283,3 +281,6 @@ model Deployment {
   @@index([appId, version])
   @@map("deployments")
 }
+
+// Note: "content_chunks" table is managed via raw SQL (pgvector).
+// See migration 20260328170000 and src/lib/vector-search.ts.

@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
 
   const formData = await request.formData();
   const files = formData.getAll("files") as File[];
-  const pipelineId = formData.get("pipelineId") as string | null;
+  const conversationId = formData.get("conversationId") as string | null;
 
   if (!files.length) {
     return NextResponse.json({ error: "No files provided" }, { status: 400 });
@@ -87,7 +87,6 @@ export async function POST(request: NextRequest) {
         sizeBytes: file.size,
         storagePath: "", // will update after storage
         status: "uploaded",
-        pipelineId: pipelineId || null,
       },
     });
 
@@ -111,7 +110,7 @@ export async function POST(request: NextRequest) {
         storagePath,
         mimeType: file.type || "application/octet-stream",
         fileName: file.name,
-        pipelineId: pipelineId || undefined,
+        conversationId: conversationId || undefined,
       });
 
       backgroundSystem.fireAndForget("file_analyzer", "analyze_file", {

@@ -282,7 +282,7 @@ export interface ProcessFilePayload {
   storagePath: string;
   mimeType: string;
   fileName: string;
-  pipelineId?: string;
+  conversationId?: string;
 }
 
 export interface ProcessFileResultPayload {

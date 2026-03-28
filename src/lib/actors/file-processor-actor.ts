@@ -38,6 +38,10 @@ function isImageFile(mimeType: string): boolean {
   return mimeType.startsWith("image/");
 }
 
+function isPdfFile(mimeType: string, fileName: string): boolean {
+  return mimeType === "application/pdf" || getFileExtension(fileName) === ".pdf";
+}
+
 export class FileProcessorActor extends BackgroundActor {
   constructor(id: string) {
     super(id, "file_processor");
@@ -45,7 +49,7 @@ export class FileProcessorActor extends BackgroundActor {
 
   async process(message: BackgroundMessage): Promise<ProcessFileResultPayload> {
     const payload = message.payload as ProcessFilePayload;
-    const { fileId, storagePath, mimeType, fileName, pipelineId } = payload;
+    const { fileId, storagePath, mimeType, fileName, conversationId } = payload;
 
     try {
       // Update status to processing
@@ -63,6 +67,19 @@ export class FileProcessorActor extends BackgroundActor {
       } else if (isImageFile(mimeType)) {
         // Use LLM vision to describe image
         extractedText = await this.describeImage(storagePath, mimeType);
+      } else if (isPdfFile(mimeType, fileName)) {
+        // Extract text from PDF
+        try {
+          const buffer = await (await import("../file-storage")).readFileFromStorage(storagePath);
+          const pdfParse = (await import("pdf-parse")).default;
+          const pdf = await pdfParse(buffer);
+          extractedText = (pdf.text || "").slice(0, MAX_TEXT_LENGTH);
+          if (!extractedText.trim()) {
+            extractedText = `[PDF with no extractable text: ${fileName}]`;
+          }
+        } catch {
+          extractedText = `[Unable to extract text from PDF: ${fileName}]`;
+        }
       } else {
         // Unknown type — try reading as text
         try {
@@ -88,15 +105,15 @@ export class FileProcessorActor extends BackgroundActor {
         },
       });
 
-      // Trigger embedding generation if we have meaningful text and a pipeline
-      if (extractedText.length > 50 && pipelineId) {
+      // Trigger embedding generation if we have meaningful text and a conversation
+      if (extractedText.length > 50 && conversationId) {
         try {
           const { backgroundSystem } = await import("./background-system");
           if (backgroundSystem.initialized) {
             backgroundSystem.fireAndForget("embedding", "embed_request", {
-              sourceType: "chat_file",
+              sourceType: "artifact" as const,
               sourceId: fileId,
-              pipelineId,
+              conversationId,
               agentRole: "user",
               content: extractedText,
             });
