@@ -50,11 +50,13 @@ function getKubeConfig(): k8s.KubeConfig {
 
   _kc = new k8s.KubeConfig();
 
-  // Try in-cluster config first (when running inside k8s)
-  // Falls back to default kubeconfig file (~/.kube/config or KUBECONFIG env)
-  try {
+  // Only use in-cluster config when both env vars are present.
+  // @kubernetes/client-node v1.x no longer validates these, causing
+  // "Invalid URL" (https://undefined:undefined) if we call loadFromCluster()
+  // without them.
+  if (process.env.KUBERNETES_SERVICE_HOST && process.env.KUBERNETES_SERVICE_PORT) {
     _kc.loadFromCluster();
-  } catch {
+  } else {
     _kc.loadFromDefault();
   }
 
@@ -164,8 +166,7 @@ export async function applyIngressRoute(
       mergePatchOptions,
     );
   } catch (err: unknown) {
-    const status = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-    if (status === 404) {
+    if (isK8sNotFound(err)) {
       await customApi().createNamespacedCustomObject({
         group: TRAEFIK_GROUP, version: TRAEFIK_VERSION, namespace, plural: "ingressroutes", body,
       });
@@ -185,8 +186,7 @@ export async function deleteIngressRoute(
       group: TRAEFIK_GROUP, version: TRAEFIK_VERSION, namespace, plural: "ingressroutes", name,
     });
   } catch (err: unknown) {
-    const status = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-    if (status !== 404) throw err;
+    if (!isK8sNotFound(err)) throw err;
   }
 }
 
@@ -212,8 +212,7 @@ export async function applyMiddleware(
       mergePatchOptions,
     );
   } catch (err: unknown) {
-    const status = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-    if (status === 404) {
+    if (isK8sNotFound(err)) {
       await customApi().createNamespacedCustomObject({
         group: TRAEFIK_GROUP, version: TRAEFIK_VERSION, namespace, plural: "middlewares", body,
       });
@@ -233,8 +232,7 @@ export async function deleteMiddleware(
       group: TRAEFIK_GROUP, version: TRAEFIK_VERSION, namespace, plural: "middlewares", name,
     });
   } catch (err: unknown) {
-    const status = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-    if (status !== 404) throw err;
+    if (!isK8sNotFound(err)) throw err;
   }
 }
 
@@ -247,6 +245,28 @@ export async function listIngressRoutes(
   });
   const body = res as { items?: Array<{ metadata: { name: string }; spec: Record<string, unknown> }> };
   return body.items || [];
+}
+
+// ── Error Helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Extract HTTP status code from a k8s API error.
+ * In @kubernetes/client-node v1.x, errors are ApiException with a `code` property.
+ * In v0.x, errors had `response.statusCode`. This helper handles both.
+ */
+export function getK8sErrorStatus(err: unknown): number | undefined {
+  // v1.x: ApiException has `code` (number)
+  const code = (err as { code?: number })?.code;
+  if (typeof code === "number") return code;
+  // v0.x fallback: { response: { statusCode } }
+  const statusCode = (err as { response?: { statusCode?: number } })?.response?.statusCode;
+  if (typeof statusCode === "number") return statusCode;
+  return undefined;
+}
+
+/** Returns true if the error is a k8s 404 Not Found */
+export function isK8sNotFound(err: unknown): boolean {
+  return getK8sErrorStatus(err) === 404;
 }
 
 // ── Health Check ─────────────────────────────────────────────────────────────

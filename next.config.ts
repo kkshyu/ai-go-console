@@ -6,7 +6,7 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(__dirname),
-  serverExternalPackages: ["@prisma/client", "bcryptjs", "handlebars"],
+  serverExternalPackages: ["@prisma/client", "bcryptjs", "handlebars", "@kubernetes/client-node", "bullmq"],
 };
 
 export default withNextIntl(nextConfig);

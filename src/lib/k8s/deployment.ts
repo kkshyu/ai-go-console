@@ -5,7 +5,7 @@
  * Manages production app containers as k8s Deployments in the aigo-prod namespace.
  */
 
-import { coreApi, appsApi, config, strategicMergePatchOptions } from "./client";
+import { coreApi, appsApi, config, strategicMergePatchOptions, isK8sNotFound } from "./client";
 import {
   prodDeploymentName,
   prodServiceName,
@@ -60,8 +60,7 @@ export async function startApp(
       strategicMergePatchOptions,
     );
   } catch (err: unknown) {
-    const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-    if (errStatus === 404) {
+    if (isK8sNotFound(err)) {
       await appsApi().createNamespacedDeployment({ namespace: ns, body: deploySpec });
     } else {
       throw err;
@@ -72,8 +71,7 @@ export async function startApp(
   try {
     await coreApi().readNamespacedService({ name: svcName, namespace: ns });
   } catch (err: unknown) {
-    const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-    if (errStatus === 404) {
+    if (isK8sNotFound(err)) {
       const svcSpec = generateProdServiceSpec(orgSlug, slug, internalPort);
       await coreApi().createNamespacedService({ namespace: ns, body: svcSpec });
     }
@@ -142,8 +140,7 @@ export async function stopApp(orgSlug: string, slug: string): Promise<string> {
     );
     return `Stopped ${deployName}`;
   } catch (err: unknown) {
-    const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-    if (errStatus === 404) return `${deployName} not found`;
+    if (isK8sNotFound(err)) return `${deployName} not found`;
     throw err;
   }
 }
@@ -253,16 +250,14 @@ export async function removeApp(orgSlug: string, slug: string): Promise<void> {
   try {
     await appsApi().deleteNamespacedDeployment({ name: deployName, namespace: ns });
   } catch (err: unknown) {
-    const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-    if (errStatus !== 404) throw err;
+    if (!isK8sNotFound(err)) throw err;
   }
 
   // Delete Service
   try {
     await coreApi().deleteNamespacedService({ name: svcName, namespace: ns });
   } catch (err: unknown) {
-    const errStatus = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-    if (errStatus !== 404) throw err;
+    if (!isK8sNotFound(err)) throw err;
   }
 }
 
