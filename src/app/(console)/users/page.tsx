@@ -338,7 +338,7 @@ export default function UsersPage() {
                     {t("manageServices")}
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => toggleRole(user)}>
-                    {user.role === "admin" ? "Set User" : "Set Admin"}
+                    {user.role === "admin" ? t("setUser") : t("setAdmin")}
                   </Button>
                   <Button
                     variant="outline"

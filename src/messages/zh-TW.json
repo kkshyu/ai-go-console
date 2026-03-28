@@ -95,7 +95,9 @@
     "devServer": "開發伺服器",
     "prodServer": "生產環境",
     "devPort": "開發",
-    "prodPort": "生產"
+    "prodPort": "生產",
+    "noApps": "尚未建立任何應用程式",
+    "loading": "載入中..."
   },
   "create": {
     "title": "建立應用",
@@ -104,6 +106,8 @@
     "heroSubtitle": "只要告訴我你想要什麼，AI 就能幫你快速建立專業的網站與應用程式",
     "heroInputPlaceholder": "告訴我你想建立什麼，例如：客戶管理系統...",
     "suggestionCRM": "幫我建立一個客戶管理系統",
+    "suggestionInvoice": "建立一個發票管理系統",
+    "suggestionLeave": "我需要一個員工請假系統",
     "suggestionEcommerce": "我需要一個電商平台",
     "suggestionBooking": "建立預約管理系統",
     "orChooseTemplate": "或選擇系統類型",
@@ -235,8 +239,187 @@
       "dashboard-analytics": {
         "name": "營運分析儀表板",
         "description": "KPI 卡片、銷售趨勢圖、客戶分析與報表產出"
+      },
+      "finance-expense-report": {
+        "name": "費用報帳系統",
+        "description": "費用申請、審核流程、費用分類統計與報帳紀錄"
+      },
+      "finance-invoice-manager": {
+        "name": "發票管理系統",
+        "description": "發票開立、追蹤、付款狀態管理與客戶發票歷史"
+      },
+      "finance-budget-tracker": {
+        "name": "預算追蹤工具",
+        "description": "部門預算設定、支出追蹤、預算達成率與超支警示"
+      },
+      "finance-accounts-receivable": {
+        "name": "應收帳款管理",
+        "description": "客戶欠款追蹤、付款提醒、帳齡分析與逾期管理"
+      },
+      "finance-accounts-payable": {
+        "name": "應付帳款管理",
+        "description": "供應商帳款管理、付款排程、對帳記錄與費用分析"
+      },
+      "finance-payroll": {
+        "name": "薪資管理系統",
+        "description": "員工薪資計算、出勤扣款、薪資單產生與費用統計"
+      },
+      "finance-tax-filing": {
+        "name": "報稅申報工具",
+        "description": "稅務資料彙整、報表產出、申報期程提醒與記錄歸檔"
+      },
+      "finance-cashflow": {
+        "name": "現金流管理",
+        "description": "收支預測、現金流圖表、資金缺口警示與財務健康儀表板"
+      },
+      "linebot-payment-notify": {
+        "name": "付款通知機器人",
+        "description": "付款成功通知、發票連結推送與繳費提醒"
+      },
+      "legal-contract-manager": {
+        "name": "合約管理系統",
+        "description": "合約建立、審核流程、到期提醒與電子簽署追蹤"
+      },
+      "legal-case-tracker": {
+        "name": "法律案件追蹤",
+        "description": "案件進度管理、文件歸檔、重要日期提醒與客戶聯絡紀錄"
+      },
+      "legal-compliance-checklist": {
+        "name": "法遵檢核工具",
+        "description": "法規檢查清單、合規狀態追蹤、缺失記錄與改善計畫"
+      },
+      "linebot-contract-alert": {
+        "name": "合約到期提醒機器人",
+        "description": "合約到期日推播、續約提醒與條款摘要查詢"
+      },
+      "sales-crm": {
+        "name": "銷售 CRM",
+        "description": "客戶資料管理、商機追蹤、銷售漏斗分析與業績儀表板"
+      },
+      "sales-quote-generator": {
+        "name": "報價單產生器",
+        "description": "快速建立報價單、商品項目管理、PDF 匯出與客戶寄送"
+      },
+      "sales-lead-tracker": {
+        "name": "潛在客戶追蹤",
+        "description": "潛客來源管理、跟進紀錄、轉換率分析與業務分配"
+      },
+      "sales-order-management": {
+        "name": "訂單管理系統",
+        "description": "訂單建立、出貨追蹤、退換貨流程與訂單統計"
+      },
+      "sales-commission": {
+        "name": "業務佣金管理",
+        "description": "業績計算、佣金方案設定、月結報表與業務排行榜"
+      },
+      "sales-visit-log": {
+        "name": "業務拜訪紀錄",
+        "description": "客戶拜訪記錄、跟進提醒、拜訪統計與地圖瀏覽"
+      },
+      "sales-territory-map": {
+        "name": "業務區域管理",
+        "description": "業務區域劃分、客戶地圖分布、區域業績分析"
+      },
+      "sales-product-catalog": {
+        "name": "產品目錄管理",
+        "description": "產品資料維護、分類篩選、價格管理與目錄 PDF 匯出"
+      },
+      "linebot-ecommerce": {
+        "name": "電商機器人",
+        "description": "商品瀏覽、加入購物車、結帳流程與訂單查詢"
+      },
+      "linebot-order-tracking": {
+        "name": "訂單追蹤機器人",
+        "description": "輸入訂單號查詢進度、配送狀態推播與到貨通知"
+      },
+      "hr-leave-system": {
+        "name": "員工請假系統",
+        "description": "假別管理、請假申請、主管審核與假期餘額統計"
+      },
+      "hr-recruitment": {
+        "name": "招募管理系統",
+        "description": "職缺刊登、履歷篩選、面試排程與錄取流程管理"
+      },
+      "hr-onboarding": {
+        "name": "新人入職流程",
+        "description": "入職任務清單、文件簽署、部門介紹與試用期追蹤"
+      },
+      "linebot-leave": {
+        "name": "請假機器人",
+        "description": "LINE 申請請假、查詢假期餘額與審核通知推播"
+      },
+      "marketing-campaign": {
+        "name": "行銷活動管理",
+        "description": "活動建立、受眾設定、成效追蹤與 A/B 測試管理"
+      },
+      "marketing-content-calendar": {
+        "name": "內容行銷日曆",
+        "description": "發文排程、多平台內容管理、素材庫與成效統計"
+      },
+      "linebot-member-card": {
+        "name": "會員卡機器人",
+        "description": "點數查詢與兌換、會員等級、優惠券與獎品目錄"
+      },
+      "linebot-survey": {
+        "name": "問卷調查機器人",
+        "description": "發送問卷、收集回覆、即時統計圖表與結果匯出"
+      },
+      "pm-task-board": {
+        "name": "專案任務看板",
+        "description": "Kanban 任務管理、成員指派、截止日追蹤與進度報告"
+      },
+      "pm-meeting-notes": {
+        "name": "會議記錄系統",
+        "description": "會議建立、記錄撰寫、決議追蹤與行動項目管理"
+      },
+      "linebot-notification": {
+        "name": "任務通知機器人",
+        "description": "任務到期提醒、進度更新推播與每日工作摘要"
+      },
+      "it-helpdesk": {
+        "name": "IT 服務台",
+        "description": "工單提交、技術支援派工、SLA 追蹤與知識庫"
+      },
+      "linebot-faq": {
+        "name": "FAQ 機器人",
+        "description": "常見問題自動回覆、關鍵字搜尋與問題升級轉接"
+      },
+      "ops-inventory": {
+        "name": "庫存管理系統",
+        "description": "庫存盤點、進出貨記錄、低庫存警示與庫存報表"
+      },
+      "realestate-listing": {
+        "name": "房源刊登平台",
+        "description": "物件新增與編輯、圖片管理、刊登狀態與潛客詢問"
+      },
+      "realestate-client-matching": {
+        "name": "買方配對系統",
+        "description": "買方需求登記、物件自動配對、推薦清單與比較功能"
+      },
+      "realestate-commission": {
+        "name": "仲介佣金管理",
+        "description": "成交記錄、佣金計算、拆佣設定與月結報表"
+      },
+      "realestate-owner-negotiation": {
+        "name": "屋主談判紀錄",
+        "description": "屋主接觸記錄、出價追蹤、談判歷程與議價建議"
+      },
+      "linebot-property-inquiry": {
+        "name": "房源詢問機器人",
+        "description": "LINE 查詢物件、預約看房、FAQ 自動回覆與業務通知"
       }
     }
+  },
+  "presetCategories": {
+    "finance": "財務金融",
+    "legal": "法務合規",
+    "sales": "業務銷售",
+    "hr": "人力資源",
+    "marketing": "行銷推廣",
+    "pm": "專案管理",
+    "it": "資訊科技",
+    "ops": "營運管理",
+    "realestate": "房地產"
   },
   "services": {
     "title": "服務列表",
@@ -416,7 +599,9 @@
     "noServicesAuthorized": "尚未授權任何服務",
     "saveServices": "儲存",
     "allOrgServices": "組織全部服務",
-    "servicesUpdated": "服務授權已更新"
+    "servicesUpdated": "服務授權已更新",
+    "setAdmin": "設為管理員",
+    "setUser": "設為一般使用者"
   },
   "auth": {
     "login": "登入",

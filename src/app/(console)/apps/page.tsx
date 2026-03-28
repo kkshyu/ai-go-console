@@ -133,12 +133,12 @@ export default function AppsPage() {
       )}
 
       {loading ? (
-        <div className="text-center py-16 text-muted-foreground">Loading...</div>
+        <div className="text-center py-16 text-muted-foreground">{t("loading")}</div>
       ) : apps.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <AppWindow className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-lg text-muted-foreground mb-4">No apps yet</p>
+            <p className="text-lg text-muted-foreground mb-4">{t("noApps")}</p>
             <Link href="/create">
               <Button>
                 <PlusCircle className="h-4 w-4" />

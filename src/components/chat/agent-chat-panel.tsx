@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Send, User, Loader2, Zap, MessageCircle, Paperclip } from "lucide-react";
-import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/ai";
+import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/models";
 import { FileAttachmentInput, type FileAttachment, type FileAttachmentInputHandle } from "@/components/chat/file-attachment-input";
 import {
   createInitialOrchestrationState,

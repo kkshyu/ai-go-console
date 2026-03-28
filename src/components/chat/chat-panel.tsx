@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Send, Bot, User, Loader2, Zap } from "lucide-react";
-import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/ai";
+import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/models";
 import type { ChatMessageContent } from "@/lib/ai";
 import { MarkdownContent } from "@/components/chat/markdown-content";
 import { FileAttachmentInput, type FileAttachment } from "@/components/chat/file-attachment-input";
