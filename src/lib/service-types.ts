@@ -51,6 +51,7 @@ export const ALL_SERVICE_TYPES: ServiceType[] = [
   "built_in_pg",
   "built_in_disk",
   "built_in_real_estate",
+  "built_in_supabase",
   // built-in industry
   "built_in_restaurant",
   "built_in_medical",
@@ -122,6 +123,7 @@ export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
   built_in_pg: ServiceCategory.database,
   built_in_disk: ServiceCategory.storage,
   built_in_real_estate: ServiceCategory.platform,
+  built_in_supabase: ServiceCategory.platform,
   // built-in industry
   built_in_restaurant: ServiceCategory.industry,
   built_in_medical: ServiceCategory.industry,
@@ -152,7 +154,7 @@ export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
   [ServiceCategory.email]: ["sendgrid", "ses", "mailgun"],
   [ServiceCategory.sms]: ["twilio", "vonage", "aws_sns"],
   [ServiceCategory.auth]: ["auth0", "firebase_auth", "line_login"],
-  [ServiceCategory.platform]: ["supabase", "hasura", "built_in_real_estate"],
+  [ServiceCategory.platform]: ["supabase", "hasura", "built_in_real_estate", "built_in_supabase"],
   [ServiceCategory.chat]: ["line_bot", "whatsapp", "discord", "telegram"],
   [ServiceCategory.ai_model]: ["openai", "gemini", "claude", "openrouter"],
   [ServiceCategory.industry]: INDUSTRY_SERVICE_TYPES,
@@ -162,6 +164,7 @@ export const BUILT_IN_SERVICE_TYPES: ReadonlySet<ServiceType> = new Set([
   "built_in_pg",
   "built_in_disk",
   "built_in_real_estate",
+  "built_in_supabase",
   ...INDUSTRY_SERVICE_TYPES,
 ]);
 
@@ -329,6 +332,7 @@ export const SERVICE_TYPE_CONFIG_FIELDS: Record<ServiceType, ConfigFieldDef[]> =
   built_in_pg: [],
   built_in_disk: [],
   built_in_real_estate: [],
+  built_in_supabase: [],
   // built-in industry (auto-configured by platform)
   built_in_restaurant: [],
   built_in_medical: [],
@@ -394,6 +398,7 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   built_in_pg: "Built-in PostgreSQL",
   built_in_disk: "Built-in Disk Storage",
   built_in_real_estate: "Built-in Real Estate",
+  built_in_supabase: "Built-in Supabase",
   built_in_restaurant: "Built-in Restaurant",
   built_in_medical: "Built-in Medical",
   built_in_beauty: "Built-in Beauty",
@@ -475,6 +480,7 @@ export const SERVICE_TYPE_HTTP_MODE: Record<ServiceType, HttpMode> = {
   built_in_pg: "proxy",
   built_in_disk: "sdk",
   built_in_real_estate: "fixed",
+  built_in_supabase: "user-provided",
   // built-in industry — all accessed via proxy
   built_in_restaurant: "proxy",
   built_in_medical: "proxy",

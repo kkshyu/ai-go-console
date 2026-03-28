@@ -2,6 +2,7 @@ import { PrismaClient, UserRole, AppStatus, ServiceType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { provisionDatabase } from "../src/lib/builtin-pg";
+import { provisionSupabaseProject } from "../src/lib/builtin-supabase";
 
 const prisma = new PrismaClient();
 
@@ -46,7 +47,7 @@ const ALL_SERVICE_TYPES: ServiceType[] = [
   "auth0", "firebase_auth", "line_login",
   "supabase", "hasura",
   "line_bot", "whatsapp", "discord", "telegram",
-  "built_in_pg", "built_in_disk",
+  "built_in_pg", "built_in_disk", "built_in_supabase",
   "built_in_restaurant", "built_in_medical", "built_in_beauty",
   "built_in_education", "built_in_realestate", "built_in_fitness",
   "built_in_retail", "built_in_hospitality", "built_in_legal",
@@ -169,6 +170,32 @@ async function main() {
         configEncrypted: diskCfg.ciphertext,
         iv: diskCfg.iv,
         authTag: diskCfg.authTag,
+        organizationId: org.id,
+      },
+    });
+
+    // Built-in Supabase
+    const supabaseCreds = await provisionSupabaseProject(org.slug);
+    const supabaseCfg = encrypt(JSON.stringify({
+      projectUrl: supabaseCreds.projectUrl,
+      apiKey: supabaseCreds.apiKey,
+    }));
+
+    await prisma.service.upsert({
+      where: { id: `builtin-supabase-${org.slug}` },
+      update: {
+        configEncrypted: supabaseCfg.ciphertext,
+        iv: supabaseCfg.iv,
+        authTag: supabaseCfg.authTag,
+      },
+      create: {
+        id: `builtin-supabase-${org.slug}`,
+        name: "Built-in Supabase",
+        type: ServiceType.built_in_supabase,
+        endpointUrl: supabaseCreds.projectUrl,
+        configEncrypted: supabaseCfg.ciphertext,
+        iv: supabaseCfg.iv,
+        authTag: supabaseCfg.authTag,
         organizationId: org.id,
       },
     });
