@@ -2,6 +2,13 @@ import { PrismaClient, UserRole, AppStatus, ServiceType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { provisionSupabaseProject } from "../src/lib/builtin-supabase";
+import { provisionKeycloakRealm } from "../src/lib/builtin-keycloak";
+import { provisionMinioBucket } from "../src/lib/builtin-minio";
+import { provisionN8nWorkspace } from "../src/lib/builtin-n8n";
+import { provisionQdrantCollection } from "../src/lib/builtin-qdrant";
+import { provisionMeilisearchIndex } from "../src/lib/builtin-meilisearch";
+import { provisionPostHogProject } from "../src/lib/builtin-posthog";
+import { provisionMetabaseGroup } from "../src/lib/builtin-metabase";
 
 const prisma = new PrismaClient();
 
@@ -47,6 +54,8 @@ const ALL_SERVICE_TYPES: ServiceType[] = [
   "supabase", "hasura",
   "line_bot", "whatsapp", "discord", "telegram",
   "built_in_supabase",
+  "built_in_keycloak", "built_in_minio", "built_in_n8n",
+  "built_in_qdrant", "built_in_meilisearch", "built_in_posthog", "built_in_metabase",
   "built_in_restaurant", "built_in_medical", "built_in_beauty",
   "built_in_education", "built_in_realestate", "built_in_fitness",
   "built_in_retail", "built_in_hospitality", "built_in_legal",
@@ -157,6 +166,48 @@ async function main() {
     }
   } catch (err) {
     console.log(`  ⚠ Skipping built-in Supabase provisioning: ${err instanceof Error ? err.message : err}`);
+  }
+
+  // Built-in infrastructure services for each org
+  const INFRA_SERVICES: { type: ServiceType; name: string; idPrefix: string; provision: (slug: string) => Promise<Record<string, unknown>>; endpointUrlKey?: string }[] = [
+    { type: "built_in_keycloak" as ServiceType, name: "Built-in Keycloak", idPrefix: "builtin-keycloak", provision: async (slug) => { const c = await provisionKeycloakRealm(slug); return { url: c.url, realm: c.realm, clientId: c.clientId, clientSecret: c.clientSecret }; }, endpointUrlKey: "url" },
+    { type: "built_in_minio" as ServiceType, name: "Built-in MinIO", idPrefix: "builtin-minio", provision: async (slug) => { const c = await provisionMinioBucket(slug); return { endpoint: c.endpoint, accessKey: c.accessKey, secretKey: c.secretKey, bucket: c.bucket }; }, endpointUrlKey: "endpoint" },
+    { type: "built_in_n8n" as ServiceType, name: "Built-in n8n", idPrefix: "builtin-n8n", provision: async (slug) => { const c = await provisionN8nWorkspace(slug); return { url: c.url, apiKey: c.apiKey, webhookUrl: c.webhookUrl }; }, endpointUrlKey: "url" },
+    { type: "built_in_qdrant" as ServiceType, name: "Built-in Qdrant", idPrefix: "builtin-qdrant", provision: async (slug) => { const c = await provisionQdrantCollection(slug); return { url: c.url, apiKey: c.apiKey, collectionPrefix: c.collectionPrefix }; }, endpointUrlKey: "url" },
+    { type: "built_in_meilisearch" as ServiceType, name: "Built-in Meilisearch", idPrefix: "builtin-meilisearch", provision: async (slug) => { const c = await provisionMeilisearchIndex(slug); return { url: c.url, apiKey: c.apiKey, indexPrefix: c.indexPrefix }; }, endpointUrlKey: "url" },
+    { type: "built_in_posthog" as ServiceType, name: "Built-in PostHog", idPrefix: "builtin-posthog", provision: async (slug) => { const c = await provisionPostHogProject(slug); return { url: c.url, apiKey: c.apiKey, projectId: c.projectId }; }, endpointUrlKey: "url" },
+    { type: "built_in_metabase" as ServiceType, name: "Built-in Metabase", idPrefix: "builtin-metabase", provision: async (slug) => { const c = await provisionMetabaseGroup(slug); return { url: c.url, apiKey: c.apiKey, groupName: c.groupName }; }, endpointUrlKey: "url" },
+  ];
+
+  try {
+    for (const org of [acme, startup]) {
+      for (const svc of INFRA_SERVICES) {
+        const creds = await svc.provision(org.slug);
+        const cfg = encrypt(JSON.stringify(creds));
+        await prisma.service.upsert({
+          where: { id: `${svc.idPrefix}-${org.slug}` },
+          update: {
+            endpointUrl: svc.endpointUrlKey ? (creds[svc.endpointUrlKey] as string) : undefined,
+            configEncrypted: cfg.ciphertext,
+            iv: cfg.iv,
+            authTag: cfg.authTag,
+          },
+          create: {
+            id: `${svc.idPrefix}-${org.slug}`,
+            name: svc.name,
+            type: svc.type,
+            endpointUrl: svc.endpointUrlKey ? (creds[svc.endpointUrlKey] as string) : undefined,
+            configEncrypted: cfg.ciphertext,
+            iv: cfg.iv,
+            authTag: cfg.authTag,
+            organizationId: org.id,
+          },
+        });
+      }
+    }
+    console.log("  ✓ Built-in infrastructure services provisioned (Keycloak, MinIO, n8n, Qdrant, Meilisearch, PostHog, Metabase)");
+  } catch (err) {
+    console.log(`  ⚠ Skipping some built-in infra services: ${err instanceof Error ? err.message : err}`);
   }
 
   // Industry built-in services for each org
