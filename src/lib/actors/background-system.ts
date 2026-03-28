@@ -4,16 +4,19 @@
  * Global singleton that manages background actors (Embedding, Retrieval, Summarizer).
  * These actors persist across HTTP requests and are initialized once at server startup.
  *
- * Provides two communication patterns:
+ * Provides three communication patterns:
  * - request(): Request-response with timeout
  * - fireAndForget(): Fire-and-forget (no response expected)
+ * - requestParallel(): Fan-out to worker pool, collect all results
  *
- * Includes health monitoring with automatic actor restart on consecutive failures.
+ * Supports parallel processing via WorkerPool for high-throughput roles.
+ * Includes health monitoring with automatic actor/pool restart on failures.
  */
 
 import type { BackgroundAgentRole } from "../agents/types";
 import type { BackgroundMessage, ActorStats } from "./types";
 import { BackgroundActor, createBackgroundMessage } from "./background-actor";
+import { WorkerPool, type WorkerPoolConfig, type WorkerPoolStats } from "./worker-pool";
 
 const HEALTH_CHECK_INTERVAL_MS = 30_000; // 30 seconds
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000; // 30 seconds
@@ -22,6 +25,7 @@ type ActorFactory = (role: BackgroundAgentRole) => BackgroundActor;
 
 export class BackgroundActorSystem {
   private actors = new Map<BackgroundAgentRole, BackgroundActor>();
+  private pools = new Map<BackgroundAgentRole, WorkerPool>();
   private actorFactory: ActorFactory | null = null;
   private healthCheckTimer: ReturnType<typeof setInterval> | null = null;
   private _initialized = false;
@@ -62,6 +66,7 @@ export class BackgroundActorSystem {
 
   /**
    * Request-response pattern: send a message and wait for the result.
+   * Routes to worker pool if available, otherwise to single actor.
    * Throws on timeout or actor failure.
    */
   async request<TResult = unknown>(
@@ -70,6 +75,12 @@ export class BackgroundActorSystem {
     payload: unknown,
     timeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS,
   ): Promise<TResult> {
+    // Try worker pool first
+    const pool = this.pools.get(role);
+    if (pool) {
+      return this.requestFromPool<TResult>(pool, type, payload, timeoutMs);
+    }
+
     const actor = this.actors.get(role);
     if (!actor) {
       throw new Error(`BackgroundActorSystem: No actor for role "${role}"`);
@@ -107,6 +118,7 @@ export class BackgroundActorSystem {
 
   /**
    * Fire-and-forget: send a message without waiting for result.
+   * Routes to worker pool if available, otherwise to single actor.
    * Errors are logged but not thrown.
    */
   fireAndForget(
@@ -114,6 +126,19 @@ export class BackgroundActorSystem {
     type: BackgroundMessage["type"],
     payload: unknown,
   ): void {
+    // Try worker pool first
+    const pool = this.pools.get(role);
+    if (pool) {
+      if (!pool.isHealthy()) {
+        pool.restartUnhealthy().catch((err) =>
+          console.error(`[BackgroundActorSystem] Failed to restart pool "${role}":`, err),
+        );
+      }
+      const message = createBackgroundMessage(type, payload);
+      pool.enqueue(message);
+      return;
+    }
+
     const actor = this.actors.get(role);
     if (!actor) {
       console.warn(`[BackgroundActorSystem] No actor for role "${role}", dropping message`);
@@ -132,12 +157,118 @@ export class BackgroundActorSystem {
   }
 
   /**
-   * Get health stats for all background actors.
+   * Fan-out: send the same message to ALL workers in a pool simultaneously.
+   * Collects and returns all results. Useful for map-reduce patterns.
+   * Falls back to single request if no pool exists.
    */
-  getSystemHealth(): Record<BackgroundAgentRole, ActorStats> {
-    const health = {} as Record<BackgroundAgentRole, ActorStats>;
+  async requestParallel<TResult = unknown>(
+    role: BackgroundAgentRole,
+    type: BackgroundMessage["type"],
+    payloads: unknown[],
+    timeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS,
+  ): Promise<TResult[]> {
+    const pool = this.pools.get(role);
+    if (pool) {
+      // Distribute payloads across pool workers
+      return Promise.all(
+        payloads.map((payload) =>
+          this.requestFromPool<TResult>(pool, type, payload, timeoutMs),
+        ),
+      );
+    }
+
+    // Fallback: process sequentially with single actor
+    const results: TResult[] = [];
+    for (const payload of payloads) {
+      const result = await this.request<TResult>(role, type, payload, timeoutMs);
+      results.push(result);
+    }
+    return results;
+  }
+
+  // ---- Worker Pool Management ----
+
+  /**
+   * Register a worker pool for a role. Replaces any existing single actor.
+   * Pool workers are created using the provided factory.
+   */
+  async registerPool(config: WorkerPoolConfig): Promise<void> {
+    // Remove existing single actor if present
+    const existing = this.actors.get(config.role);
+    if (existing) {
+      existing.stop();
+      this.actors.delete(config.role);
+    }
+
+    const pool = new WorkerPool(config);
+    await pool.start();
+    this.pools.set(config.role, pool);
+    console.log(`[BackgroundActorSystem] Registered pool for "${config.role}" with ${config.size} workers`);
+  }
+
+  /**
+   * Scale an existing worker pool to a new size.
+   */
+  async scalePool(role: BackgroundAgentRole, newSize: number): Promise<void> {
+    const pool = this.pools.get(role);
+    if (!pool) {
+      console.warn(`[BackgroundActorSystem] No pool for role "${role}" to scale`);
+      return;
+    }
+    await pool.scale(newSize);
+  }
+
+  /**
+   * Get stats for a worker pool.
+   */
+  getPoolStats(role: BackgroundAgentRole): WorkerPoolStats | null {
+    return this.pools.get(role)?.getPoolStats() ?? null;
+  }
+
+  private async requestFromPool<TResult>(
+    pool: WorkerPool,
+    type: BackgroundMessage["type"],
+    payload: unknown,
+    timeoutMs: number,
+  ): Promise<TResult> {
+    if (!pool.isHealthy()) {
+      console.warn(`[BackgroundActorSystem] Pool "${pool.role}" unhealthy, restarting workers`);
+      await pool.restartUnhealthy();
+      if (!pool.isHealthy()) {
+        throw new Error(`BackgroundActorSystem: Pool "${pool.role}" failed to recover`);
+      }
+    }
+
+    const message = createBackgroundMessage(type, payload);
+
+    return new Promise<TResult>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error(`BackgroundActorSystem: Pool request to "${pool.role}" timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      pool.enqueue(message, {
+        resolve: (value) => {
+          clearTimeout(timeout);
+          resolve(value as TResult);
+        },
+        reject: (error) => {
+          clearTimeout(timeout);
+          reject(error);
+        },
+      });
+    });
+  }
+
+  /**
+   * Get health stats for all background actors and pools.
+   */
+  getSystemHealth(): Partial<Record<BackgroundAgentRole, ActorStats>> {
+    const health: Partial<Record<BackgroundAgentRole, ActorStats>> = {};
     for (const [role, actor] of this.actors) {
       health[role] = actor.getStats();
+    }
+    for (const [role, pool] of this.pools) {
+      health[role] = pool.getStats();
     }
     return health;
   }
@@ -153,14 +284,14 @@ export class BackgroundActorSystem {
   }
 
   /**
-   * Check if an actor for a given role exists.
+   * Check if an actor or pool for a given role exists.
    */
   hasActor(role: BackgroundAgentRole): boolean {
-    return this.actors.has(role);
+    return this.actors.has(role) || this.pools.has(role);
   }
 
   /**
-   * Shutdown all actors and stop health monitoring.
+   * Shutdown all actors, pools, and stop health monitoring.
    */
   shutdown(): void {
     if (this.healthCheckTimer) {
@@ -172,6 +303,12 @@ export class BackgroundActorSystem {
       actor.stop();
     }
     this.actors.clear();
+
+    for (const pool of this.pools.values()) {
+      pool.stop();
+    }
+    this.pools.clear();
+
     this._initialized = false;
     console.log("[BackgroundActorSystem] Shutdown complete");
   }
@@ -206,6 +343,7 @@ export class BackgroundActorSystem {
 
   private startHealthMonitor(): void {
     this.healthCheckTimer = setInterval(async () => {
+      // Check single actors
       for (const [role, actor] of this.actors) {
         if (!actor.isHealthy()) {
           console.warn(`[BackgroundActorSystem] Health check: "${role}" unhealthy, restarting`);
@@ -213,6 +351,17 @@ export class BackgroundActorSystem {
             await this.restartActor(role);
           } catch (err) {
             console.error(`[BackgroundActorSystem] Failed to restart "${role}":`, err);
+          }
+        }
+      }
+      // Check worker pools
+      for (const [role, pool] of this.pools) {
+        if (!pool.isHealthy()) {
+          console.warn(`[BackgroundActorSystem] Health check: pool "${role}" unhealthy, restarting workers`);
+          try {
+            await pool.restartUnhealthy();
+          } catch (err) {
+            console.error(`[BackgroundActorSystem] Failed to restart pool "${role}":`, err);
           }
         }
       }
