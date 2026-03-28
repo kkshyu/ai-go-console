@@ -19,6 +19,7 @@ import {
   Zap,
   MessageSquare,
   Search,
+  Home,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ChatPanel } from "@/components/chat/chat-panel";
@@ -88,6 +89,11 @@ const APP_PRESETS: AppPreset[] = [
   { id: "linebot-faq", category: "it", template: "line-bot" },
   { id: "ops-inventory", category: "ops", template: "nextjs-fullstack" },
   { id: "linebot-booking", category: "ops", template: "line-bot" },
+  { id: "realestate-listing", category: "realestate", template: "nextjs-fullstack" },
+  { id: "realestate-client-matching", category: "realestate", template: "nextjs-fullstack" },
+  { id: "realestate-commission", category: "realestate", template: "nextjs-fullstack" },
+  { id: "realestate-owner-negotiation", category: "realestate", template: "nextjs-fullstack" },
+  { id: "linebot-property-inquiry", category: "realestate", template: "line-bot" },
 ];
 
 const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -99,9 +105,10 @@ const CATEGORY_ICONS: Record<string, React.ComponentType<{ className?: string }>
   pm: ClipboardList,
   it: Monitor,
   ops: Package,
+  realestate: Home,
 };
 
-const CATEGORIES = ["finance", "legal", "sales", "hr", "marketing", "pm", "it", "ops"];
+const CATEGORIES = ["finance", "legal", "sales", "hr", "marketing", "pm", "it", "ops", "realestate"];
 
 export default function CreateAppPage() {
   const t = useTranslations("create");

@@ -38,6 +38,12 @@ import {
 } from "./nextjs/pm";
 import { IT_HELPDESK_PAGE } from "./nextjs/it";
 import { OPS_INVENTORY_PAGE } from "./nextjs/ops";
+import {
+  REALESTATE_LISTING_PAGE,
+  REALESTATE_CLIENT_MATCHING_PAGE,
+  REALESTATE_COMMISSION_PAGE,
+  REALESTATE_OWNER_NEGOTIATION_PAGE,
+} from "./nextjs/realestate";
 
 import { LINEBOT_PAYMENT_NOTIFY } from "./linebot/finance";
 import { LINEBOT_CONTRACT_ALERT } from "./linebot/legal";
@@ -54,6 +60,7 @@ import {
 import { LINEBOT_NOTIFICATION } from "./linebot/pm";
 import { LINEBOT_FAQ } from "./linebot/it";
 import { LINEBOT_BOOKING } from "./linebot/ops";
+import { LINEBOT_PROPERTY_INQUIRY } from "./linebot/realestate";
 
 export interface PresetOverlay {
   files: Array<{ path: string; content: string }>;
@@ -89,6 +96,10 @@ const NEXTJS_PRESETS: Record<string, string> = {
   "pm-meeting-notes": PM_MEETING_NOTES_PAGE,
   "it-helpdesk": IT_HELPDESK_PAGE,
   "ops-inventory": OPS_INVENTORY_PAGE,
+  "realestate-listing": REALESTATE_LISTING_PAGE,
+  "realestate-client-matching": REALESTATE_CLIENT_MATCHING_PAGE,
+  "realestate-commission": REALESTATE_COMMISSION_PAGE,
+  "realestate-owner-negotiation": REALESTATE_OWNER_NEGOTIATION_PAGE,
 };
 
 const LINEBOT_PRESETS: Record<string, string> = {
@@ -103,6 +114,7 @@ const LINEBOT_PRESETS: Record<string, string> = {
   "linebot-notification": LINEBOT_NOTIFICATION,
   "linebot-faq": LINEBOT_FAQ,
   "linebot-booking": LINEBOT_BOOKING,
+  "linebot-property-inquiry": LINEBOT_PROPERTY_INQUIRY,
 };
 
 export function getPresetOverlay(presetId: string): PresetOverlay | null {
