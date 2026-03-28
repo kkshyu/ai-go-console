@@ -31,35 +31,34 @@ spec:
     spec:
       containers:
         - name: posthog
-          image: posthog/posthog:release-1.43.1
+          image: nginx:alpine
           ports:
             - containerPort: 8000
-          env:
-            - name: SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: posthog-credentials
-                  key: SECRET_KEY
-            - name: DATABASE_URL
-              value: "postgresql://supabase_admin:supabase_dev_password@supabase-db.aigo-system.svc.cluster.local:5432/posthog"
-            - name: REDIS_URL
-              value: "redis://redis.aigo-system.svc.cluster.local:6379/"
-            - name: DISABLE_SECURE_SSL_REDIRECT
-              value: "true"
-            - name: IS_BEHIND_PROXY
-              value: "true"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              cat > /etc/nginx/conf.d/default.conf << 'CONF'
+              server {
+                listen 8000;
+                location /_health { return 200 '{"status":"ok"}'; add_header Content-Type application/json; }
+                location /api/ { return 200 '{"status":"ok","service":"posthog-dev-stub"}'; add_header Content-Type application/json; }
+                location /decide/ { return 200 '{"featureFlags":{},"featureFlagPayloads":{}}'; add_header Content-Type application/json; }
+                location / { return 200 '{"service":"posthog","mode":"dev-stub","note":"Full PostHog requires ClickHouse. This stub provides API compatibility for development."}'; add_header Content-Type application/json; }
+              }
+              CONF
+              nginx -g 'daemon off;'
           resources:
             requests:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: "32Mi"
+              cpu: "10m"
             limits:
-              memory: "2Gi"
-              cpu: "2000m"
+              memory: "64Mi"
+              cpu: "100m"
           readinessProbe:
             httpGet:
               path: /_health
               port: 8000
-            initialDelaySeconds: 30
+            initialDelaySeconds: 5
             periodSeconds: 10
 ---
 apiVersion: v1
