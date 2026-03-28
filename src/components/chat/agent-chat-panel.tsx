@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Send, User, Loader2, ChevronDown, Zap, MessageCircle } from "lucide-react";
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/ai";
+import { FileAttachmentInput, type FileAttachment } from "@/components/chat/file-attachment-input";
 import {
   createInitialOrchestrationState,
 } from "@/lib/agents/types";
@@ -20,6 +21,8 @@ export interface AgentMessage {
   role: "user" | "assistant";
   content: string;
   agentRole?: AgentRole | null;
+  fileIds?: string[];
+  files?: FileAttachment[];
 }
 
 interface ModelTokenUsage {
@@ -80,6 +83,7 @@ export function AgentChatPanel({
   const resolvedTotalTokensLabel = totalTokensLabel ?? t("totalTokens");
   const [messages, setMessages] = useState<AgentMessage[]>(initialMessages);
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
@@ -123,18 +127,20 @@ export function AgentChatPanel({
   }, [modelMenuOpen]);
 
   const sendMessage = useCallback(
-    async (messageContent: string) => {
-      if (!messageContent.trim() || isLoading || externalLoading) return;
+    async (messageContent: string, messageFileIds?: string[], messageFiles?: FileAttachment[]) => {
+      if ((!messageContent.trim() && !(messageFileIds?.length)) || isLoading || externalLoading) return;
 
       const userMessage: AgentMessage = {
         id: Date.now().toString(),
         role: "user",
         content: messageContent.trim(),
+        ...(messageFileIds?.length ? { fileIds: messageFileIds, files: messageFiles } : {}),
       };
 
       const newMessages = [...messages, userMessage];
       setMessages(newMessages);
       setInput("");
+      setAttachments([]);
       setIsLoading(true);
       setNeedsUserInput(false);
 
@@ -149,6 +155,7 @@ export function AgentChatPanel({
               role: m.role,
               content: m.content,
               agentRole: m.agentRole,
+              ...(m.fileIds?.length ? { fileIds: m.fileIds } : {}),
             })),
             model: selectedModel,
             pipelineId,
@@ -434,9 +441,12 @@ export function AgentChatPanel({
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      sendMessage(input);
+      const fileIds = attachments
+        .filter((a) => a.status !== "uploading")
+        .map((a) => a.id);
+      sendMessage(input, fileIds.length > 0 ? fileIds : undefined, fileIds.length > 0 ? [...attachments] : undefined);
     },
-    [input, sendMessage]
+    [input, attachments, sendMessage]
   );
 
   // Auto-send message when autoSendMessage prop is set
@@ -506,11 +516,27 @@ export function AgentChatPanel({
                       : "bg-muted"
                   }`}
                 >
+                  {/* File attachment chips */}
+                  {message.files && message.files.length > 0 && (
+                    <div className="mb-1.5 flex flex-wrap gap-1">
+                      {message.files.map((f) => (
+                        <span
+                          key={f.id}
+                          className="inline-flex items-center gap-1 rounded bg-black/10 px-1.5 py-0.5 text-xs"
+                        >
+                          {f.type === "image" && f.preview ? (
+                            <img src={f.preview} alt={f.name} className="h-4 w-4 rounded object-cover" />
+                          ) : null}
+                          {f.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {message.content ? (
                     message.role === "assistant" ? (
-                      <MarkdownContent content={message.content} />
+                      <MarkdownContent content={typeof message.content === "string" ? message.content : String(message.content)} />
                     ) : (
-                      message.content
+                      typeof message.content === "string" ? message.content : String(message.content)
                     )
                   ) : (
                     <span className="flex items-center gap-2 animate-pulse">
@@ -597,58 +623,65 @@ export function AgentChatPanel({
           </div>
         )}
 
-        {/* Model Selector + Input */}
-        <div className="flex gap-2">
-          <div className="relative" ref={modelMenuRef}>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-9 gap-1 text-xs whitespace-nowrap"
-              onClick={() => setModelMenuOpen((v) => !v)}
+        {/* Input Area */}
+        <div>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+            <FileAttachmentInput
+              attachments={attachments}
+              onAttachmentsChange={setAttachments}
               disabled={disabled}
-            >
-              {selectedModelLabel}
-              <ChevronDown className="h-3 w-3" />
-            </Button>
-            {modelMenuOpen && (
-              <div className="absolute bottom-full left-0 mb-1 z-50 w-56 rounded-md border bg-popover p-1 shadow-md">
-                {AVAILABLE_MODELS.map((model) => (
-                  <button
-                    key={model.id}
-                    type="button"
-                    className={`flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground ${
-                      selectedModel === model.id
-                        ? "bg-accent text-accent-foreground"
-                        : ""
-                    }`}
-                    onClick={() => {
-                      setSelectedModel(model.id);
-                      setModelMenuOpen(false);
-                    }}
-                  >
-                    {model.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <form onSubmit={handleSubmit} className="flex flex-1 gap-2">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={resolvedPlaceholder}
-              disabled={disabled}
-              className="flex-1"
+              pipelineId={pipelineId}
             />
-            <Button
-              type="submit"
-              size="icon"
-              disabled={disabled || !input.trim()}
-            >
-              <Send className="h-4 w-4" />
-            </Button>
+            <div className="flex gap-2">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={resolvedPlaceholder}
+                disabled={disabled}
+                className="flex-1"
+              />
+              <Button
+                type="submit"
+                size="icon"
+                disabled={disabled || (!input.trim() && attachments.length === 0)}
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+              <div className="relative" ref={modelMenuRef}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1 text-xs whitespace-nowrap"
+                  onClick={() => setModelMenuOpen((v) => !v)}
+                  disabled={disabled}
+                >
+                  {selectedModelLabel}
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+                {modelMenuOpen && (
+                  <div className="absolute bottom-full right-0 mb-1 z-50 w-56 rounded-md border bg-popover p-1 shadow-md">
+                    {AVAILABLE_MODELS.map((model) => (
+                      <button
+                        key={model.id}
+                        type="button"
+                        className={`flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground ${
+                          selectedModel === model.id
+                            ? "bg-accent text-accent-foreground"
+                            : ""
+                        }`}
+                        onClick={() => {
+                          setSelectedModel(model.id);
+                          setModelMenuOpen(false);
+                        }}
+                      >
+                        {model.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </form>
         </div>
       </CardContent>

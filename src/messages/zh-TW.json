@@ -567,7 +567,14 @@
     "totalTokens": "Token 用量",
     "errorApi": "聊天 API 錯誤",
     "errorNoResponse": "無回應內容",
-    "errorApiKey": "抱歉，發生錯誤。請確認 OpenRouter API Key 是否已設定。"
+    "errorApiKey": "抱歉，發生錯誤。請確認 OpenRouter API Key 是否已設定。",
+    "attachFile": "附加檔案",
+    "dropFilesHere": "拖放檔案到這裡",
+    "fileTooLarge": "檔案過大（上限 {max}MB）",
+    "unsupportedType": "不支援的檔案類型",
+    "maxFilesReached": "最多附加 {max} 個檔案",
+    "fileProcessing": "檔案處理中...",
+    "fileReady": "檔案已就緒"
   },
   "domains": {
     "title": "自訂網域",

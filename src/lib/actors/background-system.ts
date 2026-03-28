@@ -143,6 +143,23 @@ export class BackgroundActorSystem {
   }
 
   /**
+   * Register and spawn a new actor after initialization.
+   * Used for late-registration of server-only actors (e.g., file processors).
+   */
+  async registerActor(actor: BackgroundActor): Promise<void> {
+    if (this.actors.has(actor.role)) return; // Already registered
+    await actor.start();
+    this.actors.set(actor.role, actor);
+  }
+
+  /**
+   * Check if an actor for a given role exists.
+   */
+  hasActor(role: BackgroundAgentRole): boolean {
+    return this.actors.has(role);
+  }
+
+  /**
    * Shutdown all actors and stop health monitoring.
    */
   shutdown(): void {

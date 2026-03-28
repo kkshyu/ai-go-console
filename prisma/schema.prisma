@@ -91,6 +91,7 @@ model Organization {
   services        Service[]
   allowedServices OrgAllowedService[]
   domains         OrgDomain[]
+  chatFiles       ChatFile[]
 
   @@map("organizations")
 }
@@ -120,6 +121,7 @@ model User {
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   apps            App[]
   chatMessages    ChatMessage[]
+  chatFiles       ChatFile[]
   allowedServices UserAllowedServiceInstance[]
 
   @@map("users")
@@ -260,6 +262,30 @@ model AgentArtifact {
 
   @@index([pipelineId, agentRole])
   @@map("agent_artifacts")
+}
+
+model ChatFile {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  organizationId String   @map("organization_id")
+  fileName       String   @map("file_name")
+  fileType       String   @map("file_type") // "image" | "text" | "pdf" | "code" | "unknown"
+  mimeType       String   @map("mime_type")
+  sizeBytes      Int      @map("size_bytes")
+  storagePath    String   @map("storage_path")
+  extractedText  String?  @map("extracted_text") @db.Text
+  summary        String?  @db.Text
+  status         String   @default("uploaded") // "uploaded" | "processing" | "ready" | "error"
+  pipelineId     String?  @map("pipeline_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([pipelineId])
+  @@map("chat_files")
 }
 
 model Deployment {

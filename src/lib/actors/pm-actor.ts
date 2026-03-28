@@ -83,6 +83,7 @@ export interface PMActorConfig {
   serviceInstances: Array<{ id: string; name: string; type: string }>;
   appContext?: string;
   artifactContext: string;
+  fileContext?: string;
   sendEvent: (data: unknown) => Promise<void>;
   saveArtifact: (agentRole: AgentRole, content: string, actorId?: string, taskId?: string) => Promise<void>;
   system: ActorSystem;
@@ -378,7 +379,7 @@ export class PMActor extends Actor {
 
       let result;
       try {
-        const systemPrompt = this.config.pmPrompt + this.config.artifactContext;
+        const systemPrompt = this.config.pmPrompt + this.config.artifactContext + (this.config.fileContext || "");
         result = await streamChat(
           chatMessages,
           () => { this.updateHeartbeat(); },

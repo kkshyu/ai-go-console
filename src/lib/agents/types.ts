@@ -8,7 +8,7 @@
 export type AgentRole = "pm" | "architect" | "developer" | "reviewer" | "devops";
 
 /** Background agent roles — persist across requests, managed by BackgroundActorSystem */
-export type BackgroundAgentRole = "embedding" | "retrieval" | "summarizer";
+export type BackgroundAgentRole = "embedding" | "retrieval" | "summarizer" | "file_processor" | "file_analyzer";
 
 export type TaskStatus = "idle" | "running" | "completed" | "error";
 
@@ -114,12 +114,27 @@ export const BACKGROUND_AGENT_DEFINITIONS: Record<BackgroundAgentRole, Backgroun
     color: "text-indigo-500",
     description: "Summarizer — translates and summarizes agent output for users",
   },
+  file_processor: {
+    role: "file_processor",
+    label: "File Processor",
+    icon: "FileSearch",
+    color: "text-orange-500",
+    description: "File Processor — extracts text from uploaded files and generates embeddings",
+  },
+  file_analyzer: {
+    role: "file_analyzer",
+    label: "File Analyzer",
+    icon: "FileBarChart",
+    color: "text-pink-500",
+    description: "File Analyzer — generates summaries and analysis of uploaded files",
+  },
 };
 
 export interface AgentMessage {
   role: "user" | "assistant";
   content: string;
   agentRole?: AgentRole;
+  fileIds?: string[];
 }
 
 export function createInitialOrchestrationState(): OrchestrationState {

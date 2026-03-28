@@ -5,6 +5,37 @@ import { prisma } from "@/lib/db";
 import { streamChat, buildAppContextPrompt, DEFAULT_MODEL, type ChatMessage } from "@/lib/ai";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
+/**
+ * Build file context string from fileIds by loading extracted text and summaries.
+ */
+async function buildFileContext(fileIds: string[], userId: string): Promise<string> {
+  if (!fileIds.length) return "";
+
+  const files = await prisma.chatFile.findMany({
+    where: {
+      id: { in: fileIds },
+      userId,
+    },
+    select: {
+      fileName: true,
+      fileType: true,
+      extractedText: true,
+      summary: true,
+      status: true,
+    },
+  });
+
+  if (files.length === 0) return "";
+
+  const parts = files.map((f) => {
+    const content = f.summary || f.extractedText;
+    if (!content) return `[File: ${f.fileName} — processing]`;
+    return `--- File: ${f.fileName} ---\n${content}\n--- End of ${f.fileName} ---`;
+  });
+
+  return `\n\n[Attached Files]\n${parts.join("\n\n")}`;
+}
+
 export async function POST(request: NextRequest) {
   // Rate limit: 20 chat requests per user per minute
   const ip = getClientIp(request.headers);
@@ -17,7 +48,7 @@ export async function POST(request: NextRequest) {
   }
   const body = await request.json();
   const { messages, model, appId } = body as {
-    messages: ChatMessage[];
+    messages: (ChatMessage & { fileIds?: string[] })[];
     model?: string;
     appId?: string;
   };
@@ -41,6 +72,12 @@ export async function POST(request: NextRequest) {
     });
     allowedServices = orgAllowed.map((s) => s.serviceType);
   }
+
+  // Collect all fileIds from messages and build file context
+  const allFileIds = messages.flatMap((m) => m.fileIds || []);
+  const fileContext = session?.user?.id
+    ? await buildFileContext(allFileIds, session.user.id)
+    : "";
 
   // Build app-context system prompt if appId is provided
   let systemPromptOverride: string | undefined;
@@ -73,6 +110,17 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // If file context exists, append it to system prompt
+  if (fileContext) {
+    systemPromptOverride = (systemPromptOverride || "") + fileContext;
+  }
+
+  // Strip fileIds from messages before sending to LLM
+  const cleanMessages: ChatMessage[] = messages.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }));
+
   // Create a TransformStream for SSE
   const encoder = new TextEncoder();
   const stream = new TransformStream();
@@ -82,7 +130,7 @@ export async function POST(request: NextRequest) {
   (async () => {
     try {
       const result = await streamChat(
-        messages,
+        cleanMessages,
         (chunk) => {
           const data = JSON.stringify({ content: chunk });
           writer.write(encoder.encode(`data: ${data}\n\n`));
