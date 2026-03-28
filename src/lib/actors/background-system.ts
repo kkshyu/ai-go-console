@@ -9,6 +9,11 @@
  * Communication patterns:
  * - request(): Enqueue task and wait for k8s worker to return result
  * - fireAndForget(): Enqueue task without waiting
+ * - requestParallel(): Fan-out multiple payloads to the same queue concurrently
+ *
+ * Parallelization is handled at the queue level — BullMQ workers process
+ * jobs concurrently based on their concurrency setting, so fan-out simply
+ * means enqueueing multiple jobs simultaneously.
  */
 
 import type { BackgroundAgentRole } from "../agents/types";
@@ -80,6 +85,28 @@ export class BackgroundActorSystem {
     const queueName = roleToQueue(role);
     enqueueTask(queueName, { type, payload }).catch((err) =>
       console.error(`[BackgroundActorSystem] Failed to enqueue to "${role}":`, err),
+    );
+  }
+
+  /**
+   * Fan-out: enqueue multiple payloads to the same queue concurrently.
+   * BullMQ workers process them in parallel based on their concurrency setting.
+   * Collects and returns all results. Useful for map-reduce patterns.
+   *
+   * Example: embed 10 chunks in parallel
+   *   await system.requestParallel("embedding", "embed_request", chunks);
+   */
+  async requestParallel<TResult = unknown>(
+    role: BackgroundAgentRole,
+    type: BackgroundMessage["type"],
+    payloads: unknown[],
+    timeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS,
+  ): Promise<TResult[]> {
+    const queueName = roleToQueue(role);
+    return Promise.all(
+      payloads.map((payload) =>
+        enqueueAndWait<TResult>(queueName, { type, payload }, timeoutMs),
+      ),
     );
   }
 
