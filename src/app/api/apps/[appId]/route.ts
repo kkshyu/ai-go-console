@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, getOrgSlug } from "@/lib/db";
 import { removeApp } from "@/lib/generator";
-import { stopApp } from "@/lib/docker";
+import { stopApp } from "@/lib/k8s/deployment";
 import { stopDevServer } from "@/lib/dev-server";
 import { slugify } from "@/lib/utils";
 import { authorizeAppAccess } from "@/lib/api-auth";
@@ -99,7 +99,7 @@ export async function DELETE(
     await stopDevServer(orgSlug, auth.app.slug);
   } catch { /* ignore */ }
   try {
-    await stopApp(auth.app.slug);
+    await stopApp(orgSlug, auth.app.slug);
   } catch { /* ignore */ }
 
   // Remove files

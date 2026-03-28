@@ -12,7 +12,7 @@ import {
   FIXED_ENDPOINT_URLS,
 } from "@/lib/service-types";
 import type { ServiceType } from "@prisma/client";
-import * as sandbox from "@/lib/docker-sandbox";
+import * as sandbox from "@/lib/k8s/sandbox";
 
 /**
  * Metadata directory on host — only stores docker-compose.yml for production.

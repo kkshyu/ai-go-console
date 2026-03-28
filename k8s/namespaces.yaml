@@ -1,0 +1,74 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aigo-system
+  labels:
+    app.kubernetes.io/part-of: aigo
+    aigo.dev/purpose: platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aigo-dev
+  labels:
+    app.kubernetes.io/part-of: aigo
+    aigo.dev/purpose: development
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aigo-prod
+  labels:
+    app.kubernetes.io/part-of: aigo
+    aigo.dev/purpose: production
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aigo-workers
+  labels:
+    app.kubernetes.io/part-of: aigo
+    aigo.dev/purpose: background-workers
+---
+# Resource quotas for dev namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dev-quota
+  namespace: aigo-dev
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "16"
+    limits.memory: 32Gi
+    pods: "50"
+---
+# Resource quotas for prod namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: prod-quota
+  namespace: aigo-prod
+spec:
+  hard:
+    requests.cpu: "16"
+    requests.memory: 32Gi
+    limits.cpu: "32"
+    limits.memory: 64Gi
+    pods: "100"
+---
+# Resource quotas for workers namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: workers-quota
+  namespace: aigo-workers
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    pods: "20"

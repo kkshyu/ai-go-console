@@ -1,68 +1,63 @@
 /**
  * Background Actor System
  *
- * Global singleton that manages background actors (Embedding, Retrieval, Summarizer).
- * These actors persist across HTTP requests and are initialized once at server startup.
+ * Delegates background tasks (Embedding, Retrieval, Summarizer, File Processing)
+ * to k8s Worker pods via Redis-backed BullMQ queues.
  *
- * Provides two communication patterns:
- * - request(): Request-response with timeout
- * - fireAndForget(): Fire-and-forget (no response expected)
+ * The public API is preserved so all consumers (chat routes, etc.) work unchanged.
  *
- * Includes health monitoring with automatic actor restart on consecutive failures.
+ * Communication patterns:
+ * - request(): Enqueue task and wait for k8s worker to return result
+ * - fireAndForget(): Enqueue task without waiting
  */
 
 import type { BackgroundAgentRole } from "../agents/types";
 import type { BackgroundMessage, ActorStats } from "./types";
-import { BackgroundActor, createBackgroundMessage } from "./background-actor";
+import { enqueueTask, enqueueAndWait, getAllQueueStats } from "../queue";
+import type { QueueName, QueueStats } from "../queue/types";
 
-const HEALTH_CHECK_INTERVAL_MS = 30_000; // 30 seconds
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000; // 30 seconds
 
-type ActorFactory = (role: BackgroundAgentRole) => BackgroundActor;
+/** Map background agent role to queue name */
+function roleToQueue(role: BackgroundAgentRole): QueueName {
+  switch (role) {
+    case "embedding": return "embedding";
+    case "retrieval": return "retrieval";
+    case "summarizer": return "summarizer";
+    case "file-processor": return "file-processing";
+    case "file-analyzer": return "file-analysis";
+    default: return role as QueueName;
+  }
+}
 
 export class BackgroundActorSystem {
-  private actors = new Map<BackgroundAgentRole, BackgroundActor>();
-  private actorFactory: ActorFactory | null = null;
-  private healthCheckTimer: ReturnType<typeof setInterval> | null = null;
   private _initialized = false;
 
   /**
    * Register the factory for creating background actors.
-   * Must be called before initialize().
+   * No-op in k8s mode — actors run in worker pods, not in-process.
+   * Kept for API compatibility.
    */
-  setActorFactory(factory: ActorFactory): void {
-    this.actorFactory = factory;
+  setActorFactory(_factory: unknown): void {
+    // No-op: actors are managed by k8s worker pods
   }
 
   /**
-   * Initialize all background actors and start health monitoring.
+   * Initialize the queue-based background system.
+   * Simply marks as initialized since Redis handles the actual queuing.
    */
   async initialize(): Promise<void> {
     if (this._initialized) return;
-    if (!this.actorFactory) {
-      throw new Error("BackgroundActorSystem: setActorFactory() must be called before initialize()");
-    }
-
-    const roles: BackgroundAgentRole[] = ["embedding", "retrieval", "summarizer"];
-    for (const role of roles) {
-      await this.spawnActor(role);
-    }
-
-    this.startHealthMonitor();
     this._initialized = true;
-    console.log("[BackgroundActorSystem] Initialized with actors:", roles.join(", "));
+    console.log("[BackgroundActorSystem] Initialized (k8s queue mode)");
   }
 
-  /**
-   * Check if the system is initialized.
-   */
   get initialized(): boolean {
     return this._initialized;
   }
 
   /**
-   * Request-response pattern: send a message and wait for the result.
-   * Throws on timeout or actor failure.
+   * Request-response pattern: enqueue task to Redis, wait for worker result.
    */
   async request<TResult = unknown>(
     role: BackgroundAgentRole,
@@ -70,153 +65,53 @@ export class BackgroundActorSystem {
     payload: unknown,
     timeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS,
   ): Promise<TResult> {
-    const actor = this.actors.get(role);
-    if (!actor) {
-      throw new Error(`BackgroundActorSystem: No actor for role "${role}"`);
-    }
-
-    // If actor is unhealthy, try restart before failing
-    if (!actor.isHealthy()) {
-      console.warn(`[BackgroundActorSystem] Actor "${role}" unhealthy, attempting restart`);
-      await this.restartActor(role);
-      const restarted = this.actors.get(role);
-      if (!restarted || !restarted.isHealthy()) {
-        throw new Error(`BackgroundActorSystem: Actor "${role}" failed to restart`);
-      }
-    }
-
-    const message = createBackgroundMessage(type, payload);
-
-    return new Promise<TResult>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error(`BackgroundActorSystem: Request to "${role}" timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-
-      actor.enqueue(message, {
-        resolve: (value) => {
-          clearTimeout(timeout);
-          resolve(value as TResult);
-        },
-        reject: (error) => {
-          clearTimeout(timeout);
-          reject(error);
-        },
-      });
-    });
+    const queueName = roleToQueue(role);
+    return enqueueAndWait<TResult>(queueName, { type, payload }, timeoutMs);
   }
 
   /**
-   * Fire-and-forget: send a message without waiting for result.
-   * Errors are logged but not thrown.
+   * Fire-and-forget: enqueue task without waiting for result.
    */
   fireAndForget(
     role: BackgroundAgentRole,
     type: BackgroundMessage["type"],
     payload: unknown,
   ): void {
-    const actor = this.actors.get(role);
-    if (!actor) {
-      console.warn(`[BackgroundActorSystem] No actor for role "${role}", dropping message`);
-      return;
-    }
-
-    if (!actor.isHealthy()) {
-      console.warn(`[BackgroundActorSystem] Actor "${role}" unhealthy, queuing restart`);
-      this.restartActor(role).catch((err) =>
-        console.error(`[BackgroundActorSystem] Failed to restart "${role}":`, err),
-      );
-    }
-
-    const message = createBackgroundMessage(type, payload);
-    actor.enqueue(message);
+    const queueName = roleToQueue(role);
+    enqueueTask(queueName, { type, payload }).catch((err) =>
+      console.error(`[BackgroundActorSystem] Failed to enqueue to "${role}":`, err),
+    );
   }
 
   /**
-   * Get health stats for all background actors.
+   * Get health stats from Redis queues.
    */
-  getSystemHealth(): Record<BackgroundAgentRole, ActorStats> {
-    const health = {} as Record<BackgroundAgentRole, ActorStats>;
-    for (const [role, actor] of this.actors) {
-      health[role] = actor.getStats();
-    }
-    return health;
+  async getSystemHealth(): Promise<Record<string, QueueStats>> {
+    return getAllQueueStats();
   }
 
   /**
-   * Register and spawn a new actor after initialization.
-   * Used for late-registration of server-only actors (e.g., file processors).
+   * Register a new actor.
+   * No-op in k8s mode — new actor types are added to the worker deployment.
    */
-  async registerActor(actor: BackgroundActor): Promise<void> {
-    if (this.actors.has(actor.role)) return; // Already registered
-    await actor.start();
-    this.actors.set(actor.role, actor);
+  async registerActor(_actor: unknown): Promise<void> {
+    // No-op
   }
 
   /**
-   * Check if an actor for a given role exists.
+   * Check if a queue for a given role exists.
+   * Always returns true since queues are created on demand.
    */
-  hasActor(role: BackgroundAgentRole): boolean {
-    return this.actors.has(role);
+  hasActor(_role: BackgroundAgentRole): boolean {
+    return true;
   }
 
   /**
-   * Shutdown all actors and stop health monitoring.
+   * Shutdown — close queue connections.
    */
   shutdown(): void {
-    if (this.healthCheckTimer) {
-      clearInterval(this.healthCheckTimer);
-      this.healthCheckTimer = null;
-    }
-
-    for (const actor of this.actors.values()) {
-      actor.stop();
-    }
-    this.actors.clear();
     this._initialized = false;
-    console.log("[BackgroundActorSystem] Shutdown complete");
-  }
-
-  // ---- Internal ----
-
-  private async spawnActor(role: BackgroundAgentRole): Promise<void> {
-    if (!this.actorFactory) {
-      throw new Error("BackgroundActorSystem: No actor factory set");
-    }
-
-    const actor = this.actorFactory(role);
-    await actor.start();
-    this.actors.set(role, actor);
-  }
-
-  private async restartActor(role: BackgroundAgentRole): Promise<void> {
-    const old = this.actors.get(role);
-    if (old) {
-      old.stop();
-      this.actors.delete(role);
-    }
-
-    await this.spawnActor(role);
-
-    const newActor = this.actors.get(role);
-    if (newActor) {
-      newActor.incrementRestartCount();
-      console.log(`[BackgroundActorSystem] Restarted actor "${role}"`);
-    }
-  }
-
-  private startHealthMonitor(): void {
-    this.healthCheckTimer = setInterval(async () => {
-      for (const [role, actor] of this.actors) {
-        if (!actor.isHealthy()) {
-          console.warn(`[BackgroundActorSystem] Health check: "${role}" unhealthy, restarting`);
-          try {
-            await this.restartActor(role);
-          } catch (err) {
-            console.error(`[BackgroundActorSystem] Failed to restart "${role}":`, err);
-          }
-        }
-      }
-    }, HEALTH_CHECK_INTERVAL_MS);
+    console.log("[BackgroundActorSystem] Shutdown (k8s queue mode)");
   }
 }
 
@@ -228,29 +123,10 @@ let _ensured = false;
 
 /**
  * Ensure the background system is initialized.
- * Safe to call multiple times — only initializes once.
- * Must call backgroundSystem.setActorFactory() before first call.
+ * In k8s mode, simply marks as initialized (no in-process actors to spawn).
  */
 export async function ensureBackgroundSystem(): Promise<BackgroundActorSystem> {
   if (!_ensured && !backgroundSystem.initialized) {
-    // Import actor implementations lazily to avoid circular deps
-    const { EmbeddingActor } = await import("./embedding-actor");
-    const { RetrievalActor } = await import("./retrieval-actor");
-    const { SummarizerActor } = await import("./summarizer-actor");
-
-    backgroundSystem.setActorFactory((role) => {
-      switch (role) {
-        case "embedding":
-          return new EmbeddingActor(`embedding-${Date.now()}`);
-        case "retrieval":
-          return new RetrievalActor(`retrieval-${Date.now()}`);
-        case "summarizer":
-          return new SummarizerActor(`summarizer-${Date.now()}`);
-        default:
-          throw new Error(`Unknown background agent role: ${role}`);
-      }
-    });
-
     await backgroundSystem.initialize();
     _ensured = true;
   }

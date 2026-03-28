@@ -1,0 +1,60 @@
+---
+# Background Worker Deployment
+# Processes embedding, retrieval, summarization, and file tasks from Redis queues
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: background-workers
+  namespace: aigo-workers
+  labels:
+    app: background-worker
+    aigo.dev/component: background-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: background-worker
+  template:
+    metadata:
+      labels:
+        app: background-worker
+        aigo.dev/component: background-worker
+    spec:
+      containers:
+        - name: worker
+          image: localhost:5111/aigo-worker:latest
+          env:
+            - name: REDIS_URL
+              value: redis://redis.aigo-system.svc.cluster.local:6379
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: DATABASE_URL
+                  optional: true
+            - name: NODE_ENV
+              value: production
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            exec:
+              command:
+                - node
+                - -e
+                - "process.exit(0)"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            exec:
+              command:
+                - node
+                - -e
+                - "process.exit(0)"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      restartPolicy: Always

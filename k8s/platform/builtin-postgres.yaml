@@ -1,0 +1,98 @@
+---
+# Built-in PostgreSQL for organizations
+# 每個 org 使用獨立 database，共享此 PostgreSQL instance
+apiVersion: v1
+kind: Secret
+metadata:
+  name: builtin-postgres-credentials
+  namespace: aigo-system
+type: Opaque
+stringData:
+  POSTGRES_USER: aigo_builtin
+  POSTGRES_PASSWORD: aigo_builtin_password
+  POSTGRES_DB: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: builtin-postgres
+  namespace: aigo-system
+  labels:
+    app: builtin-postgres
+    aigo.dev/component: org-db
+spec:
+  serviceName: builtin-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: builtin-postgres
+  template:
+    metadata:
+      labels:
+        app: builtin-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: builtin-postgres-credentials
+          volumeMounts:
+            - name: builtin-postgres-data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - aigo_builtin
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: builtin-postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: builtin-postgres
+  namespace: aigo-system
+  labels:
+    app: builtin-postgres
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: builtin-postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: builtin-postgres-external
+  namespace: aigo-system
+  labels:
+    app: builtin-postgres
+spec:
+  type: NodePort
+  ports:
+    - port: 5432
+      targetPort: 5432
+      nodePort: 30434
+  selector:
+    app: builtin-postgres

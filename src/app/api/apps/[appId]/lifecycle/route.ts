@@ -5,10 +5,10 @@ import fsp from "node:fs/promises";
 import crypto from "node:crypto";
 import { prisma, getOrgSlug } from "@/lib/db";
 import { startDevServer, stopDevServer, getDevServerLogs } from "@/lib/dev-server";
-import { startApp, stopApp, restartApp, getAppLogs, getAppDockerStatus, tagImage, startAppFromImage } from "@/lib/docker";
+import { startApp, stopApp, restartApp, getAppLogs, getAppDockerStatus, tagImage, startAppFromImage } from "@/lib/k8s/deployment";
 import { regenerateCompose, getAppPath } from "@/lib/generator";
-import { syncRoutes } from "@/lib/proxy";
-import * as sandbox from "@/lib/docker-sandbox";
+import { syncRoutes } from "@/lib/k8s/ingress";
+import * as sandbox from "@/lib/k8s/sandbox";
 import { getTemplate } from "@/lib/templates";
 import { authorizeAppAccess } from "@/lib/api-auth";
 
@@ -86,32 +86,18 @@ export async function POST(
           const composeSrc = path.join(getAppPath(app.slug), "docker-compose.yml");
           await fsp.copyFile(composeSrc, path.join(tmpDir, "docker-compose.yml"));
 
-          // Stop existing production container before re-deploying to avoid name conflict
+          // Stop existing production deployment before re-deploying
           try {
-            await stopApp(app.slug);
+            await stopApp(orgSlug, app.slug);
           } catch {
             // ignore if not running
           }
-          // Also force-remove legacy container name (without -prod suffix) and new name
-          // to handle migration from old naming convention
-          const { execFile: ef } = await import("node:child_process");
-          const { promisify: pf } = await import("node:util");
-          const efAsync = pf(ef);
-          for (const name of [`aigo-${orgSlug}-${app.slug}`, `aigo-${orgSlug}-${app.slug}-prod`]) {
-            try { await efAsync("docker", ["rm", "-f", name], { timeout: 10_000 }); } catch { /* ignore */ }
-          }
 
-          // Build and start production container from the temp directory
-          const { execFile } = await import("node:child_process");
-          const { promisify } = await import("node:util");
-          const execFileAsync = promisify(execFile);
-
-          const { stdout, stderr } = await execFileAsync(
-            "docker",
-            ["compose", "-f", path.join(tmpDir, "docker-compose.yml"), "up", "-d", "--build"],
-            { timeout: 300_000, cwd: tmpDir }
-          );
-          const output = stdout + stderr;
+          // Build and deploy production container via k8s
+          const tmplDef = getTemplate(app.template);
+          const internalPort = tmplDef?.internalDevPort || 3000;
+          // TODO: resolve service env vars for prod
+          const output = await startApp(orgSlug, app.slug, version, internalPort);
 
           // Tag the image for rollback
           await tagImage(orgSlug, app.slug, version);
@@ -159,8 +145,8 @@ export async function POST(
           data: { status: "building" },
         });
 
-        // Stop current container
-        await stopApp(app.slug);
+        // Stop current deployment
+        await stopApp(orgSlug, app.slug);
 
         // Start from the tagged image version
         const output = await startAppFromImage(orgSlug, app.slug, targetDeployment.version);
@@ -198,7 +184,14 @@ export async function POST(
       }
 
       case "start": {
-        const output = await startApp(app.slug);
+        const tmplStart = getTemplate(app.template);
+        const portStart = tmplStart?.internalDevPort || 3000;
+        const lastDeploy = await prisma.deployment.findFirst({
+          where: { appId, status: "stopped" },
+          orderBy: { version: "desc" },
+        });
+        const ver = lastDeploy?.version || 1;
+        const output = await startApp(orgSlug, app.slug, ver, portStart);
         await prisma.app.update({
           where: { id: appId },
           data: { status: "running" },
@@ -208,7 +201,7 @@ export async function POST(
       }
 
       case "stop": {
-        const output = await stopApp(app.slug);
+        const output = await stopApp(orgSlug, app.slug);
         await prisma.app.update({
           where: { id: appId },
           data: { status: "stopped" },
@@ -217,7 +210,7 @@ export async function POST(
       }
 
       case "restart": {
-        const output = await restartApp(app.slug);
+        const output = await restartApp(orgSlug, app.slug);
         await prisma.app.update({
           where: { id: appId },
           data: { status: "running" },
@@ -226,9 +219,9 @@ export async function POST(
       }
 
       case "logs": {
-        const dockerStatus = await getAppDockerStatus(app.slug);
-        if (dockerStatus === "running") {
-          const logs = await getAppLogs(app.slug);
+        const k8sStatus = await getAppDockerStatus(orgSlug, app.slug);
+        if (k8sStatus === "running") {
+          const logs = await getAppLogs(orgSlug, app.slug);
           return NextResponse.json({ logs });
         } else {
           const logs = await getDevServerLogs(orgSlug, app.slug);
@@ -242,7 +235,7 @@ export async function POST(
       }
 
       case "prod-logs": {
-        const logs = await getAppLogs(app.slug);
+        const logs = await getAppLogs(orgSlug, app.slug);
         return NextResponse.json({ logs });
       }
 

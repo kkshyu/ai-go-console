@@ -1,0 +1,183 @@
+---
+# Traefik Ingress Controller deployment for k3d/k3s
+# k3s 預設啟用 Traefik，但我們在 k3d-setup.sh 中使用 --disable=traefik
+# 以便自行管理版本和設定
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: traefik
+  namespace: aigo-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: traefik
+rules:
+  - apiGroups: [""]
+    resources: ["services", "endpoints", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions", "networking.k8s.io"]
+    resources: ["ingresses", "ingressclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions", "networking.k8s.io"]
+    resources: ["ingresses/status"]
+    verbs: ["update"]
+  - apiGroups: ["traefik.io"]
+    resources: ["middlewares", "middlewaretcps", "ingressroutes", "traefikservices",
+                "ingressroutetcps", "ingressrouteudps", "tlsoptions", "tlsstores",
+                "serverstransports", "serverstransporttcps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: traefik
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: traefik
+subjects:
+  - kind: ServiceAccount
+    name: traefik
+    namespace: aigo-system
+---
+# Traefik CRDs — IngressRoute, Middleware, etc.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: ingressroutes.traefik.io
+spec:
+  group: traefik.io
+  names:
+    kind: IngressRoute
+    listKind: IngressRouteList
+    plural: ingressroutes
+    singular: ingressroute
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: middlewares.traefik.io
+spec:
+  group: traefik.io
+  names:
+    kind: Middleware
+    listKind: MiddlewareList
+    plural: middlewares
+    singular: middleware
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik
+  namespace: aigo-system
+  labels:
+    app: traefik
+    app.kubernetes.io/name: traefik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traefik
+  template:
+    metadata:
+      labels:
+        app: traefik
+        app.kubernetes.io/name: traefik
+    spec:
+      serviceAccountName: traefik
+      containers:
+        - name: traefik
+          image: traefik:v3.2
+          args:
+            - --api.insecure=true
+            - --api.dashboard=true
+            - --entryPoints.web.address=:80
+            - --entryPoints.websecure.address=:443
+            - --providers.kubernetescrd
+            - --providers.kubernetescrd.allowCrossNamespace=true
+            - --log.level=INFO
+            # Let's Encrypt for custom domains (production)
+            # - --certificatesresolvers.letsencrypt.acme.email=admin@example.com
+            # - --certificatesresolvers.letsencrypt.acme.storage=/data/acme.json
+            # - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+          ports:
+            - name: web
+              containerPort: 80
+            - name: websecure
+              containerPort: 443
+            - name: dashboard
+              containerPort: 8080
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik
+  namespace: aigo-system
+  labels:
+    app: traefik
+spec:
+  type: LoadBalancer
+  ports:
+    - name: web
+      port: 80
+      targetPort: 80
+    - name: websecure
+      port: 443
+      targetPort: 443
+  selector:
+    app: traefik
+---
+# Dashboard service (internal only)
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik-dashboard
+  namespace: aigo-system
+  labels:
+    app: traefik
+spec:
+  type: ClusterIP
+  ports:
+    - name: dashboard
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: traefik
