@@ -86,7 +86,7 @@ export class PostProcessor {
 
       if (result.unauthorized && result.unauthorized.length > 0) {
         await this.config.sendEvent({
-          pmMessage: `無法完成：您未被授權使用以下服務：${result.unauthorized.join(", ")}。請聯繫管理員取得授權。`,
+          pmMessage: `您沒有使用以下服務的權限：${result.unauthorized.join(", ")}。請聯繫管理員取得授權。`,
           agentRole: "pm",
         });
         return;

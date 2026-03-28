@@ -199,7 +199,7 @@ export default function CreateAppPage() {
           }
         }
         if (missingTypes.length > 0) {
-          setServiceWarning(`${t("serviceNotAuthorized")}: ${missingTypes.join(", ")}`);
+          setServiceWarning(`${t("serviceNotConnected")}: ${missingTypes.join(", ")}`);
           return;
         }
         serviceIds = resolvedIds;
