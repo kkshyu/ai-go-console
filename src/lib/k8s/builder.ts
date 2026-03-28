@@ -245,6 +245,18 @@ export function getImageUrl(
 }
 
 /**
+ * Get the full in-cluster registry image URL for an app (used in k8s pod specs).
+ */
+export function getInClusterImageUrl(
+  orgSlug: string,
+  slug: string,
+  type: "dev" | "prod",
+  tag: string = "latest",
+): string {
+  return `${config.inClusterRegistryUrl}/aigo-${orgSlug}-${slug}-${type}:${tag}`;
+}
+
+/**
  * Get the base image URL for a template.
  */
 export function getBaseImageUrl(template: string): string {
