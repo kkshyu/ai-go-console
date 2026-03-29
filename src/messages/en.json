@@ -725,7 +725,11 @@
       "architect": "Architect",
       "developer": "Developer",
       "reviewer": "Reviewer",
-      "devops": "DevOps"
+      "devops": "DevOps",
+      "ux_designer": "UX Designer",
+      "tester": "Tester",
+      "db_migrator": "DB Migrator",
+      "doc_writer": "Doc Writer"
     },
     "roleDescriptions": {
       "pm": "Orchestrates agents and manages requirements",
@@ -733,6 +737,94 @@
       "developer": "Writes and generates application code",
       "reviewer": "Reviews code quality and security",
       "devops": "Handles deployment and infrastructure"
+    },
+    "pmMessages": {
+      "dispatchSingle": "Assigning **{role}** to work on: {task}",
+      "dispatchParallel": "Assigning **{count} developers** to work on different modules in parallel...",
+      "dispatchFallback": "Assigning a specialist to handle your request...",
+      "respondFallback": "Responding to your question...",
+      "completeFallback": "All tasks completed!",
+      "defaultFallback": "Processing...",
+      "rateLimitRetry": "Rate limited, retrying shortly...",
+      "apiTimeout": "Timed out, rescheduling task...",
+      "partialTimeout": "Some developers timed out ({received}/{total} results collected), merging completed work...",
+      "allDevelopersDone": "All developers have completed their work.",
+      "workerLongRunning": "{role} has been running for {minutes} minute(s)...",
+      "progress": {
+        "analyzing": "**{role}** is analyzing progress...",
+        "planning": "**{role}** is planning next steps...",
+        "organizing": "**{role}** is organizing results...",
+        "dispatching": "Preparing to dispatch the next task...",
+        "confirming": "Confirming the workflow...",
+        "consolidating": "Consolidating information from all sources...",
+        "stillWorking": "**{role}** is still working, please wait...",
+        "almostDone": "**{role}** is almost done...",
+        "planningTasks": "**{role}** is planning task breakdown...",
+        "synthesizing": "**{role}** is synthesizing all results...",
+        "subTaskWorking": "**{role}** is working on a sub-task...",
+        "subTaskGenerating": "**{role}** is generating content...",
+        "subTaskAlmostDone": "**{role}** sub-task almost done..."
+      },
+      "specialistDone": "Done."
+    },
+    "specialistProgress": {
+      "architect": [
+        "**Architect** is analyzing your requirements...",
+        "**Architect** is evaluating the best technical approach...",
+        "**Architect** is selecting frameworks and services...",
+        "**Architect** is planning the system architecture...",
+        "**Architect** is confirming technical details...",
+        "**Architect** is almost done with the design..."
+      ],
+      "developer": [
+        "**Developer** is setting up the environment...",
+        "**Developer** is planning the application structure...",
+        "**Developer** is designing the data model...",
+        "**Developer** is implementing core features...",
+        "**Developer** is integrating required services...",
+        "**Developer** is almost done building the app..."
+      ],
+      "reviewer": [
+        "**Reviewer** is checking code quality...",
+        "**Reviewer** is performing a security audit...",
+        "**Reviewer** is evaluating performance...",
+        "**Reviewer** is compiling review results..."
+      ],
+      "devops": [
+        "**DevOps** is configuring the deployment environment...",
+        "**DevOps** is setting up service connections...",
+        "**DevOps** is preparing to start the application...",
+        "**DevOps** is running final checks...",
+        "**DevOps** is almost done with deployment..."
+      ],
+      "ux_designer": [
+        "**UX Designer** is analyzing visual requirements...",
+        "**UX Designer** is designing the color system...",
+        "**UX Designer** is planning the layout...",
+        "**UX Designer** is defining design guidelines...",
+        "**UX Designer** is almost done with the design system..."
+      ],
+      "tester": [
+        "**Tester** is analyzing code structure...",
+        "**Tester** is writing unit tests...",
+        "**Tester** is writing integration tests...",
+        "**Tester** is planning end-to-end tests...",
+        "**Tester** is almost done with test files..."
+      ],
+      "db_migrator": [
+        "**DB Migrator** is analyzing the data model...",
+        "**DB Migrator** is designing the database schema...",
+        "**DB Migrator** is generating migration scripts...",
+        "**DB Migrator** is preparing seed data...",
+        "**DB Migrator** is almost done with migrations..."
+      ],
+      "doc_writer": [
+        "**Doc Writer** is gathering project info...",
+        "**Doc Writer** is writing the README...",
+        "**Doc Writer** is generating API docs...",
+        "**Doc Writer** is writing architecture docs...",
+        "**Doc Writer** is almost done with documentation..."
+      ]
     },
     "status": {
       "idle": "Ready",

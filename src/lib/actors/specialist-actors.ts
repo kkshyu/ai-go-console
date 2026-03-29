@@ -45,6 +45,13 @@ import {
 } from "../agents/prompts";
 import { actorLog } from "./logger";
 import type { BackgroundActorSystem } from "./background-system";
+import {
+  getPlanningTasksMessage,
+  getSynthesizingMessage,
+  getSpecialistProgressMessage,
+  getSpecialistDoneMessage,
+  getSubTaskProgressMessages,
+} from "../../i18n/pm-messages";
 
 export interface SpecialistConfig {
   model: string;
@@ -59,66 +66,7 @@ export interface SpecialistConfig {
   system?: ActorSystem;
 }
 
-/** Progress messages shown while an agent is generating. */
-const PROGRESS_MESSAGES: Record<string, string[]> = {
-  architect: [
-    "正在分析您的需求...",
-    "正在評估最佳技術方案...",
-    "正在選擇合適的框架和服務...",
-    "正在規劃系統架構...",
-    "正在確認技術細節...",
-    "架構設計即將完成...",
-  ],
-  developer: [
-    "正在準備開發環境...",
-    "正在規劃應用程式結構...",
-    "正在設計資料模型...",
-    "正在實作核心功能...",
-    "正在整合所需服務...",
-    "應用程式即將建立完成...",
-  ],
-  reviewer: [
-    "正在檢查程式碼品質...",
-    "正在進行安全性審查...",
-    "正在評估效能表現...",
-    "正在整理審查結果...",
-  ],
-  devops: [
-    "正在配置部署環境...",
-    "正在設定服務連接...",
-    "正在準備啟動應用程式...",
-    "正在進行最終檢查...",
-    "部署設定即將完成...",
-  ],
-  ux_designer: [
-    "正在分析視覺需求...",
-    "正在設計色彩系統...",
-    "正在規劃版面架構...",
-    "正在制定設計規範...",
-    "設計系統即將完成...",
-  ],
-  tester: [
-    "正在分析程式碼結構...",
-    "正在撰寫單元測試...",
-    "正在撰寫整合測試...",
-    "正在規劃端對端測試...",
-    "測試檔案即將完成...",
-  ],
-  db_migrator: [
-    "正在分析資料模型...",
-    "正在設計資料庫結構...",
-    "正在產生遷移腳本...",
-    "正在準備種子資料...",
-    "資料庫遷移即將完成...",
-  ],
-  doc_writer: [
-    "正在整理專案資訊...",
-    "正在撰寫 README...",
-    "正在產生 API 文件...",
-    "正在撰寫架構文件...",
-    "文件撰寫即將完成...",
-  ],
-};
+/** Progress messages are now loaded from i18n (see pm-messages.ts). */
 
 const PROGRESS_INTERVAL_MS = 2500;
 
@@ -512,11 +460,10 @@ Respond with your perspective on this topic. Be concise and technical.`;
     // Send thinking event
     await sendEvent({ thinking: true, agentRole: this.role });
 
-    // Set up progress updates
+    // Set up progress updates — locale-aware with agent role indicated
     let progressIdx = 0;
-    const agentMsgs = PROGRESS_MESSAGES[this.role] || [];
     const progressTimer = setInterval(async () => {
-      const msg = agentMsgs[Math.min(progressIdx, agentMsgs.length - 1)];
+      const msg = getSpecialistProgressMessage(this.role, progressIdx, this.config.locale);
       progressIdx++;
       if (msg) {
         try {
@@ -571,7 +518,7 @@ Respond with your perspective on this topic. Be concise and technical.`;
     await sendEvent({ translating: true, agentRole });
 
     const translated = await translateForUser(content, agentRole, this.config.locale);
-    const displayContent = translated.content || stripJsonBlocks(content) || "處理完成。";
+    const displayContent = translated.content || stripJsonBlocks(content) || getSpecialistDoneMessage(this.config.locale);
 
     await sendEvent({ content: displayContent, agentRole });
 
@@ -904,7 +851,7 @@ abstract class SeniorSpecialistActor extends BaseSpecialistActor {
     const effectiveModel = getModelForTier(this.role, "senior", this.config.model);
 
     this.updateHeartbeat();
-    await this.config.sendEvent({ statusUpdate: "正在規劃任務分解...", agentRole: this.role });
+    await this.config.sendEvent({ statusUpdate: getPlanningTasksMessage(this.role, this.config.locale), agentRole: this.role });
 
     try {
       const result = await streamChat(
@@ -1056,7 +1003,7 @@ abstract class SeniorSpecialistActor extends BaseSpecialistActor {
     }));
 
     // Phase 5: Synthesis
-    await this.config.sendEvent({ statusUpdate: "正在整合所有結果...", agentRole: this.role });
+    await this.config.sendEvent({ statusUpdate: getSynthesizingMessage(this.role, this.config.locale), agentRole: this.role });
 
     const synthesisPrompt = buildSeniorSynthesisPrompt(
       this.role,
@@ -1132,12 +1079,7 @@ abstract class SeniorSpecialistActor extends BaseSpecialistActor {
 
 // ---- Junior Specialist Actor ----
 
-/** Progress messages for junior/intermediate agents */
-const JUNIOR_PROGRESS_MESSAGES = [
-  "正在執行子任務...",
-  "正在產生內容...",
-  "子任務即將完成...",
-];
+/** Junior progress messages are now loaded from i18n (see pm-messages.ts). */
 
 /**
  * Junior/Intermediate specialist actor — executes a single sub-task.
@@ -1175,10 +1117,11 @@ class JuniorSpecialistActor extends BaseSpecialistActor {
 
     this.updateHeartbeat();
 
-    // Progress updates
+    // Progress updates — locale-aware with role indicated
     let progressIdx = 0;
+    const juniorMsgs = getSubTaskProgressMessages(this.role, this.config.locale);
     const progressTimer = setInterval(async () => {
-      const msg = JUNIOR_PROGRESS_MESSAGES[Math.min(progressIdx, JUNIOR_PROGRESS_MESSAGES.length - 1)];
+      const msg = juniorMsgs[Math.min(progressIdx, juniorMsgs.length - 1)];
       progressIdx++;
       try {
         await this.config.sendEvent({ statusUpdate: msg, agentRole: this.role, actorId: this.id });

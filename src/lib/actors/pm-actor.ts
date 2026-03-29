@@ -48,6 +48,17 @@ import { validatePMAction } from "../services/llm-output-validator";
 import { actorLog } from "./logger";
 import { pruneMessages } from "../ai/token-budget";
 import type { BackgroundActorSystem } from "./background-system";
+import {
+  getDispatchMessage as i18nDispatchMessage,
+  getParallelDispatchMessage as i18nParallelDispatchMessage,
+  getFallbackMessage as i18nFallbackMessage,
+  getRateLimitMessage,
+  getApiTimeoutMessage,
+  getPartialTimeoutMessage,
+  getAllDevelopersDoneMessage,
+  getWorkerLongRunningMessage,
+  getProgressMessage,
+} from "../../i18n/pm-messages";
 
 /** Maximum number of agent interactions per request. */
 const MAX_INTERACTIONS = 20;
@@ -71,55 +82,7 @@ const WORKER_STALE_MS = 60_000;
 /** Worker long-running threshold */
 const WORKER_LONG_RUNNING_MS = 180_000;
 
-const PM_PROGRESS_MESSAGES = [
-  "正在分析進度...",
-  "正在規劃下一步...",
-  "正在整理結果...",
-  "正在準備派發下一個任務...",
-  "正在確認工作流程...",
-  "正在彙整各方資訊...",
-  "仍在處理中，請稍候...",
-  "即將完成分析...",
-];
-
 const PROGRESS_INTERVAL_MS = 2500;
-
-const FALLBACK_MESSAGES: Record<string, Record<string, string>> = {
-  pm: {
-    dispatch: "正在安排專家處理您的需求...",
-    respond: "正在回覆您的問題...",
-    complete: "所有工作已完成！",
-    default: "正在處理中...",
-  },
-};
-
-/** Friendly role names for dispatch messages */
-const ROLE_DISPLAY_NAMES: Record<string, string> = {
-  architect: "架構師",
-  developer: "開發者",
-  reviewer: "審查員",
-  devops: "部署專家",
-  ux_designer: "設計師",
-  tester: "測試專家",
-  db_migrator: "資料庫專家",
-  doc_writer: "文件撰寫者",
-};
-
-function getDispatchMessage(target: string, task: string): string {
-  const roleName = ROLE_DISPLAY_NAMES[target] || target;
-  // Truncate long tasks for display
-  const shortTask = task.length > 80 ? task.slice(0, 77) + "..." : task;
-  return `正在請**${roleName}**處理：${shortTask}`;
-}
-
-function getParallelDispatchMessage(tasks: Array<{ taskId: string; task: string; files: string[] }>): string {
-  const count = tasks.length;
-  return `正在同時安排 **${count} 位開發者**平行處理不同模組...`;
-}
-
-function getFallbackMessage(action?: string): string {
-  return (action && FALLBACK_MESSAGES.pm[action]) || FALLBACK_MESSAGES.pm.default || "處理完成。";
-}
 
 interface WorkerStatus {
   role: AgentRole;
@@ -299,7 +262,7 @@ export class PMActor extends Actor {
         if (elapsed > WORKER_LONG_RUNNING_MS) {
           try {
             await this.config.sendEvent({
-              statusUpdate: `${status.role} 已執行 ${Math.round(elapsed / 60000)} 分鐘...`,
+              statusUpdate: getWorkerLongRunningMessage(status.role, Math.round(elapsed / 60000), this.config.locale),
               agentRole: "pm",
             });
           } catch { /* stream may have closed */ }
@@ -542,7 +505,7 @@ export class PMActor extends Actor {
         const backoffMs = calculateBackoff(retryCount);
         if (workerStatus) workerStatus.retryCount = retryCount + 1;
         actorLog("info", this.id, `Rate limit hit, backing off ${backoffMs}ms (attempt ${retryCount + 1})`, this.traceId);
-        await sendEvent({ statusUpdate: "遇到速率限制，稍後重試...", agentRole: "pm" });
+        await sendEvent({ statusUpdate: getRateLimitMessage(this.config.locale), agentRole: "pm" });
         await new Promise((resolve) => setTimeout(resolve, backoffMs));
         // Add a note to history and let PM loop retry
         this.messages.push({
@@ -555,7 +518,7 @@ export class PMActor extends Actor {
       }
 
       case "api_timeout": {
-        await sendEvent({ statusUpdate: "API 逾時，正在重新安排任務...", agentRole: "pm" });
+        await sendEvent({ statusUpdate: getApiTimeoutMessage(this.config.locale), agentRole: "pm" });
         this.messages.push({
           role: "assistant",
           content: `\`\`\`json\n{"status": "blocked", "blockedReason": "API timeout - ${payload.error}"}\n\`\`\``,
@@ -636,10 +599,10 @@ export class PMActor extends Actor {
         chatMessages.push({ role: "user", content: "Please continue based on the above context. What is your next action?" });
       }
 
-      // Progress updates while PM generates
+      // Progress updates while PM generates — show which agent (PM) is working
       let progressIdx = 0;
       const progressTimer = setInterval(async () => {
-        const msg = PM_PROGRESS_MESSAGES[Math.min(progressIdx, PM_PROGRESS_MESSAGES.length - 1)];
+        const msg = getProgressMessage(progressIdx, "pm", this.config.locale);
         progressIdx++;
         try {
           await sendEvent({ statusUpdate: msg, agentRole: "pm" });
@@ -719,7 +682,7 @@ export class PMActor extends Actor {
       if (pmAction?.action === "dispatch") {
         // Send friendly dispatch message to user
         await sendEvent({
-          pmMessage: getDispatchMessage(pmAction.target, pmAction.task),
+          pmMessage: i18nDispatchMessage(pmAction.target, pmAction.task, this.config.locale),
           agentRole: "pm",
         });
         await sendEvent({
@@ -739,7 +702,7 @@ export class PMActor extends Actor {
         const parallelTasks = (pmAction as { tasks: Array<{ taskId: string; task: string; files: string[] }> }).tasks;
         // Send friendly parallel dispatch message to user
         await sendEvent({
-          pmMessage: getParallelDispatchMessage(parallelTasks),
+          pmMessage: i18nParallelDispatchMessage(parallelTasks.length, this.config.locale),
           agentRole: "pm",
         });
         await sendEvent({
@@ -913,7 +876,7 @@ export class PMActor extends Actor {
       if (this.expectedParallelCount > 0 && this.pendingParallelResults.size < this.expectedParallelCount) {
         actorLog("warn", this.id, `Parallel timeout: only ${this.pendingParallelResults.size}/${this.expectedParallelCount} results collected — forcing merge`, this.traceId);
         await sendEvent({
-          statusUpdate: `部分開發者逾時（已收到 ${this.pendingParallelResults.size}/${this.expectedParallelCount} 個結果），正在合併已完成的工作...`,
+          statusUpdate: getPartialTimeoutMessage(this.pendingParallelResults.size, this.expectedParallelCount, this.config.locale),
           agentRole: "pm",
         });
         await this.mergeAndContinue();
@@ -1030,7 +993,7 @@ export class PMActor extends Actor {
 
     // Translate merged result
     const translated = await translateForUser(mergedContent, "developer", this.config.locale);
-    const displayContent = translated.content || stripJsonBlocks(mergedContent) || "所有開發者已完成工作。";
+    const displayContent = translated.content || stripJsonBlocks(mergedContent) || getAllDevelopersDoneMessage(this.config.locale);
     await sendEvent({ content: displayContent, agentRole: "developer" });
     if (translated.usage) {
       await sendEvent({ usage: translated.usage, model: getOutputModel() });
@@ -1098,7 +1061,7 @@ export class PMActor extends Actor {
     const humanMessage =
       translated.content ||
       fallbackContent ||
-      getFallbackMessage(action);
+      i18nFallbackMessage(action, this.config.locale);
 
     if (translated.usage) {
       await sendEvent({ usage: translated.usage, model: getOutputModel() });
