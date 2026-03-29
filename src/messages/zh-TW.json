@@ -555,7 +555,6 @@
       "whatsapp": "WhatsApp",
       "discord": "Discord",
       "telegram": "Telegram",
-      "built_in_real_estate": "內建房地產查詢",
       "built_in_supabase": "內建 Supabase",
       "built_in_keycloak": "內建 Keycloak",
       "built_in_minio": "內建 MinIO",

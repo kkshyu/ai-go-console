@@ -55,7 +55,6 @@ enum ServiceType {
   discord
   telegram
   // built-in (platform-managed infrastructure)
-  built_in_real_estate
   built_in_supabase
   built_in_keycloak
   built_in_minio

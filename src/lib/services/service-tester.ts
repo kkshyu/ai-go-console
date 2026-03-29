@@ -270,18 +270,15 @@ export const testers: Record<ServiceType, ServiceTester> = {
     throw new Error(`Telegram API returned ${res.status}`);
   },
 
-  // --- built-in ---
-  built_in_real_estate: configOnlyTester("Built-in Real Estate", [
-    "apiBaseUrl",
-  ]),
-
   // --- built-in infrastructure (platform-managed) ---
   built_in_keycloak: async (_config, endpointUrl) => {
     const url = endpointUrl || _config.url;
     if (!url) return { success: true, message: "Built-in Keycloak configuration valid" };
-    const res = await fetch(`${url}/health/ready`, { signal: AbortSignal.timeout(5000) });
-    if (res.ok) return { success: true, message: "Built-in Keycloak connection OK" };
-    throw new Error(`Built-in Keycloak returned ${res.status}`);
+    const healthRes = await fetch(`${url}/health/ready`, { signal: AbortSignal.timeout(5000) }).catch(() => null);
+    if (healthRes?.ok) return { success: true, message: "Built-in Keycloak connection OK" };
+    const realmRes = await fetch(`${url}/realms/master`, { signal: AbortSignal.timeout(5000) });
+    if (realmRes.ok) return { success: true, message: "Built-in Keycloak connection OK" };
+    throw new Error(`Built-in Keycloak returned ${realmRes.status}`);
   },
   built_in_minio: async (_config, endpointUrl) => {
     const url = endpointUrl || _config.endpoint;
@@ -342,7 +339,7 @@ export const testers: Record<ServiceType, ServiceTester> = {
       },
       signal: AbortSignal.timeout(5000),
     });
-    if (res.ok || res.status === 200) {
+    if (res.ok) {
       return { success: true, message: "Built-in Supabase connection OK" };
     }
     throw new Error(`Built-in Supabase returned ${res.status}`);

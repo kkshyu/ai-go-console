@@ -555,7 +555,6 @@
       "whatsapp": "WhatsApp",
       "discord": "Discord",
       "telegram": "Telegram",
-      "built_in_real_estate": "Built-in Real Estate",
       "built_in_supabase": "Built-in Supabase",
       "built_in_keycloak": "Built-in Keycloak",
       "built_in_minio": "Built-in MinIO",

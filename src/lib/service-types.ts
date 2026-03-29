@@ -48,7 +48,6 @@ export const ALL_SERVICE_TYPES: ServiceType[] = [
   "discord",
   "telegram",
   // built-in infrastructure
-  "built_in_real_estate",
   "built_in_supabase",
   "built_in_keycloak",
   "built_in_minio",
@@ -125,7 +124,6 @@ export const SERVICE_TYPE_CATEGORY: Record<ServiceType, ServiceCategory> = {
   discord: ServiceCategory.chat,
   telegram: ServiceCategory.chat,
   // built-in infra
-  built_in_real_estate: ServiceCategory.platform,
   built_in_supabase: ServiceCategory.platform,
   built_in_keycloak: ServiceCategory.platform,
   built_in_minio: ServiceCategory.platform,
@@ -164,7 +162,7 @@ export const CATEGORY_SERVICE_TYPES: Record<ServiceCategory, ServiceType[]> = {
   [ServiceCategory.email]: ["sendgrid", "ses", "mailgun"],
   [ServiceCategory.sms]: ["twilio", "vonage", "aws_sns"],
   [ServiceCategory.auth]: ["auth0", "firebase_auth", "line_login"],
-  [ServiceCategory.platform]: ["supabase", "hasura", "built_in_real_estate", "built_in_supabase", "built_in_keycloak", "built_in_minio", "built_in_n8n", "built_in_qdrant", "built_in_meilisearch", "built_in_posthog", "built_in_metabase"],
+  [ServiceCategory.platform]: ["supabase", "hasura", "built_in_supabase", "built_in_keycloak", "built_in_minio", "built_in_n8n", "built_in_qdrant", "built_in_meilisearch", "built_in_posthog", "built_in_metabase"],
   [ServiceCategory.chat]: ["line_bot", "whatsapp", "discord", "telegram"],
   [ServiceCategory.ai_model]: ["openai", "gemini", "claude", "openrouter"],
   [ServiceCategory.industry]: INDUSTRY_SERVICE_TYPES,
@@ -182,7 +180,6 @@ export const BUILT_IN_INFRA_SERVICE_TYPES: ServiceType[] = [
 ];
 
 export const BUILT_IN_SERVICE_TYPES: ReadonlySet<ServiceType> = new Set([
-  "built_in_real_estate",
   ...BUILT_IN_INFRA_SERVICE_TYPES,
   ...INDUSTRY_SERVICE_TYPES,
 ]);
@@ -348,7 +345,6 @@ export const SERVICE_TYPE_CONFIG_FIELDS: Record<ServiceType, ConfigFieldDef[]> =
     { key: "botToken", type: "password", placeholder: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" },
   ],
   // built-in (auto-configured by platform)
-  built_in_real_estate: [],
   built_in_supabase: [],
   built_in_keycloak: [],
   built_in_minio: [],
@@ -419,7 +415,6 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   whatsapp: "WhatsApp",
   discord: "Discord",
   telegram: "Telegram",
-  built_in_real_estate: "Built-in Real Estate",
   built_in_supabase: "Built-in Supabase",
   built_in_keycloak: "Built-in Keycloak",
   built_in_minio: "Built-in MinIO",
@@ -432,7 +427,7 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   built_in_medical: "Built-in Medical",
   built_in_beauty: "Built-in Beauty",
   built_in_education: "Built-in Education",
-  built_in_realestate: "Built-in Real Estate (Industry)",
+  built_in_realestate: "Built-in Real Estate",
   built_in_fitness: "Built-in Fitness",
   built_in_retail: "Built-in Retail",
   built_in_hospitality: "Built-in Hospitality",
@@ -506,7 +501,6 @@ export const SERVICE_TYPE_HTTP_MODE: Record<ServiceType, HttpMode> = {
   discord: "fixed",
   telegram: "fixed",
   // built-in infra
-  built_in_real_estate: "fixed",
   built_in_supabase: "user-provided",
   built_in_keycloak: "user-provided",
   built_in_minio: "user-provided",

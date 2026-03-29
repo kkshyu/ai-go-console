@@ -2,7 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
-import { ALL_SERVICE_TYPES } from "@/lib/service-types";
+import { ALL_SERVICE_TYPES, INDUSTRY_SERVICE_TYPES } from "@/lib/service-types";
 import { encrypt } from "@/lib/crypto";
 import { provisionSupabaseProject } from "@/lib/builtin-supabase";
 import { provisionKeycloakRealm } from "@/lib/builtin-keycloak";
@@ -62,20 +62,6 @@ async function createOrganizationWithDefaults(name: string) {
     },
   });
 
-  const realEstateConfig = encrypt(JSON.stringify({
-    apiBaseUrl: `/api/platform/real-estate/${orgSlug}`,
-  }));
-  await prisma.service.create({
-    data: {
-      name: "Built-in Real Estate",
-      type: "built_in_real_estate" as ServiceType,
-      configEncrypted: realEstateConfig.ciphertext,
-      iv: realEstateConfig.iv,
-      authTag: realEstateConfig.authTag,
-      organizationId: org.id,
-    },
-  });
-
   // Auto-provision built-in infrastructure services (graceful degradation)
   const infraProvisions: { name: string; type: ServiceType; provision: () => Promise<Record<string, unknown>>; endpointUrlKey?: string }[] = [
     { name: "Built-in Keycloak", type: "built_in_keycloak" as ServiceType, provision: async () => { const c = await provisionKeycloakRealm(orgSlug); return { url: c.url, realm: c.realm, clientId: c.clientId, clientSecret: c.clientSecret }; }, endpointUrlKey: "url" },
@@ -105,6 +91,26 @@ async function createOrganizationWithDefaults(name: string) {
     } catch {
       // Graceful degradation: service not available yet
     }
+  }
+
+  // Auto-provision industry built-in services
+  for (const industryType of INDUSTRY_SERVICE_TYPES) {
+    const industryCfg = encrypt(JSON.stringify({
+      industry: industryType.replace("built_in_", ""),
+      version: "1.0",
+    }));
+    const label = industryType.replace("built_in_", "").replace(/_/g, " ");
+    const name = `Built-in ${label.charAt(0).toUpperCase()}${label.slice(1)}`;
+    await prisma.service.create({
+      data: {
+        name,
+        type: industryType,
+        configEncrypted: industryCfg.ciphertext,
+        iv: industryCfg.iv,
+        authTag: industryCfg.authTag,
+        organizationId: org.id,
+      },
+    });
   }
 
   return org;
