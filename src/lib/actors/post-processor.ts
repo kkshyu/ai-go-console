@@ -11,7 +11,6 @@
 import { executeFileOperations } from "../services/file-operations";
 import {
   extractServicesFromContent,
-  getAuthorizedServiceIds,
   bindServicesToApp,
 } from "../services/service-authorization";
 import { actorLog } from "./logger";
@@ -73,9 +72,10 @@ export class PostProcessor {
       const services = extractServicesFromContent(content);
       if (services.length === 0) return;
 
-      const authorizedIds = await getAuthorizedServiceIds(
-        this.config.userId,
-        this.config.serviceInstances,
+      // serviceInstances is already RBAC-filtered + probe-passed upstream.
+      // Use it directly as the authorized set — no DB query needed.
+      const authorizedIds = new Set(
+        this.config.serviceInstances.map((s) => s.id),
       );
 
       const result = await bindServicesToApp(

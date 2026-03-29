@@ -1,8 +1,12 @@
 /**
- * Service Authorization & Binding Service
+ * Service Binding Service
  *
- * Extracted from PM Actor. Handles RBAC validation and binding
- * services to apps based on agent output.
+ * Handles binding services to apps based on agent output.
+ * Authorization is performed upstream (loadUserServiceInstances + probe filtering)
+ * before services reach the agent system. This module only handles:
+ * - Extracting service specs from agent output
+ * - Lightweight validation against the pre-authorized set
+ * - Writing AppService junction records
  */
 
 import { prisma } from "../db";
@@ -40,54 +44,6 @@ export function extractServicesFromContent(content: string): ServiceSpec[] {
   }
 
   return [];
-}
-
-/**
- * Get the set of service IDs authorized for a user.
- * Only returns IDs of services that are both authorized AND verified working
- * (i.e., present in the probed serviceInstances list which only contains status: "ok").
- */
-export async function getAuthorizedServiceIds(
-  userId: string | undefined,
-  serviceInstances: Array<{ id: string }>,
-): Promise<Set<string>> {
-  if (!userId) {
-    // Fallback: trust the pre-filtered instances list
-    return new Set(serviceInstances.map((s) => s.id));
-  }
-
-  // serviceInstances already contains only probe-passed ("ok") instances.
-  // Intersect with the user's authorization.
-  const okIds = new Set(serviceInstances.map((s) => s.id));
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true, organizationId: true },
-  });
-
-  if (user?.role === "admin") {
-    // Admin can use all org services, but still limited to probe-passed ones
-    const orgServices = await prisma.service.findMany({
-      where: { organizationId: user.organizationId! },
-      select: { id: true },
-    });
-    const adminIds = new Set<string>();
-    for (const s of orgServices) {
-      if (okIds.has(s.id)) adminIds.add(s.id);
-    }
-    return adminIds;
-  }
-
-  // Non-admin: intersect userAllowedServiceInstance with probe-passed
-  const allowed = await prisma.userAllowedServiceInstance.findMany({
-    where: { userId },
-    select: { serviceId: true },
-  });
-  const authorizedIds = new Set<string>();
-  for (const a of allowed) {
-    if (okIds.has(a.serviceId)) authorizedIds.add(a.serviceId);
-  }
-  return authorizedIds;
 }
 
 /**
