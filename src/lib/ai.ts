@@ -65,10 +65,7 @@ export function getOutputModel(): string {
     : "openai/gpt-4o-mini";
 }
 
-export function buildSystemPrompt(allowedServices?: string[]): string {
-  const serviceList = allowedServices && allowedServices.length > 0
-    ? allowedServices.join(", ")
-    : "postgresql, mysql, mongodb, s3, gcs, azure_blob, stripe, paypal, ecpay, sendgrid, ses, mailgun, twilio, vonage, aws_sns, auth0, firebase_auth, line_login, supabase, hasura, line_bot, whatsapp, discord, telegram";
+export function buildSystemPrompt(): string {
 
   return `你是 AI Go，一位友善的應用程式建立助手。你的任務是幫助使用者快速建立他們需要的應用程式。
 
@@ -115,10 +112,7 @@ export function buildSystemPrompt(allowedServices?: string[]): string {
 - 如果只需要後端 API → "node-api"
 - 其他情況一律用 → "nextjs-fullstack"
 
-### 可用的服務類型（不要告訴使用者技術名稱，但在 JSON 中使用正確的代碼）
-僅限以下組織已啟用的服務：${serviceList}
-
-服務對應表（左邊是功能描述，右邊是 JSON 中要用的代碼）：
+### 服務對應表（不要告訴使用者技術名稱，但在 JSON 中使用正確的代碼）
 - 儲存資料 → "postgresql" / "mysql" / "mongodb"
 - 檔案儲存 → "s3" / "gcs" / "azure_blob"
 - 收款/付款 → "stripe" / "paypal" / "ecpay"
@@ -169,13 +163,8 @@ export interface AppContext {
 
 export function buildAppContextPrompt(
   app: AppContext,
-  allowedServices?: string[],
   fileContext?: string
 ): string {
-  const serviceList =
-    allowedServices && allowedServices.length > 0
-      ? allowedServices.join(", ")
-      : "disk, postgresql, supabase, stripe, hasura";
 
   const connectedServices =
     app.services && app.services.length > 0
@@ -201,7 +190,6 @@ Available templates:
 - "node-api": Express.js REST API with TypeScript.
 - "nextjs-fullstack": Full-stack Next.js application with App Router and Tailwind.
 
-Available service types for this organization: ${serviceList}
 ${fileSection}
 
 When the user wants to update the app configuration, add services, or change settings, respond with a JSON block:
@@ -236,7 +224,6 @@ export async function streamChat(
   messages: ChatMessage[],
   onChunk: (text: string) => void,
   model: string = DEFAULT_MODEL,
-  allowedServices?: string[],
   systemPromptOverride?: string,
   abortSignal?: AbortSignal,
 ): Promise<StreamChatResult> {
@@ -250,7 +237,7 @@ export async function streamChat(
     throw new Error("OPENROUTER_API_KEY is not set");
   }
 
-  const systemPrompt = systemPromptOverride || buildSystemPrompt(allowedServices);
+  const systemPrompt = systemPromptOverride || buildSystemPrompt();
 
   // Create a timeout-based abort if no external signal provided
   const timeoutController = new AbortController();
@@ -440,7 +427,6 @@ export async function translateDirect(
     return await chat(
       [{ role: "user", content: userMessage }],
       outputModel,
-      undefined,
       systemPrompt,
     );
   } catch {
@@ -504,7 +490,6 @@ export async function translateForUser(
 export async function chat(
   messages: ChatMessage[],
   model: string = DEFAULT_MODEL,
-  allowedServices?: string[],
   systemPromptOverride?: string
 ): Promise<StreamChatResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -512,7 +497,7 @@ export async function chat(
     throw new Error("OPENROUTER_API_KEY is not set");
   }
 
-  const systemPrompt = systemPromptOverride || buildSystemPrompt(allowedServices);
+  const systemPrompt = systemPromptOverride || buildSystemPrompt();
 
   const response = await fetch(OPENROUTER_API_URL, {
     method: "POST",

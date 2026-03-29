@@ -71,19 +71,11 @@ export default function ServicesPage() {
       .then(setServices)
       .catch(() => {});
 
-    fetch("/api/organizations")
-      .then((r) => r.json())
-      .then((org) => {
-        if (org.allowedServices) {
-          const enabled = new Set<string>(
-            org.allowedServices
-              .filter((s: { enabled: boolean }) => s.enabled)
-              .map((s: { serviceType: string }) => s.serviceType)
-          );
-          setAllowedTypes(enabled);
-        }
-      })
-      .catch(() => {});
+    // All service types are available (org-level type restrictions removed)
+    const allTypes = new Set<string>(
+      Object.values(CATEGORY_SERVICE_TYPES).flat()
+    );
+    setAllowedTypes(allTypes);
   }, []);
 
   // --- Filtered services ---

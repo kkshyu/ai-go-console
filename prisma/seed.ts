@@ -44,26 +44,6 @@ function encrypt(plaintext: string) {
 
 // ── All service types for allowed-service seeding ───────────────────────────
 
-const ALL_SERVICE_TYPES: ServiceType[] = [
-  "postgresql", "mysql", "mongodb",
-  "s3", "gcs", "azure_blob", "google_drive",
-  "stripe", "paypal", "ecpay",
-  "sendgrid", "ses", "mailgun",
-  "twilio", "vonage", "aws_sns",
-  "auth0", "firebase_auth", "line_login",
-  "supabase", "hasura",
-  "line_bot", "whatsapp", "discord", "telegram",
-  "built_in_supabase",
-  "built_in_keycloak", "built_in_minio", "built_in_n8n",
-  "built_in_qdrant", "built_in_meilisearch", "built_in_posthog", "built_in_metabase",
-  "built_in_restaurant", "built_in_medical", "built_in_beauty",
-  "built_in_education", "built_in_realestate", "built_in_fitness",
-  "built_in_retail", "built_in_hospitality", "built_in_legal",
-  "built_in_accounting", "built_in_auto_repair", "built_in_pet_care",
-  "built_in_photography", "built_in_cleaning", "built_in_logistics",
-  "openai", "gemini", "claude", "openrouter",
-];
-
 const INDUSTRY_SERVICES: { type: ServiceType; name: string }[] = [
   { type: "built_in_restaurant", name: "Built-in Restaurant" },
   { type: "built_in_medical", name: "Built-in Medical" },
@@ -109,28 +89,7 @@ async function main() {
 
   console.log(`  ✓ Organizations: ${acme.name}, ${startup.name}`);
 
-  // ── 2. Allowed services for each org ────────────────────────────────────
-
-  for (const org of [acme, startup]) {
-    for (const serviceType of ALL_SERVICE_TYPES) {
-      await prisma.orgAllowedService.upsert({
-        where: {
-          organizationId_serviceType: {
-            organizationId: org.id,
-            serviceType,
-          },
-        },
-        update: {},
-        create: {
-          organizationId: org.id,
-          serviceType,
-          enabled: true,
-        },
-      });
-    }
-  }
-
-  console.log("  ✓ Allowed services configured for all orgs");
+  // ── 2. (Removed: OrgAllowedService no longer used) ────────────────────
 
   // ── 2b. Built-in services for each org ────────────────────────────────
 
@@ -382,6 +341,28 @@ async function main() {
   });
 
   console.log(`  ✓ Services: ${pgService.name}, ${stripeService.name}, ${sendgridService.name}, ${s3Service.name}, ${openaiService.name}`);
+
+  // ── 4b. User allowed service instances ────────────────────────────────
+  // Admin users (admin, bob) already see all org services via admin role check.
+  // Grant alice (regular user) access to built-in supabase + core services.
+
+  const acmeServices = await prisma.service.findMany({
+    where: { organizationId: acme.id },
+    select: { id: true },
+  });
+
+  // Grant alice access to all Acme services
+  for (const svc of acmeServices) {
+    await prisma.userAllowedServiceInstance.upsert({
+      where: {
+        userId_serviceId: { userId: alice.id, serviceId: svc.id },
+      },
+      update: {},
+      create: { userId: alice.id, serviceId: svc.id },
+    });
+  }
+
+  console.log(`  ✓ User allowed services: alice → ${acmeServices.length} services`);
 
   // ── 5. Apps ─────────────────────────────────────────────────────────────
 

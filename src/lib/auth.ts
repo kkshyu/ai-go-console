@@ -31,15 +31,6 @@ async function createOrganizationWithDefaults(name: string) {
     },
   });
 
-  // Seed all service types as allowed
-  await prisma.orgAllowedService.createMany({
-    data: ALL_SERVICE_TYPES.map((serviceType) => ({
-      organizationId: org.id,
-      serviceType,
-      enabled: true,
-    })),
-  });
-
   // Auto-provision built-in services
   const orgSlug = org.slug;
 

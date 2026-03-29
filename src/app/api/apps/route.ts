@@ -81,20 +81,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check each service type is allowed
-    const allowedServices = await prisma.orgAllowedService.findMany({
-      where: { organizationId, enabled: true },
-    });
-    const allowedTypes = new Set(allowedServices.map((s) => s.serviceType));
-
-    for (const svc of services) {
-      if (!allowedTypes.has(svc.type)) {
-        return NextResponse.json(
-          { error: `Service type "${svc.type}" is not enabled for your organization` },
-          { status: 403 }
-        );
-      }
-    }
   }
 
   // Use AI-provided slug if available, otherwise fallback to slugify(name)

@@ -100,13 +100,14 @@ export async function POST(request: NextRequest) {
     let bgSystem: BackgroundActorSystem | undefined;
     const traceId = generateTraceId();
     try {
-      // 0a. Probe service instances for connectivity
+      // 0a. Probe service instances for connectivity, keep only working ones
       if (ctx.serviceInstances.length > 0) {
-        ctx.serviceInstances = await probeAndEnrichServices(
+        const enriched = await probeAndEnrichServices(
           ctx.serviceInstances,
           session?.user?.organizationId,
           sendEvent,
         );
+        ctx.serviceInstances = enriched.filter((s) => s.status === "ok");
       }
 
       // 0b. Ensure background actor system is initialized
@@ -140,7 +141,6 @@ export async function POST(request: NextRequest) {
       system.setActorFactory((role, index) =>
         createSpecialistActor(role, index, {
           model: ctx.model || DEFAULT_MODEL,
-          allowedServices: ctx.allowedServices,
           serviceInstances: ctx.serviceInstances,
           appContext: ctx.appContext,
           sendEvent,
@@ -153,7 +153,6 @@ export async function POST(request: NextRequest) {
       // 3. Create and spawn PM actor
       const pmConfig: PMActorConfig = {
         model: ctx.model || DEFAULT_MODEL,
-        allowedServices: ctx.allowedServices,
         serviceInstances: ctx.serviceInstances,
         appContext: ctx.appContext,
         artifactContext: ctx.artifactContext,

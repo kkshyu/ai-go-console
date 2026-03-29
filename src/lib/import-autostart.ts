@@ -301,7 +301,6 @@ export async function runAutostartLoop(
         const result = await chat(
           [{ role: "user", content: fixPrompt }],
           model,
-          undefined,
           FIX_SYSTEM_PROMPT
         );
 

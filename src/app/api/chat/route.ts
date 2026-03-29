@@ -60,18 +60,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // Get allowed services for the user's org
-  let allowedServices: string[] | undefined;
   const session = await getServerSession(authOptions);
-  if (session?.user?.organizationId) {
-    const orgAllowed = await prisma.orgAllowedService.findMany({
-      where: {
-        organizationId: session.user.organizationId,
-        enabled: true,
-      },
-    });
-    allowedServices = orgAllowed.map((s) => s.serviceType);
-  }
 
   // Collect all fileIds from messages and build file context
   const allFileIds = messages.flatMap((m) => m.fileIds || []);
@@ -93,20 +82,17 @@ export async function POST(request: NextRequest) {
       },
     });
     if (app) {
-      systemPromptOverride = buildAppContextPrompt(
-        {
-          name: app.name,
-          template: app.template,
-          description: app.description,
-          status: app.status,
-          port: app.port,
-          services: app.services.map((s) => ({
-            name: s.service.name,
-            type: s.service.type,
-          })),
-        },
-        allowedServices
-      );
+      systemPromptOverride = buildAppContextPrompt({
+        name: app.name,
+        template: app.template,
+        description: app.description,
+        status: app.status,
+        port: app.port,
+        services: app.services.map((s) => ({
+          name: s.service.name,
+          type: s.service.type,
+        })),
+      });
     }
   }
 
@@ -136,7 +122,6 @@ export async function POST(request: NextRequest) {
           writer.write(encoder.encode(`data: ${data}\n\n`));
         },
         model || DEFAULT_MODEL,
-        allowedServices,
         systemPromptOverride
       );
       // Send usage data before closing

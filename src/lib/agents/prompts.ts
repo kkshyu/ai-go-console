@@ -14,7 +14,7 @@
  * while preserving all decision-critical information.
  */
 
-import type { AgentRole } from "./types";
+
 
 /**
  * FAILURE REPORTING:
@@ -57,7 +57,7 @@ IMPORTANT — If you CANNOT complete the task for any reason (missing informatio
   "blockedReason": "Clear description of why you cannot proceed"
 PM Agent will review this and decide how to recover.`;
 
-export function buildPMPrompt(allowedServices: string[]): string {
+export function buildPMPrompt(serviceInstances: Array<{ id: string; name: string; type: string }>): string {
   return `You are the PM Agent (Product Manager) in a multi-agent app creation system called AI Go.
 
 You are the ORCHESTRATOR. You control the entire workflow by deciding which specialist agents to dispatch tasks to.
@@ -181,30 +181,17 @@ Guidelines:
 - Proactively drive the entire process from start to finish without pausing for user input.
 - You decide the agent flow based on the task. Adapt and re-route as needed.
 - Respond in the same language as the user
-- Available services for this organization: ${allowedServices.join(", ") || "all"}`;
+- Available services: ${serviceInstances.length > 0 ? serviceInstances.map(s => `${s.name} (${s.type})`).join(", ") : "none configured"}`;
 }
 
 export function buildArchitectPrompt(
-  allowedServices: string[],
-  serviceInstances?: Array<{ id: string; name: string; type: string; status?: 'ok' | 'failed' | 'untested'; message?: string }>
+  serviceInstances?: Array<{ id: string; name: string; type: string }>
 ): string {
-  const statusIcon = (s: string | undefined) => {
-    if (s === "ok") return "✅ OK";
-    if (s === "failed") return "❌ FAILED";
-    return "⚠️ UNTESTED";
-  };
-
   const instanceList = serviceInstances && serviceInstances.length > 0
     ? serviceInstances.map((s) => {
-        const statusStr = s.status ? ` — ${statusIcon(s.status)}${s.status === "failed" && s.message ? ` (${s.message})` : ""}` : "";
-        return `  - id: "${s.id}", name: "${s.name}", type: "${s.type}"${statusStr}`;
+        return `  - id: "${s.id}", name: "${s.name}", type: "${s.type}"`;
       }).join("\n")
-    : "  (No service instances configured yet)";
-
-  // Separate working vs non-working for the prompt
-  const okServices = serviceInstances?.filter((s) => s.status === "ok") ?? [];
-  const failedServices = serviceInstances?.filter((s) => s.status === "failed") ?? [];
-  const _untestedServices = serviceInstances?.filter((s) => s.status === "untested" || !s.status) ?? [];
+    : "  (No service instances available)";
 
   return `You are the Architect Agent in a multi-agent app creation system called AI Go.
 
@@ -217,15 +204,14 @@ Available templates:
 - "nextjs-fullstack": Full-stack Next.js with App Router + Tailwind
 - "line-bot": LINE Bot webhook server with @line/bot-sdk + Express + TypeScript. Pre-configured with webhook endpoint, message handling, and reply API. Requires LINE_CHANNEL_SECRET and LINE_CHANNEL_ACCESS_TOKEN env vars.
 
-Available service types: ${allowedServices.join(", ") || "all"}
-
-IMPORTANT — Available service INSTANCES (already configured in the organization):
+IMPORTANT — Available service INSTANCES (authorized and verified working):
 ${instanceList}
 
-You MUST select services from the available instances above by their "id" and "name".
-If no instance exists for a needed service type, you may still recommend it but note that it needs to be created.
+All services listed above have been authorized for the current user and confirmed reachable via connectivity probes. You MUST select services ONLY from this list by their exact "id" and "name". NEVER fabricate or assume service instances not in the list.
 
-IMPORTANT: Services of type "built_in_supabase" (Built-in Supabase) are platform-managed and automatically available for every organization. They require no external credentials. Prefer using these built-in services for database and file storage needs unless the user specifically requires an external service.
+If the list is empty or no service matches the user's needs, the app should be built without external services (use local/mock data) and include TODO comments for adding services later.
+
+IMPORTANT: Services of type "built_in_supabase" (Built-in Supabase) are platform-managed. Prefer using these built-in services for database and file storage needs unless the user specifically requires an external service.
 
 PARALLEL DEVELOPMENT: You decide how many developers should work on this app in parallel.
 - developerCount: 1 for simple apps (single-page, basic CRUD)
@@ -259,55 +245,6 @@ Output your design as:
 \`\`\`
 ${FAILURE_CLAUSE}
 
-SERVICE CONNECTIVITY STATUS:
-Each service instance above has been probed for connectivity before this task:
-- ✅ OK: Connectivity confirmed — PREFER these services.
-- ❌ FAILED: Service unreachable or authentication error — AVOID using these.
-- ⚠️ UNTESTED: Probe timed out or skipped — use with caution.
-${okServices.length > 0 ? `\nWorking services (${okServices.length}): ${okServices.map((s) => `${s.name} (${s.type})`).join(", ")}` : ""}
-${failedServices.length > 0 ? `\nFailed services (${failedServices.length}): ${failedServices.map((s) => `${s.name} (${s.type}): ${s.message || "unknown error"}`).join(", ")}` : ""}
-
-CRITICAL — Service selection strategy:
-1. ONLY use services with status ✅ OK. These are confirmed working right now.
-2. If the user's requirements need a service type where ALL instances are ❌ FAILED, report "status": "blocked" with a clear explanation.
-3. CREATIVE COMBINATION: Think creatively about how to combine the available WORKING services to fulfill the user's needs:
-   - If Stripe (payment) is down but PayPal is available and working, recommend PayPal instead.
-   - If PostgreSQL is down but Built-in Supabase is working, use Supabase for database needs.
-   - If a dedicated auth service is down, consider using Supabase Auth as an alternative.
-   - If no email service is working, suggest the app works without email for now with a TODO note.
-4. NEVER fabricate or assume service instances that are not in the list.
-5. Include a "serviceStatus" field in your design output summarizing which services are available and your substitution decisions.
-
-Example output with serviceStatus:
-\`\`\`json
-{
-  "action": "architect_design",
-  "design": {
-    "template": "nextjs-fullstack",
-    "services": [
-      { "instanceId": "svc-supabase", "name": "Built-in Supabase", "type": "built_in_supabase" }
-    ],
-    "serviceStatus": {
-      "available": ["built_in_supabase"],
-      "unavailable": ["stripe"],
-      "substitutions": [
-        { "needed": "stripe", "replacement": "built_in_supabase", "reason": "Stripe is currently unreachable; using Supabase for data storage, payment can be added later" }
-      ]
-    },
-    ...
-  }
-}
-\`\`\`
-
-Example blocked response when NO working service can fulfill a critical need:
-\`\`\`json
-{
-  "status": "blocked",
-  "blockedReason": "此應用需要資料庫服務，但所有資料庫服務實例（PostgreSQL, MySQL）目前都無法連線。請先檢查服務設定。",
-  "missingServices": ["postgresql", "mysql"]
-}
-\`\`\`
-
 PEER DISCUSSION: If you need clarification on implementation feasibility or technical constraints, you can request a discussion with the developer agent. Output a "discuss" block:
 \`\`\`json
 {
@@ -324,13 +261,12 @@ Guidelines:
 - Be concise. Your output will be rewritten by an output model for the user.
 - Choose the simplest template that meets requirements
 - ALWAYS reference service instances by their exact id and name from the available instances list
-- Prioritize ✅ OK services; avoid ❌ FAILED services unless no alternative exists
 - npmPackages will be ACTUALLY INSTALLED into the generated app. List ALL necessary production dependencies (including @types packages for TypeScript). The template already includes base dependencies (react, next, express, etc.) — only list ADDITIONAL packages the app needs.
 - Developer Agent will follow your specs exactly and write the actual source code
 - Respond in the same language as the user`;
 }
 
-export function buildDeveloperPrompt(_allowedServices: string[]): string {
+export function buildDeveloperPrompt(): string {
   return `You are the Developer Agent in a multi-agent app creation system called AI Go.
 
 You receive a task from the PM Agent and WRITE ACTUAL SOURCE CODE for the app.
@@ -486,21 +422,13 @@ Guidelines:
 
 export function buildAppDevArchitectPrompt(
   appContext: string,
-  allowedServices: string[],
-  serviceInstances?: Array<{ id: string; name: string; type: string; status?: 'ok' | 'failed' | 'untested'; message?: string }>
+  serviceInstances?: Array<{ id: string; name: string; type: string }>
 ): string {
-  const statusIcon = (s: string | undefined) => {
-    if (s === "ok") return "✅ OK";
-    if (s === "failed") return "❌ FAILED";
-    return "⚠️ UNTESTED";
-  };
-
   const instanceList = serviceInstances && serviceInstances.length > 0
     ? serviceInstances.map((s) => {
-        const statusStr = s.status ? ` — ${statusIcon(s.status)}${s.status === "failed" && s.message ? ` (${s.message})` : ""}` : "";
-        return `  - id: "${s.id}", name: "${s.name}", type: "${s.type}"${statusStr}`;
+        return `  - id: "${s.id}", name: "${s.name}", type: "${s.type}"`;
       }).join("\n")
-    : "  (No service instances configured yet)";
+    : "  (No service instances available)";
 
   return `You are the Architect Agent in a multi-agent app development system called AI Go.
 
@@ -510,9 +438,7 @@ ${appContext}
 
 You can see the app's current file tree and source code contents above. Use this to understand the existing architecture before proposing changes.
 
-Available service types: ${allowedServices.join(", ") || "all"}
-
-Available service INSTANCES (already configured in the organization):
+Available service INSTANCES (authorized and verified working):
 ${instanceList}
 
 When proposing architectural changes, output:
@@ -749,7 +675,7 @@ Be concise. Your output will be rewritten by an output model for the user. Respo
 
 // ---- PlannerPM Prompt (DAG-based orchestration) ----
 
-export function buildPlannerPMPrompt(allowedServices: string[]): string {
+export function buildPlannerPMPrompt(serviceInstances: Array<{ id: string; name: string; type: string }>): string {
   return `You are the PlannerPM Agent in a multi-agent app creation system called AI Go.
 
 You are a STRATEGIC PLANNER. Your job is to analyze the user's request and produce a complete execution plan as a DAG (Directed Acyclic Graph). You make ONE decision that defines the entire pipeline — no back-and-forth.
@@ -816,7 +742,7 @@ Guidelines:
 - Be concise in task descriptions — focus on WHAT the agent should do
 - Include all context the agent needs in the task description
 - Never ask clarifying questions — make smart assumptions and plan immediately
-- Available services: ${allowedServices.join(", ") || "all"}
+- Available services: ${serviceInstances.length > 0 ? serviceInstances.map(s => `${s.name} (${s.type})`).join(", ") : "none configured"}
 - Respond in the same language as the user`;
 }
 
@@ -983,14 +909,3 @@ Guidelines:
 - Respond in the same language as the user`;
 }
 
-export const AGENT_PROMPTS: Record<AgentRole, (...args: string[]) => string> = {
-  pm: (services: string) => buildPMPrompt(services ? services.split(",") : []),
-  architect: (services: string) => buildArchitectPrompt(services ? services.split(",") : [], []),
-  developer: (services: string) => buildDeveloperPrompt(services ? services.split(",") : []),
-  reviewer: () => buildReviewerPrompt(),
-  devops: () => buildDevOpsPrompt(),
-  ux_designer: () => buildUXDesignerPrompt(),
-  tester: () => buildTesterPrompt(),
-  db_migrator: () => buildDBMigratorPrompt(),
-  doc_writer: () => buildDocWriterPrompt(),
-};

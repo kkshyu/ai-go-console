@@ -81,7 +81,6 @@ export class SummarizerActor extends BackgroundActor {
             },
           ],
           OUTPUT_MODEL,
-          undefined,
           mapPrompt,
         ),
       ),
@@ -123,7 +122,6 @@ Rules:
         },
       ],
       OUTPUT_MODEL,
-      undefined,
       reducePrompt,
     );
 

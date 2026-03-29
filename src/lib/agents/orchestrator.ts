@@ -39,8 +39,7 @@ export interface ServiceInstance {
 }
 
 export interface OrchestratorContext {
-  allowedServices: string[];
-  /** Actual service instances configured in the organization */
+  /** Actual service instances configured and authorized for the user */
   serviceInstances?: ServiceInstance[];
   appContext?: string; // For existing app development
   orchestrationState?: OrchestrationState;
@@ -272,7 +271,7 @@ function buildPMDispatch(
 ): AgentDispatch {
   const prompt = context.appContext
     ? buildAppDevPMPrompt(context.appContext)
-    : buildPMPrompt(context.allowedServices);
+    : buildPMPrompt(context.serviceInstances ?? []);
 
   return {
     agentRole: "pm",
@@ -292,15 +291,15 @@ function buildSpecialistDispatch(
   context: OrchestratorContext
 ): AgentDispatch {
   const promptBuilders: Record<AgentRole, () => string> = {
-    pm: () => buildPMPrompt(context.allowedServices),
+    pm: () => buildPMPrompt(context.serviceInstances ?? []),
     architect: () =>
       context.appContext
-        ? buildAppDevArchitectPrompt(context.appContext, context.allowedServices, context.serviceInstances)
-        : buildArchitectPrompt(context.allowedServices, context.serviceInstances),
+        ? buildAppDevArchitectPrompt(context.appContext, context.serviceInstances)
+        : buildArchitectPrompt(context.serviceInstances),
     developer: () =>
       context.appContext
         ? buildAppDevDeveloperPrompt(context.appContext)
-        : buildDeveloperPrompt(context.allowedServices),
+        : buildDeveloperPrompt(),
     reviewer: () =>
       context.appContext
         ? buildAppDevReviewerPrompt(context.appContext)

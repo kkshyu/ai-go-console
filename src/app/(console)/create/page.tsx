@@ -121,7 +121,6 @@ export default function CreateAppPage() {
   const [inputValue, setInputValue] = useState("");
 
   // Chat mode state
-  const [allowedServices, setAllowedServices] = useState<string[]>([]);
   const [serviceInstances, setServiceInstances] = useState<Array<{ id: string; name: string; type: string }>>([]);
   const [chatMessages, setChatMessages] = useState<AgentMessage[]>([]);
   const [prdData, setPrdData] = useState<PRDData | null>(null);
@@ -131,17 +130,6 @@ export default function CreateAppPage() {
   const autoSendValueRef = useRef<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/organizations")
-      .then((r) => r.json())
-      .then((org) => {
-        if (org.allowedServices) {
-          const enabled = org.allowedServices
-            .filter((s: { enabled: boolean }) => s.enabled)
-            .map((s: { serviceType: string }) => s.serviceType);
-          setAllowedServices(enabled);
-        }
-      })
-      .catch(() => {});
     fetch("/api/services")
       .then((r) => r.json())
       .then((services) => {
@@ -301,7 +289,6 @@ export default function CreateAppPage() {
             prdData={prdData}
             requiredServiceTypes={prdData?.requiredServices || []}
             serviceInstances={serviceInstances}
-            allowedServices={allowedServices}
             selectedServices={selectedServices}
             onServiceChange={handleServiceChange}
             serviceTestResults={serviceTestResults}
