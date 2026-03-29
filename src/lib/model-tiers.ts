@@ -118,7 +118,10 @@ export interface OrgModelConfig {
 
 /**
  * Get the model for a given agent role and tier.
- * Priority: orgConfig (DB) > env var > per-role tier override > global tier default.
+ * Priority: orgConfig (DB) > env var > userModel (session fallback) > hard-coded default.
+ *
+ * userModel is a session-level fallback (e.g. user's chat model selection),
+ * NOT a global override. Org configs always take precedence.
  */
 export function getModelForTier(
   agentRole: string,
@@ -126,10 +129,7 @@ export function getModelForTier(
   userModel?: string,
   orgConfigs?: OrgModelConfig[],
 ): string {
-  // Legacy: user explicit model override takes priority (backward compat)
-  if (userModel) return userModel;
-
-  // 1. Org DB config
+  // 1. Org DB config (highest priority — admin-controlled)
   const orgOverride = orgConfigs?.find((c) => c.agentRole === `${agentRole}:${tier}`)?.modelId;
   if (orgOverride) return orgOverride;
 
@@ -137,6 +137,9 @@ export function getModelForTier(
   const envModel = getEnvModel(agentRole, tier);
   if (envModel) return envModel;
 
-  // 3. Hard-coded default
+  // 3. Session-level user model (fallback, not override)
+  if (userModel) return userModel;
+
+  // 4. Hard-coded default
   return getHardCodedDefault(agentRole, tier);
 }

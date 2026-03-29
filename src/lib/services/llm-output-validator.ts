@@ -176,9 +176,12 @@ export function validatePMAction(
       if (typeof obj.task !== "string" || !obj.task) {
         return { error: "dispatch: missing 'task'" };
       }
+      if (obj.target === "pm") {
+        return { error: "dispatch: PM cannot dispatch to itself" };
+      }
       const validTargets = ["architect", "developer", "reviewer", "devops", "ux_designer", "tester", "db_migrator", "doc_writer"];
       if (!validTargets.includes(obj.target)) {
-        return { error: `dispatch: invalid target '${obj.target}'` };
+        return { error: `dispatch: invalid target '${obj.target}'. Valid targets: ${validTargets.join(", ")}` };
       }
       return {
         action: {
@@ -190,6 +193,9 @@ export function validatePMAction(
     }
 
     case "dispatch_parallel": {
+      if (obj.target && obj.target !== "developer") {
+        return { error: `dispatch_parallel: only 'developer' target is supported, got '${obj.target}'` };
+      }
       if (!Array.isArray(obj.tasks) || obj.tasks.length === 0) {
         return { error: "dispatch_parallel: missing or empty 'tasks'" };
       }

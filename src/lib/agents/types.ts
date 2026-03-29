@@ -59,7 +59,8 @@ export interface OrchestrationState {
   tasks: AgentTask[]; // dispatched tasks (history, in order)
   parallelGroups: ParallelTaskGroup[]; // parallel developer groups
   currentAgent: AgentRole | null; // currently executing agent
-  activeActors: string[]; // list of active actor IDs
+  /** @deprecated Not populated — worker tracking uses workerStatusTracker Map in PMActor instead. Retained for UI serialization compatibility. */
+  activeActors: string[];
 }
 
 export interface AgentMeta {

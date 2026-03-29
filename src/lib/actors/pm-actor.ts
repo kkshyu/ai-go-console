@@ -128,6 +128,8 @@ export class PMActor extends Actor {
   private expectedParallelCount = 0;
   private currentGroupId: string | null = null;
   private parallelTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** Maps actorId → taskId for consistent key usage in parallel error path */
+  private actorToTaskId: Map<string, string> = new Map();
 
   /** Timeout for collecting all parallel results (3 minutes). */
   private static readonly PARALLEL_TIMEOUT_MS = 3 * 60 * 1000;
@@ -344,11 +346,12 @@ export class PMActor extends Actor {
       actorLog("warn", this.id, `Post-processing failed (non-fatal): ${ppErr instanceof Error ? ppErr.message : ppErr}`, this.traceId);
     }
 
-    // Update state
+    // Update state (pass actorId for precise matching in parallel scenarios)
     this.orchState = stateForAgentComplete(
       this.orchState,
       payload.agentRole,
-      payload.summary
+      payload.summary,
+      message.from
     );
 
     // Send completion event
@@ -391,11 +394,12 @@ export class PMActor extends Actor {
       actorLog("warn", this.id, `Post-processing failed (non-fatal): ${ppErr instanceof Error ? ppErr.message : ppErr}`, this.traceId);
     }
 
-    // Update state
+    // Update state (pass actorId for precise matching)
     this.orchState = stateForAgentComplete(
       this.orchState,
       payload.agentRole,
-      payload.summary
+      payload.summary,
+      message.from
     );
 
     // Log discussion if present
@@ -472,10 +476,12 @@ export class PMActor extends Actor {
 
     // If we're in parallel mode, treat failed worker as a completed result with error
     if (this.expectedParallelCount > 0 && this.currentGroupId) {
-      actorLog("warn", this.id, `Parallel worker ${payload.actorId} failed — injecting error result`, this.traceId);
-      this.pendingParallelResults.set(payload.actorId, {
+      // Resolve taskId from actorId mapping (fall back to actorId for robustness)
+      const resolvedTaskId = this.actorToTaskId.get(payload.actorId) || payload.actorId;
+      actorLog("warn", this.id, `Parallel worker ${payload.actorId} (task: ${resolvedTaskId}) failed — injecting error result`, this.traceId);
+      this.pendingParallelResults.set(resolvedTaskId, {
         groupId: this.currentGroupId,
-        taskId: payload.actorId,
+        taskId: resolvedTaskId,
         agentRole: payload.agentRole,
         actorId: payload.actorId,
         content: `\`\`\`json\n{"status": "blocked", "blockedReason": "${payload.error}"}\n\`\`\``,
@@ -487,7 +493,7 @@ export class PMActor extends Actor {
       await sendEvent({
         parallelActorStatus: {
           actorId: payload.actorId,
-          taskId: payload.actorId,
+          taskId: resolvedTaskId,
           groupId: this.currentGroupId,
           status: "error",
           agentRole: payload.agentRole,
@@ -1048,6 +1054,9 @@ export class PMActor extends Actor {
       // Register worker for status tracking
       this.registerWorker(developer.id, "developer");
 
+      // Track actorId → taskId mapping for consistent error-path key resolution
+      this.actorToTaskId.set(developer.id, task.taskId);
+
       const parallelMsg = createMessage("parallel_task", this.id, developer.id, {
         groupId,
         taskId: task.taskId,
@@ -1093,13 +1102,14 @@ export class PMActor extends Actor {
       });
     }
 
-    // Update state for each completed developer
+    // Update state for each completed developer (pass actorId for precise matching)
     for (const [, result] of this.pendingParallelResults) {
       this.markWorkerComplete(result.actorId);
       this.orchState = stateForAgentComplete(
         this.orchState,
         "developer",
-        result.summary
+        result.summary,
+        result.actorId
       );
     }
 
@@ -1135,6 +1145,7 @@ export class PMActor extends Actor {
     this.pendingParallelResults.clear();
     this.expectedParallelCount = 0;
     this.currentGroupId = null;
+    this.actorToTaskId.clear();
 
     // Continue PM loop
     await this.runPMLoop();

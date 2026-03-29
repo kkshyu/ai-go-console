@@ -776,6 +776,12 @@ abstract class SeniorSpecialistActor extends BaseSpecialistActor {
   private originalMessage: ActorMessage | null = null;
   private juniorCounter = 0;
   private collectionTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** Sub-tasks waiting for their dependencies to complete before dispatch */
+  private pendingDependentTasks: Map<string, SubTask> = new Map();
+  /** Set of completed sub-task IDs for dependency resolution */
+  private completedSubTaskIds: Set<string> = new Set();
+  /** Stored results by sub-task ID for passing upstream context to dependents */
+  private subTaskResultContents: Map<string, string> = new Map();
 
   /** Subclasses must provide the standard role prompt builder */
   protected abstract buildPrompt(task: string): string;
@@ -900,24 +906,66 @@ abstract class SeniorSpecialistActor extends BaseSpecialistActor {
     const { system } = this.config;
     if (!system) return;
 
-    // Simple approach: dispatch all sub-tasks without dependencies first,
-    // then dispatch dependent ones as their dependencies complete
+    // Split into independent and dependent sub-tasks
     const noDeps = subTasks.filter(t => !t.dependsOn || t.dependsOn.length === 0);
     const withDeps = subTasks.filter(t => t.dependsOn && t.dependsOn.length > 0);
 
-    // Dispatch independent sub-tasks in parallel
+    // Store dependent tasks — they'll be dispatched when their dependencies complete
+    for (const subTask of withDeps) {
+      this.pendingDependentTasks.set(subTask.subTaskId, subTask);
+    }
+
+    // Dispatch independent sub-tasks in parallel immediately
     for (const subTask of noDeps) {
       await this.spawnAndDispatchJunior(subTask, originalMessage);
     }
 
-    // Store dependent tasks — they'll be dispatched when their dependencies complete
-    // For simplicity, dispatch them immediately too (they'll have context from the strategy)
-    for (const subTask of withDeps) {
-      await this.spawnAndDispatchJunior(subTask, originalMessage);
+    // Edge case: if all tasks have deps (e.g. circular or missing deps),
+    // try dispatching any whose deps don't exist in the task set
+    if (noDeps.length === 0 && withDeps.length > 0) {
+      const allIds = new Set(subTasks.map(t => t.subTaskId));
+      for (const subTask of withDeps) {
+        const hasUnresolvableDep = subTask.dependsOn!.every(dep => !allIds.has(dep));
+        if (hasUnresolvableDep) {
+          this.pendingDependentTasks.delete(subTask.subTaskId);
+          await this.spawnAndDispatchJunior(subTask, originalMessage);
+        }
+      }
     }
   }
 
-  private async spawnAndDispatchJunior(subTask: SubTask, originalMessage: ActorMessage): Promise<void> {
+  /**
+   * Check and dispatch any pending dependent tasks whose dependencies are now satisfied.
+   */
+  private async dispatchReadyDependents(): Promise<void> {
+    if (this.pendingDependentTasks.size === 0 || !this.originalMessage) return;
+
+    const toDispatch: SubTask[] = [];
+
+    for (const [id, subTask] of this.pendingDependentTasks) {
+      const depsResolved = subTask.dependsOn!.every(dep => this.completedSubTaskIds.has(dep));
+      if (depsResolved) {
+        toDispatch.push(subTask);
+      }
+    }
+
+    for (const subTask of toDispatch) {
+      this.pendingDependentTasks.delete(subTask.subTaskId);
+
+      // Build upstream context from completed dependency results
+      const depContext = subTask.dependsOn!
+        .map(depId => {
+          const content = this.subTaskResultContents.get(depId);
+          return content ? `[Dependency ${depId} result]: ${content.slice(0, 2000)}` : null;
+        })
+        .filter(Boolean)
+        .join("\n\n");
+
+      await this.spawnAndDispatchJunior(subTask, this.originalMessage!, depContext);
+    }
+  }
+
+  private async spawnAndDispatchJunior(subTask: SubTask, originalMessage: ActorMessage, dependencyContext?: string): Promise<void> {
     const { system, sendEvent } = this.config;
     if (!system) return;
 
@@ -959,12 +1007,18 @@ abstract class SeniorSpecialistActor extends BaseSpecialistActor {
       },
     });
 
+    // Build context: original context + dependency results (if any)
+    const baseContext = (originalMessage as { payload: { context?: string } }).payload.context || "";
+    const fullContext = dependencyContext
+      ? `${baseContext}\n\n--- UPSTREAM DEPENDENCY RESULTS ---\n${dependencyContext}`
+      : baseContext;
+
     // Dispatch the sub_task message
     const taskMsg = createMessage("sub_task", this.id, juniorId, {
       subTaskId: subTask.subTaskId,
       task: subTask.description,
       tier,
-      context: (originalMessage as { payload: { context?: string } }).payload.context,
+      context: fullContext,
       seniorStrategy: this.currentPlan?.strategy,
       files: subTask.files,
       messages: (originalMessage as { payload: { messages?: Array<{ role: string; content: string }> } }).payload.messages,
@@ -977,6 +1031,8 @@ abstract class SeniorSpecialistActor extends BaseSpecialistActor {
     const payload = message.payload;
 
     this.pendingSubTaskResults.set(payload.subTaskId, payload);
+    this.completedSubTaskIds.add(payload.subTaskId);
+    this.subTaskResultContents.set(payload.subTaskId, payload.content || "");
     actorLog("info", this.id, `Received sub_task_result ${payload.subTaskId} (${this.pendingSubTaskResults.size}/${this.expectedSubTaskCount})`, this.traceId);
 
     // Send sub-task complete event for UI
@@ -989,6 +1045,9 @@ abstract class SeniorSpecialistActor extends BaseSpecialistActor {
         summary: payload.summary?.slice(0, 100) || "Completed",
       },
     });
+
+    // Dispatch any dependent tasks whose dependencies are now satisfied
+    await this.dispatchReadyDependents();
 
     // Check if all sub-tasks are done
     if (this.pendingSubTaskResults.size >= this.expectedSubTaskCount) {

@@ -251,20 +251,31 @@ export function stateForDispatch(
 
 /**
  * Update orchestration state when an agent completes.
+ * When actorId is provided, matches the specific actor instance (for parallel correctness).
+ * Without actorId, falls back to matching by agentRole (first running task).
+ * Only one task is updated per call to prevent over-matching in parallel scenarios.
  */
 export function stateForAgentComplete(
   state: OrchestrationState,
   agentRole: AgentRole,
-  summary?: string
+  summary?: string,
+  actorId?: string
 ): OrchestrationState {
+  let matched = false;
   return {
     ...state,
     currentAgent: "pm", // control returns to PM
-    tasks: state.tasks.map((t) =>
-      t.agentRole === agentRole && t.status === "running"
-        ? { ...t, status: "completed" as const, summary }
-        : t
-    ),
+    tasks: state.tasks.map((t) => {
+      if (matched || t.status !== "running") return t;
+      const isMatch = actorId
+        ? t.actorId === actorId
+        : t.agentRole === agentRole;
+      if (isMatch) {
+        matched = true;
+        return { ...t, status: "completed" as const, summary };
+      }
+      return t;
+    }),
   };
 }
 
