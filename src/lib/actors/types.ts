@@ -240,7 +240,9 @@ export type BackgroundMessageType =
   | "progress_init"
   | "progress_update"
   | "progress_query"
-  | "progress_result";
+  | "progress_result"
+  | "generate_and_start"
+  | "generate_and_start_result";
 
 export interface BackgroundMessage {
   id: string;

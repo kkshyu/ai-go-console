@@ -18,6 +18,7 @@ enum AppStatus {
   building
   running
   error
+  importing
 }
 
 enum ServiceType {
@@ -294,6 +295,24 @@ model Deployment {
 
   @@index([appId, version])
   @@map("deployments")
+}
+
+model ImportSession {
+  id               String   @id @default(cuid())
+  userId           String   @map("user_id")
+  organizationId   String   @map("organization_id")
+  importSessionId  String   @unique @map("import_session_id") // matches ChatFile.importSessionId
+  appId            String?  @map("app_id")
+  status           String   @default("uploading") // uploading | processing | analyzing | creating | starting | completed | failed
+  fileCount        Int      @default(0) @map("file_count")
+  errorMessage     String?  @map("error_message") @db.Text
+  progressMessage  String?  @map("progress_message")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([appId])
+  @@index([userId])
+  @@map("import_sessions")
 }
 
 // Note: "content_chunks" table is managed via raw SQL (pgvector).

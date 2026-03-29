@@ -31,6 +31,9 @@ import {
   Server,
   FolderOpen,
   ArrowLeftRight,
+  Loader2,
+  AlertTriangle,
+  Wrench,
 } from "lucide-react";
 import { AgentChatPanel, type AgentMessage } from "@/components/chat/agent-chat-panel";
 import { FileManager } from "@/components/file-manager/file-manager";
@@ -68,7 +71,15 @@ const statusVariant: Record<string, "default" | "success" | "warning" | "destruc
   stopped: "secondary",
   building: "warning",
   error: "destructive",
+  importing: "warning",
 };
+
+interface ImportSessionData {
+  status: string;
+  fileCount: number;
+  errorMessage: string | null;
+  progressMessage: string | null;
+}
 
 export default function AppDetailPage() {
   const { appId } = useParams();
@@ -167,6 +178,10 @@ export default function AppDetailPage() {
   const [autoSendMessage, setAutoSendMessage] = useState<string | undefined>(undefined);
   const developInitRef = useRef(false);
 
+  // Import session state for importing apps
+  const [importSession, setImportSession] = useState<ImportSessionData | null>(null);
+  const importPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Dev server is running if we have a port and it's in developing state
   const [devRunning, setDevRunning] = useState(false);
   const hasPreview = app?.port && devRunning;
@@ -219,6 +234,50 @@ export default function AppDetailPage() {
     fetchDeployments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appId]);
+
+  // Poll import session status when app is importing
+  useEffect(() => {
+    if (!app || app.status !== "importing") {
+      if (importPollRef.current) {
+        clearInterval(importPollRef.current);
+        importPollRef.current = null;
+      }
+      return;
+    }
+
+    const fetchImportStatus = async () => {
+      try {
+        const res = await fetch(`/api/apps/import/session?appId=${appId}`);
+        if (!res.ok) return;
+        const data: ImportSessionData = await res.json();
+        setImportSession(data);
+
+        // If completed, refresh app data
+        if (data.status === "completed" || data.status === "failed") {
+          if (importPollRef.current) {
+            clearInterval(importPollRef.current);
+            importPollRef.current = null;
+          }
+          // Refresh app data to get the updated status
+          const appRes = await fetch(`/api/apps/${appId}`);
+          const appData = await appRes.json();
+          setApp(appData);
+        }
+      } catch {
+        // Ignore polling errors
+      }
+    };
+
+    fetchImportStatus();
+    importPollRef.current = setInterval(fetchImportStatus, 3000);
+    return () => {
+      if (importPollRef.current) {
+        clearInterval(importPollRef.current);
+        importPollRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when status changes, not on every app object update
+  }, [app?.status, appId]);
 
   // Auto-develop: trigger multi-agent after chat and app data are loaded
   useEffect(() => {
@@ -678,7 +737,7 @@ export default function AppDetailPage() {
         </Button>
         <h1 className="text-xl font-bold tracking-tight truncate">{app.name}</h1>
         <Badge variant={statusVariant[app.status] || "secondary"}>
-          {t(app.status as "developing" | "running" | "stopped" | "building" | "error")}
+          {t(app.status as "developing" | "running" | "stopped" | "building" | "error" | "importing")}
         </Badge>
 
         {/* Separator */}
@@ -754,8 +813,61 @@ export default function AppDetailPage() {
         <div className="flex-1" />
       </div>
 
+      {/* Importing Progress Panel */}
+      {app.status === "importing" && (
+        <div className="flex flex-1 items-center justify-center min-h-0">
+          <div className="flex flex-col items-center gap-4 p-8 max-w-md text-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <h2 className="text-lg font-semibold">{t("importingTitle")}</h2>
+            <p className="text-sm text-muted-foreground">
+              {importSession?.progressMessage || t("importingWait")}
+            </p>
+            {importSession && (
+              <div className="w-full space-y-2">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{t("importingStatus")}</span>
+                  <Badge variant="outline">{importSession.status}</Badge>
+                </div>
+                {importSession.fileCount > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {t("importFileCount", { count: importSession.fileCount })}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Error with import session — show manual fix option */}
+      {app.status === "error" && importSession?.status === "failed" && (
+        <div className="mb-3 flex items-center gap-3 rounded-lg border border-destructive/50 bg-destructive/5 p-3">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-destructive">{t("importFailedTitle")}</p>
+            <p className="text-xs text-muted-foreground truncate">
+              {importSession.errorMessage || t("importFailedHint")}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              // Open chat panel and send an initial fix request
+              setChatCollapsed(false);
+              setAutoSendMessage(
+                `應用程式匯入後自動啟動失敗。請讀取 dev server 的錯誤日誌，分析問題並嘗試修復。錯誤訊息：${importSession.errorMessage || "未知錯誤"}`
+              );
+            }}
+          >
+            <Wrench className="h-3.5 w-3.5" />
+            {t("importManualFix")}
+          </Button>
+        </div>
+      )}
+
       {/* Main Content: Chat + Preview + Deployments */}
-      <div className="flex flex-1 gap-4 min-h-0 flex-col lg:flex-row">
+      <div className={`flex flex-1 gap-4 min-h-0 flex-col lg:flex-row ${app.status === "importing" ? "hidden" : ""}`}>
         {/* Multi-Agent Chat Panel */}
         <div className={`flex flex-col min-h-0 transition-all duration-200 overflow-hidden ${chatCollapsed ? "shrink-0 basis-auto" : "shrink-0 basis-1/2 lg:basis-auto lg:shrink-1"} lg:flex-1`}>
           {/* Collapse toggle — mobile/tablet only */}

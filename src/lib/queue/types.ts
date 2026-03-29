@@ -10,7 +10,8 @@ export type QueueName =
   | "retrieval"
   | "summarizer"
   | "file-processing"
-  | "file-analysis";
+  | "file-analysis"
+  | "import-orchestrator";
 
 export interface QueueJobPayload {
   type: string;

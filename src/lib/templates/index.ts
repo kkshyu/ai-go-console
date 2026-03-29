@@ -143,6 +143,19 @@ export const templates: Record<string, TemplateDefinition> = {
     ...NEXTJS_BASE,
     devBaseImage: "aigo-dev-base-dashboard",
   },
+  blank: {
+    id: "blank",
+    name: "Blank (User Files)",
+    description: "Minimal container for user-provided project files",
+    directory: path.join(TEMPLATES_ROOT, "blank"),
+    defaultPort: 3000,
+    devCommand: "sh",
+    devArgs: ["-c", "if [ -f package.json ]; then npm install && npm run dev; else echo 'No package.json found' && sleep infinity; fi"],
+    installCommand: "npm",
+    installArgs: ["install"],
+    internalDevPort: 3000,
+    devBaseImage: "node:22-alpine",
+  },
 };
 
 export function getTemplate(id: string): TemplateDefinition | undefined {
