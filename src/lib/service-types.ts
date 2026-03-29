@@ -193,10 +193,44 @@ export function isIndustryServiceType(type: ServiceType): boolean {
 }
 
 /**
+ * Built-in infra services that act as database/platform backends.
+ * These should be compatible with traditional database service types.
+ */
+const SUPABASE_COMPATIBLE: ServiceType[] = [
+  "built_in_supabase",
+  "supabase",
+  "postgresql",
+  "mysql",
+  "mongodb",
+];
+
+/**
  * Get all compatible service types in the same category.
- * e.g. "postgresql" → ["postgresql", "mysql", "mongodb"]
+ * e.g. "postgresql" → ["postgresql", "mysql", "mongodb", "built_in_supabase", "supabase"]
+ *
+ * Special cases:
+ * - built_in_supabase is compatible with database types (it IS a database+platform)
+ * - Other built-in infra services (metabase, posthog, etc.) only match themselves
+ * - Industry services only match themselves
  */
 export function getCompatibleServiceTypes(svcType: ServiceType): ServiceType[] {
+  // built_in_supabase is compatible with database types and supabase
+  if (svcType === "built_in_supabase" || svcType === "supabase") {
+    return SUPABASE_COMPATIBLE;
+  }
+  // Database types are also compatible with built_in_supabase
+  if (svcType === "postgresql" || svcType === "mysql" || svcType === "mongodb") {
+    return SUPABASE_COMPATIBLE;
+  }
+  // Other built-in infra services only match themselves
+  if (BUILT_IN_INFRA_SERVICE_TYPES.includes(svcType) && svcType !== "built_in_supabase") {
+    return [svcType];
+  }
+  // Industry services only match themselves
+  if (INDUSTRY_SERVICE_TYPES.includes(svcType)) {
+    return [svcType];
+  }
+  // Default: return all types in the same category
   const category = SERVICE_TYPE_CATEGORY[svcType];
   if (!category) return [svcType];
   return CATEGORY_SERVICE_TYPES[category] || [svcType];

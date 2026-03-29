@@ -610,6 +610,7 @@ export class PMActor extends Actor {
           agentComplete: true,
           agentRole: "pm",
           rawContent: result.content,
+          needsUserInput: true,
         });
 
         system.signalCompletion(this.orchState);

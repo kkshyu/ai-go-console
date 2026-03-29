@@ -123,6 +123,11 @@ export function PRDPanel({
                 const instances = serviceInstances
                   .filter((s) => compatibleTypes.includes(s.type as ServiceType))
                   .sort((a, b) => {
+                    // Exact type match first
+                    const aExact = a.type === svcType ? 0 : 1;
+                    const bExact = b.type === svcType ? 0 : 1;
+                    if (aExact !== bExact) return aExact - bExact;
+                    // Built-in services second
                     const aBuiltIn = isBuiltInServiceType(a.type as ServiceType) ? 0 : 1;
                     const bBuiltIn = isBuiltInServiceType(b.type as ServiceType) ? 0 : 1;
                     return aBuiltIn - bBuiltIn;

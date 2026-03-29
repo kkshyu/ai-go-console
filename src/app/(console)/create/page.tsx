@@ -128,6 +128,9 @@ export default function CreateAppPage() {
   const [serviceTestResults, setServiceTestResults] = useState<Record<string, { success: boolean; message: string } | null>>({});
   const manuallySelectedRef = useRef<Set<string>>(new Set());
   const autoSendValueRef = useRef<string | null>(null);
+  const appCreatingRef = useRef(false);
+  const prdDataRef = useRef<PRDData | null>(null);
+  const selectedServicesRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     fetch("/api/services")
@@ -157,7 +160,11 @@ export default function CreateAppPage() {
 
   const handleServiceChange = useCallback((svcType: string, instanceId: string) => {
     manuallySelectedRef.current.add(svcType);
-    setSelectedServices((prev) => ({ ...prev, [svcType]: instanceId }));
+    setSelectedServices((prev) => {
+      const next = { ...prev, [svcType]: instanceId };
+      selectedServicesRef.current = next;
+      return next;
+    });
     testService(svcType, instanceId);
   }, [testService]);
 
@@ -173,7 +180,11 @@ export default function CreateAppPage() {
       const instances = serviceInstances
         .filter((s) => compatibleTypes.includes(s.type as ServiceType))
         .sort((a, b) => {
-          // Built-in services first
+          // Exact type match first
+          const aExact = a.type === svcType ? 0 : 1;
+          const bExact = b.type === svcType ? 0 : 1;
+          if (aExact !== bExact) return aExact - bExact;
+          // Built-in services second
           const aBuiltIn = isBuiltInServiceType(a.type as ServiceType) ? 0 : 1;
           const bBuiltIn = isBuiltInServiceType(b.type as ServiceType) ? 0 : 1;
           return aBuiltIn - bBuiltIn;
@@ -184,13 +195,17 @@ export default function CreateAppPage() {
         testService(svcType, instances[0].id);
       }
     }
-    if (changed) setSelectedServices(newSelected);
+    if (changed) {
+      setSelectedServices(newSelected);
+      selectedServicesRef.current = newSelected;
+    }
   }, [selectedServices, serviceInstances, testService]);
 
   // PRD update from PM Agent
   const handlePRDUpdate = useCallback(
     (prd: PRDData) => {
       setPrdData(prd);
+      prdDataRef.current = prd;
       autoSelectServices(prd);
     },
     [autoSelectServices]
@@ -206,9 +221,41 @@ export default function CreateAppPage() {
   const handleAssistantComplete = useCallback((content: string) => {
     setChatMessages((prev) => [
       ...prev,
-      { id: (Date.now() + 1).toString(), role: "assistant", content, agentRole: "pm" },
+      { id: (Date.now() + 1).toString(), role: "assistant", content, agentRole: "pm" as const },
     ]);
-  }, []);
+
+    // When PRD data exists, create the app and redirect to build page
+    const currentPrd = prdDataRef.current;
+    if (currentPrd?.appName && !appCreatingRef.current) {
+      appCreatingRef.current = true;
+      const serviceIds = Object.values(selectedServicesRef.current).filter(Boolean);
+      fetch("/api/apps", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: currentPrd.appName,
+          description: currentPrd.description || "",
+          template: "nextjs-fullstack",
+          serviceIds,
+        }),
+      })
+        .then((res) => {
+          if (!res.ok) return res.json().then((d) => Promise.reject(new Error(d.error || "Failed")));
+          return res.json();
+        })
+        .then((app) =>
+          fetch(`/api/apps/${app.id}/lifecycle`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "dev-start" }),
+          }).then(() => router.push(`/apps/${app.id}?develop=true`))
+        )
+        .catch((err) => {
+          console.error("[create] App creation failed:", err);
+          appCreatingRef.current = false;
+        });
+    }
+  }, [router]);
 
   const handlePresetCreate = useCallback(
     async (preset: AppPreset) => {

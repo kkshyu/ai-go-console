@@ -95,6 +95,15 @@ export async function POST(request: NextRequest) {
       appId: ctx.appId,
     });
 
+  // SSE keepalive: send a ping every 30s to prevent client inactivity timeout
+  const keepaliveInterval = setInterval(async () => {
+    try {
+      await writer.write(encoder.encode(`: keepalive\n\n`));
+    } catch {
+      clearInterval(keepaliveInterval);
+    }
+  }, 30_000);
+
   // Start actor system in background
   (async () => {
     let bgSystem: BackgroundActorSystem | undefined;
@@ -140,9 +149,12 @@ export async function POST(request: NextRequest) {
         model: ctx.model || DEFAULT_MODEL,
       });
 
-      // 2. Set actor factory for restarts
-      system.setActorFactory((role, index) =>
-        createSpecialistActor(role, index, {
+      // 2. Set actor factory for restarts (skip PM role — only specialists can be respawned)
+      system.setActorFactory((role, index) => {
+        if (role === "pm") {
+          throw new Error("PM actor cannot be respawned as a specialist");
+        }
+        return createSpecialistActor(role, index, {
           model: ctx.model || DEFAULT_MODEL,
           serviceInstances: ctx.serviceInstances,
           appContext: ctx.appContext,
@@ -151,8 +163,8 @@ export async function POST(request: NextRequest) {
           conversationId: ctx.conversationId,
           backgroundSystem: bgSystem,
           orgModelConfigs,
-        }),
-      );
+        });
+      });
 
       // 3. Create and spawn PM actor
       const pmConfig: PMActorConfig = {
@@ -212,9 +224,11 @@ export async function POST(request: NextRequest) {
       const msg = error instanceof Error ? error.message : "Unknown error";
       await sendEvent({ error: msg });
     } finally {
+      // Stop SSE keepalive
+      clearInterval(keepaliveInterval);
       // Unregister from monitoring registry
       actorSystemRegistry.unregister(traceId);
-      try { writer.close(); } catch { /* already closed */ }
+      try { if (!writer.closed) writer.close(); } catch { /* already closed */ }
     }
   })();
 

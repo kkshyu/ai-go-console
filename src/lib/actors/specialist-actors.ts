@@ -500,6 +500,10 @@ Respond with your perspective on this topic. Be concise and technical.`;
         ? `${systemPrompt}\n\n--- RELEVANT CONTEXT (RAG) ---\n${ragContext}`
         : systemPrompt;
 
+      // Code-heavy roles get larger token budgets for generation
+      const codeRoles: string[] = ["developer", "db_migrator", "ux_designer", "tester"];
+      const maxTokens = codeRoles.includes(this.role) ? 8192 : 4096;
+
       const result = await streamChat(
         chatMessages,
         () => {
@@ -507,7 +511,9 @@ Respond with your perspective on this topic. Be concise and technical.`;
           this.updateHeartbeat();
         },
         effectiveModel,
-        fullSystemPrompt
+        fullSystemPrompt,
+        undefined, // abortSignal
+        maxTokens,
       );
 
       // Fire embedding for the output
@@ -1090,6 +1096,8 @@ abstract class SeniorSpecialistActor extends BaseSpecialistActor {
         () => { this.updateHeartbeat(); },
         effectiveModel,
         synthesisPrompt,
+        undefined, // abortSignal
+        12288,     // Large token budget for merging multiple sub-task code outputs
       );
 
       if (result.usage) {
@@ -1222,6 +1230,8 @@ class JuniorSpecialistActor extends BaseSpecialistActor {
         () => { this.updateHeartbeat(); },
         effectiveModel,
         systemPrompt,
+        undefined, // abortSignal
+        8192,      // Code generation needs more tokens
       );
 
       if (result.usage) {
@@ -1240,6 +1250,21 @@ class JuniorSpecialistActor extends BaseSpecialistActor {
         summary: parsed.summary,
         blocked: parsed.blocked,
         blockedReason: parsed.blockedReason,
+      } satisfies SubTaskResultPayload);
+    } catch (err) {
+      // On LLM failure (e.g. OpenRouter timeout), send back an error sub_task_result
+      // so the senior actor doesn't wait forever for this junior's response
+      const errMsg = err instanceof Error ? err.message : String(err);
+      actorLog("error", this.id, `Junior sub-task ${payload.subTaskId} failed: ${errMsg}`, this.traceId);
+      return createMessage("sub_task_result", this.id, message.from, {
+        subTaskId: payload.subTaskId,
+        agentRole: this.role,
+        tier: this.tier,
+        actorId: this.id,
+        content: `[ERROR] Sub-task failed: ${errMsg}`,
+        summary: `Sub-task failed due to: ${errMsg}`,
+        blocked: true,
+        blockedReason: errMsg,
       } satisfies SubTaskResultPayload);
     } finally {
       this.clearTrackedTimer(progressTimer);

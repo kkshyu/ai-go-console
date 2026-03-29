@@ -160,9 +160,11 @@ export function AgentChatPanel({
         const decoder = new TextDecoder();
         let rawContent = "";
         let resolvedAgent: AgentRole | null = null;
+        let pmMessageSent = false;
 
-        // Client-side inactivity timeout: if no data received for 2 minutes, abort
-        const SSE_INACTIVITY_TIMEOUT_MS = 2 * 60 * 1000;
+        // Client-side inactivity timeout: if no data received for 5 minutes, abort
+        // (code generation by developer agents can take several minutes)
+        const SSE_INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000;
         let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
         const resetInactivityTimer = () => {
           if (inactivityTimer) clearTimeout(inactivityTimer);
@@ -220,11 +222,17 @@ export function AgentChatPanel({
 
               // PM sends a complete message to the user
               if (parsed.pmMessage) {
+                pmMessageSent = true;
                 const msgId = (Date.now() + Math.random()).toString();
                 setMessages((prev) => [
                   ...prev,
                   { id: msgId, role: "assistant", content: parsed.pmMessage, agentRole: "pm" },
                 ]);
+                // Also notify parent so initialMessages stays in sync
+                onAssistantComplete?.(parsed.pmMessage, "pm");
+                // Clear the "translating" status since the message is ready
+                setAgentPhase(null);
+                setStatusMessage("");
                 continue;
               }
 
@@ -233,7 +241,11 @@ export function AgentChatPanel({
                 rawContent = parsed.rawContent || rawContent;
                 setAgentPhase(null);
                 onAssistantResponse?.(rawContent, resolvedAgent || undefined);
-                onAssistantComplete?.(rawContent, resolvedAgent || undefined);
+                // Skip adding rawContent if pmMessage already provided the user-facing message
+                if (!pmMessageSent) {
+                  onAssistantComplete?.(rawContent, resolvedAgent || undefined);
+                }
+                pmMessageSent = false;
 
                 // Update orchestration state if provided
                 if (parsed.orchestrationState) {

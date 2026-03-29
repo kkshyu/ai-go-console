@@ -230,8 +230,8 @@ Be concise and helpful. Respond in the same language as the user.`;
 /**
  * Stream chat completion from OpenRouter
  */
-/** Default timeout for streaming LLM calls (90 seconds). */
-const STREAM_TIMEOUT_MS = 90_000;
+/** Default timeout for streaming LLM calls (3 minutes — code generation can be slow). */
+const STREAM_TIMEOUT_MS = 180_000;
 
 export async function streamChat(
   messages: ChatMessage[],
@@ -239,6 +239,7 @@ export async function streamChat(
   model: string = DEFAULT_MODEL,
   systemPromptOverride?: string,
   abortSignal?: AbortSignal,
+  maxTokens: number = 4096,
 ): Promise<StreamChatResult> {
   // Circuit breaker: fail fast when the LLM provider is unhealthy
   if (!llmCircuitBreaker.canRequest()) {
@@ -262,6 +263,14 @@ export async function streamChat(
     : timeoutController.signal;
 
   try {
+    // Ensure conversation doesn't end with an assistant message — some providers
+    // (e.g. Azure) reject "assistant message prefill". Append a continuation
+    // prompt if the last message is from the assistant.
+    const sanitizedMessages = [...messages];
+    if (sanitizedMessages.length > 0 && sanitizedMessages[sanitizedMessages.length - 1].role === "assistant") {
+      sanitizedMessages.push({ role: "user", content: "Please continue based on the above context." });
+    }
+
     const response = await fetch(OPENROUTER_API_URL, {
       method: "POST",
       headers: {
@@ -272,9 +281,9 @@ export async function streamChat(
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: "system", content: systemPrompt }, ...messages],
+        messages: [{ role: "system", content: systemPrompt }, ...sanitizedMessages],
         stream: true,
-        max_tokens: 4096,
+        max_tokens: maxTokens,
       }),
       signal,
     });
@@ -330,8 +339,13 @@ export async function streamChat(
     return { content: fullContent, usage };
   } catch (error) {
     // Don't count CircuitOpenError itself as a failure (it's thrown before the request)
+    // Don't count provider-side timeouts as circuit breaker failures (they're transient)
     if (!(error instanceof CircuitOpenError)) {
-      llmCircuitBreaker.recordFailure();
+      const msg = error instanceof Error ? error.message : String(error);
+      const isProviderTimeout = msg.includes("Request timeout reached") || msg.includes("timed out");
+      if (!isProviderTimeout) {
+        llmCircuitBreaker.recordFailure();
+      }
     }
     throw error;
   } finally {
@@ -519,7 +533,8 @@ export async function translateForUser(
 export async function chat(
   messages: ChatMessage[],
   model: string = DEFAULT_MODEL,
-  systemPromptOverride?: string
+  systemPromptOverride?: string,
+  maxTokens: number = 4096,
 ): Promise<StreamChatResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
@@ -527,6 +542,12 @@ export async function chat(
   }
 
   const systemPrompt = systemPromptOverride || buildSystemPrompt();
+
+  // Ensure conversation doesn't end with an assistant message (Azure rejects prefill)
+  const sanitizedMessages = [...messages];
+  if (sanitizedMessages.length > 0 && sanitizedMessages[sanitizedMessages.length - 1].role === "assistant") {
+    sanitizedMessages.push({ role: "user", content: "Please continue based on the above context." });
+  }
 
   const response = await fetch(OPENROUTER_API_URL, {
     method: "POST",
@@ -538,8 +559,8 @@ export async function chat(
     },
     body: JSON.stringify({
       model,
-      messages: [{ role: "system", content: systemPrompt }, ...messages],
-      max_tokens: 4096,
+      messages: [{ role: "system", content: systemPrompt }, ...sanitizedMessages],
+      max_tokens: maxTokens,
     }),
   });
 

@@ -270,8 +270,8 @@ export const DEFAULT_SUPERVISOR_STRATEGY: SupervisorStrategy = {
   type: "one-for-one",
   maxRestarts: 2,
   withinMs: 60_000,
-  heartbeatIntervalMs: 15_000,
-  heartbeatTimeoutMs: 120_000,
+  heartbeatIntervalMs: 30_000,
+  heartbeatTimeoutMs: 300_000, // 5 minutes — developer LLM calls can be slow
 };
 
 // ---- Background Actor Types ----

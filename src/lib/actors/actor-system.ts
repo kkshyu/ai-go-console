@@ -34,8 +34,8 @@ export class ActorSystem {
   private _finalState: OrchestrationState | null = null;
   private _completed = false;
 
-  /** Safety timeout for the entire orchestration (6 minutes — slightly longer than PM's 5-min timeout). */
-  private static readonly SAFETY_TIMEOUT_MS = 6 * 60 * 1000;
+  /** Safety timeout for the entire orchestration (10 minutes — allows time for multiple agent rounds). */
+  private static readonly SAFETY_TIMEOUT_MS = 10 * 60 * 1000;
 
   constructor(
     sendEvent: (data: unknown) => Promise<void>,
@@ -298,7 +298,13 @@ export class ActorSystem {
 
     if (this.actorFactory) {
       const index = parseInt(actorId.split("-").pop() || "0", 10);
-      const newActor = this.actorFactory(state.role, index);
+      let newActor;
+      try {
+        newActor = this.actorFactory(state.role, index);
+      } catch (factoryErr) {
+        actorLog("error", "system", `Cannot respawn actor ${actorId} (role=${state.role}): ${factoryErr instanceof Error ? factoryErr.message : String(factoryErr)}`, this.traceId);
+        return;
+      }
       newActor.incrementRestartCount();
 
       await this.spawn(newActor);
