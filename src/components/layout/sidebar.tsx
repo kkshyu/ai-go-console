@@ -25,7 +25,7 @@ const navItems: NavItem[] = [
   { href: "/create", labelKey: "createApp", icon: PlusCircle },
   { href: "/apps", labelKey: "apps", icon: AppWindow },
   { href: "/services", labelKey: "services", icon: Server, adminOnly: true },
-  { href: "/actors", labelKey: "actors", icon: Activity, adminOnly: true },
+  { href: "/agents", labelKey: "agents", icon: Activity, adminOnly: true },
   { href: "/users", labelKey: "users", icon: Users, adminOnly: true },
   { href: "/settings/organization", labelKey: "organization", icon: Building2, adminOnly: true },
 ];

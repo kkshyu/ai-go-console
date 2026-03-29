@@ -19,6 +19,7 @@ export interface RegisteredSession {
   conversationId: string;
   startedAt: number;
   model: string;
+  traceId?: string;
 }
 
 export interface RegisteredSessionSnapshot {
@@ -28,6 +29,7 @@ export interface RegisteredSessionSnapshot {
   conversationId: string;
   startedAt: number;
   model: string;
+  traceId?: string;
   actors: ActorState[];
   actorCount: number;
 }
@@ -51,6 +53,7 @@ class ActorSystemRegistry {
       conversationId: s.conversationId,
       startedAt: s.startedAt,
       model: s.model,
+      traceId: s.traceId,
       actors: s.system.getAllStates(),
       actorCount: s.system.getAllActorIds().length,
     }));
@@ -66,6 +69,7 @@ class ActorSystemRegistry {
       conversationId: s.conversationId,
       startedAt: s.startedAt,
       model: s.model,
+      traceId: s.traceId,
       actors: s.system.getAllStates(),
       actorCount: s.system.getAllActorIds().length,
     };

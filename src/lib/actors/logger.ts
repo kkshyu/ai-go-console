@@ -5,6 +5,8 @@
  * all actor messages within a single user request.
  */
 
+import { appendActivity } from "@/lib/agents/activity-feed";
+
 export type LogLevel = "info" | "warn" | "error";
 
 interface LogEntry {
@@ -49,6 +51,15 @@ export function actorLog(
     default:
       console.log(jsonLine);
   }
+
+  appendActivity({
+    source: "actor",
+    level,
+    actorId,
+    traceId,
+    message,
+    meta: extra,
+  }).catch(() => {});
 }
 
 /** Start a timer and return a function to stop it and get duration in ms. */

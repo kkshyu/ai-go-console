@@ -26,7 +26,7 @@
     "services": "Service List",
     "users": "User Management",
     "organization": "Organization",
-    "actors": "Actor Monitor",
+    "agents": "Agent Monitor",
     "settings": "Settings",
     "logout": "Logout"
   },
@@ -740,8 +740,8 @@
     "fileProcessing": "Processing file...",
     "fileReady": "File ready"
   },
-  "actors": {
-    "title": "Actor System Monitor",
+  "agents": {
+    "title": "Agent Observability",
     "activeSessions": "Active Orchestration Sessions",
     "backgroundQueues": "Background Worker Queues",
     "noActiveSessions": "No active orchestration sessions",
@@ -767,7 +767,23 @@
     "statusWaiting": "Waiting",
     "statusDead": "Dead",
     "statusRestarting": "Restarting",
-    "noQueues": "No background worker queues available"
+    "noQueues": "No background worker queues available",
+    "avgTime": "Avg Time",
+    "backpressure": "Backpressure",
+    "activityFeed": "Activity Feed",
+    "filterAll": "All",
+    "filterActor": "Actor",
+    "filterQueue": "Queue",
+    "filterSystem": "System",
+    "errorsOnly": "Errors only",
+    "noActivity": "No activity events in the last 24 hours",
+    "time": "Time",
+    "source": "Source",
+    "actorOrQueue": "Actor / Queue",
+    "message": "Message",
+    "traceId": "Trace ID",
+    "archiveUnavailable": "Archive storage unavailable",
+    "archivedEvents": "Archived {count} old events"
   },
   "domains": {
     "title": "Custom Domains",

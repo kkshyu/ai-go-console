@@ -11,6 +11,7 @@
 import { Queue, Worker, Job, QueueEvents } from "bullmq";
 import type { QueueName, QueueJobPayload, QueueStats } from "./types";
 import { ALL_QUEUE_NAMES } from "./types";
+import { appendActivity } from "@/lib/agents/activity-feed";
 
 // ── Redis Connection ─────────────────────────────────────────────────────────
 
@@ -175,11 +176,37 @@ export function createWorker(
   worker.on("failed", (job, error) => {
     const attemptInfo = job ? ` (attempt ${job.attemptsMade}/${job.opts?.attempts ?? "?"})` : "";
     console.error(`[Queue:${queueName}] Job ${job?.id} failed${attemptInfo}:`, error.message);
+    appendActivity({
+      source: "queue",
+      level: "error",
+      queueName,
+      jobId: job?.id,
+      message: `Job ${job?.id} failed${attemptInfo}`,
+      failedReason: error.message,
+      meta: {
+        queueName,
+        attemptsMade: job?.attemptsMade ?? 0,
+        maxAttempts: job?.opts?.attempts ?? 3,
+      },
+    }).catch(() => {});
   });
 
   worker.on("completed", (job) => {
-    const duration = job.finishedOn && job.processedOn ? `${job.finishedOn - job.processedOn}ms` : "?";
+    const durationMs = job.finishedOn && job.processedOn ? job.finishedOn - job.processedOn : 0;
+    const duration = durationMs ? `${durationMs}ms` : "?";
     console.log(`[Queue:${queueName}] Job ${job.id} completed (${duration})`);
+    appendActivity({
+      source: "queue",
+      level: "info",
+      queueName,
+      jobId: job.id,
+      message: `Job ${job.id} completed (${duration})`,
+      meta: {
+        queueName,
+        durationMs,
+        attemptsMade: job.attemptsMade,
+      },
+    }).catch(() => {});
   });
 
   return worker;
