@@ -124,11 +124,11 @@ if [ "$SKIP_INFRA" = false ]; then
   # MinIO UI:   localhost:9001 → k3d → NodePort 30901
 
   # 等待核心服務就緒
-  kubectl wait --for=condition=ready pod -l app=postgres \
+  kubectl wait --for=condition=ready pod -l app=platform-postgres \
     -n aigo-system --timeout=60s 2>/dev/null || error "PostgreSQL Pod 未就緒"
   info "  PostgreSQL 就緒 (localhost:5432 via k3d) ✓"
 
-  kubectl wait --for=condition=ready pod -l app=redis \
+  kubectl wait --for=condition=ready pod -l app=platform-redis \
     -n aigo-system --timeout=60s 2>/dev/null || error "Redis Pod 未就緒"
   info "  Redis 就緒 (localhost:6379 via k3d) ✓"
 

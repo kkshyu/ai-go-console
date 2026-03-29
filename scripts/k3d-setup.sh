@@ -151,12 +151,12 @@ kubectl wait --for=condition=available deployment/traefik \
 
 # 等待 PostgreSQL
 info "  等待 PostgreSQL..."
-kubectl wait --for=condition=ready pod -l app=postgres \
+kubectl wait --for=condition=ready pod -l app=platform-postgres \
   -n aigo-system --timeout=120s 2>/dev/null || warn "  PostgreSQL 尚未就緒，請稍後檢查"
 
 # 等待 Redis
 info "  等待 Redis..."
-kubectl wait --for=condition=ready pod -l app=redis \
+kubectl wait --for=condition=ready pod -l app=platform-redis \
   -n aigo-system --timeout=60s 2>/dev/null || warn "  Redis 尚未就緒，請稍後檢查"
 
 # 等待 Supabase 服務

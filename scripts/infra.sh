@@ -37,9 +37,9 @@ kubectl config use-context k3d-aigo 2>/dev/null || error "無法切換至 k3d-ai
 
 # ── 等待核心服務 ──────────────────────────────────────────────────────────
 info "等待核心服務就緒..."
-kubectl wait --for=condition=ready pod -l app=postgres \
+kubectl wait --for=condition=ready pod -l app=platform-postgres \
   -n aigo-system --timeout=60s 2>/dev/null || error "PostgreSQL 未就緒"
-kubectl wait --for=condition=ready pod -l app=redis \
+kubectl wait --for=condition=ready pod -l app=platform-redis \
   -n aigo-system --timeout=60s 2>/dev/null || error "Redis 未就緒"
 kubectl wait --for=condition=available deployment/builtin-supabase-kong \
   -n aigo-system --timeout=60s 2>/dev/null || warn "Supabase Kong 尚未就緒"
