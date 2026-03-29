@@ -154,7 +154,7 @@ Models in `prisma/schema.prisma`:
 1. User adds credential via form → credentials encrypted with AES-256-GCM → stored in PostgreSQL (encrypted at application level)
 2. When generating/starting an app, server decrypts linked credentials → injects as environment variables into app's `docker-compose.yml`
 3. Credentials never shown decrypted in UI (masked display only)
-4. `ENCRYPTION_KEY` auto-generated on first run → stored in `.env.local`
+4. `ENCRYPTION_KEY` auto-generated on first run → stored in `.env`
 5. Credentials never written to plain-text `.env` files — only passed via Docker Compose environment config
 
 ## App Creation & Lifecycle Flow

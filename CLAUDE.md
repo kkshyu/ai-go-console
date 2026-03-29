@@ -16,7 +16,7 @@ bash scripts/setup.sh
 
 | 步驟 | 指令 | 說明 |
 |------|------|------|
-| 1. 環境變數 | `ln -s /path/to/main/.env.local .env.local` | Worktree 需 symlink 主專案的 .env.local |
+| 1. 環境變數 | `ln -s /path/to/main/.env .env` | Worktree 需 symlink 主專案的 .env |
 | 2. 基礎服務 | `bash scripts/k3d-setup.sh` | 啟動 k3d 叢集（PostgreSQL, Redis, Traefik, Supabase） |
 | 3. 等待 DB | `kubectl port-forward svc/postgres 5432:5432 -n aigo-system &` | 確認 PostgreSQL 可連線 |
 | 4. 安裝依賴 | `pnpm install` | 必須使用 pnpm，不可用 npm/yarn |
@@ -29,7 +29,7 @@ bash scripts/setup.sh
 
 | 問題 | 解法 |
 |------|------|
-| `.env.local` 不存在 | 從主專案 `ln -s` 建立 symlink |
+| `.env` 不存在 | 從主專案 `ln -s` 建立 symlink，或 `cp .env.example .env` |
 | PostgreSQL 連不上 | `kubectl port-forward svc/postgres 5432:5432 -n aigo-system &` |
 | k3d 叢集未啟動 | `k3d cluster start aigo` |
 | Pod 未就緒 | `kubectl get pods -n aigo-system` 查看狀態 |
@@ -48,7 +48,7 @@ bash scripts/setup.sh
 
 使用 worktree 開發時，須確保環境正確：
 
-1. **自動建立 `.env.local` symbolic link**：若 worktree 中不存在 `.env.local`，自動從主專案建立 symbolic link（`ln -s`），確保環境變數可用。
+1. **自動建立 `.env` symbolic link**：若 worktree 中不存在 `.env`，自動從主專案建立 symbolic link（`ln -s`），確保環境變數可用。
 2. **使用 pnpm 安裝依賴**：在 worktree 中執行 `pnpm install` 安裝套件，確保 dev server 可正常啟動。
 
 ## 驗證流程 — 使用 Seed 測試帳號登入
@@ -71,7 +71,7 @@ bash scripts/setup.sh
 ### 驗證步驟
 
 1. **確認環境就緒**
-   - 若在 worktree 中，先確認 `.env.local` 存在（不存在則從主專案複製）
+   - 若在 worktree 中，先確認 `.env` 存在（不存在則從主專案建立 symlink）
    - 確認資料庫已有 seed 資料：`npx prisma db seed`
 
 2. **啟動 Dev Server**

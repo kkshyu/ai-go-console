@@ -31,8 +31,8 @@ pnpm install
 bash scripts/setup.sh
 
 # 設定環境變數
-cp .env.example .env.local
-# 編輯 .env.local 填入 DATABASE_URL, NEXTAUTH_SECRET 等
+cp .env.example .env
+# 編輯 .env 填入 DATABASE_URL, NEXTAUTH_SECRET 等
 
 # 初始化資料庫
 pnpm db:migrate
