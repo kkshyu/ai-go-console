@@ -5,6 +5,7 @@ import { stopApp } from "@/lib/k8s/deployment";
 import { stopDevServer } from "@/lib/dev-server";
 import { slugify } from "@/lib/utils";
 import { authorizeAppAccess } from "@/lib/api-auth";
+import { createPreOperationSnapshot } from "@/lib/backup";
 
 export async function PATCH(
   request: NextRequest,
@@ -93,6 +94,9 @@ export async function DELETE(
   if ("error" in auth) return auth.error;
 
   const orgSlug = await getOrgSlug(auth.app.userId);
+
+  // Pre-delete snapshot for disaster recovery
+  await createPreOperationSnapshot("delete", appId).catch(() => {});
 
   // Stop running processes
   try {

@@ -15,6 +15,36 @@ import {
 import { tagImage as tagRegistryImage, getInClusterImageUrl } from "./builder";
 import { isClusterAvailable } from "./client";
 
+// ── Safe Deployment Wrapper ─────────────────────────────────────────────────
+
+/**
+ * Deploy with safety: if K8s deployment fails, returns an error
+ * instead of leaving the system in an inconsistent state.
+ * The caller is responsible for DB status rollback on failure.
+ */
+export async function deployWithSafety(
+  orgSlug: string,
+  slug: string,
+  version: number,
+  internalPort: number,
+  envVars: Record<string, string> = {},
+): Promise<{ success: boolean; output: string; error?: string }> {
+  try {
+    const output = await startApp(orgSlug, slug, version, internalPort, envVars);
+    await tagImage(orgSlug, slug, version);
+    return { success: true, output };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown deployment error";
+    // Attempt to clean up partial deployment
+    try {
+      await stopApp(orgSlug, slug);
+    } catch {
+      // Ignore cleanup errors
+    }
+    return { success: false, output: "", error: msg };
+  }
+}
+
 // ── Tag Image ────────────────────────────────────────────────────────────────
 
 export async function tagImage(

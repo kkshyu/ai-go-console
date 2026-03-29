@@ -175,6 +175,12 @@ if [ "$RESET_DB" = true ]; then
   warn "  重置資料庫..."
   npx prisma migrate reset --force
 else
+  # Pre-migration backup (skip on first run when DB is empty)
+  if npx prisma db execute --stdin <<< "SELECT 1 FROM \"User\" LIMIT 1" >/dev/null 2>&1; then
+    info "  建立 migration 前備份..."
+    bash "$SCRIPT_DIR/backup-db.sh" --env dev --label "pre-migrate" --quiet 2>/dev/null || \
+      warn "  備份失敗（可忽略，可能是首次執行）"
+  fi
   npx prisma migrate deploy 2>/dev/null || npx prisma db push
 fi
 

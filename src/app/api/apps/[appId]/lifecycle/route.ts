@@ -12,6 +12,7 @@ import { getTemplate } from "@/lib/templates";
 import { authorizeAppAccess } from "@/lib/api-auth";
 import { generateApp } from "@/lib/generator";
 import { readFileFromMinIO } from "@/lib/minio-storage";
+import { createPreOperationSnapshot } from "@/lib/backup";
 
 
 export async function POST(
@@ -90,6 +91,8 @@ export async function POST(
       }
 
       case "publish": {
+        // Pre-publish snapshot for disaster recovery
+        await createPreOperationSnapshot("publish", appId).catch(() => {});
 
         await prisma.app.update({
           where: { id: appId },

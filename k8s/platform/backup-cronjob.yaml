@@ -1,0 +1,250 @@
+---
+# ============================================================================
+# 排程備份 CronJob
+# - 每日凌晨 3:00: 完整 PostgreSQL dump
+# - 每週日凌晨 4:00: 完整備份 + 標記為 weekly
+# ============================================================================
+
+# --- 每日備份 ---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-db-daily
+  namespace: aigo-system
+  labels:
+    app: backup
+    aigo.dev/component: backup
+spec:
+  schedule: "0 3 * * *"       # 每日凌晨 3:00
+  timeZone: "Asia/Taipei"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 600
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app: backup
+            aigo.dev/job: db-daily
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: pgvector/pgvector:pg17
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+                  FILENAME="aigo_daily_${TIMESTAMP}.sql.gz"
+                  BACKUP_DIR="/backups/db"
+                  mkdir -p "$BACKUP_DIR"
+
+                  echo "[BACKUP] Starting daily PostgreSQL backup..."
+                  PGPASSWORD="$POSTGRES_PASSWORD" pg_dump \
+                    -h platform-postgres \
+                    -U "$POSTGRES_USER" \
+                    -d "$POSTGRES_DB" \
+                    --no-owner --no-privileges --clean --if-exists \
+                    | gzip > "${BACKUP_DIR}/${FILENAME}"
+
+                  SIZE=$(stat -c%s "${BACKUP_DIR}/${FILENAME}" 2>/dev/null || echo "0")
+                  echo "[BACKUP] Completed: ${FILENAME} (${SIZE} bytes)"
+
+                  # Cleanup: keep last 7 daily backups
+                  find "$BACKUP_DIR" -name "aigo_daily_*.sql.gz" -mtime +7 -delete 2>/dev/null || true
+                  echo "[BACKUP] Cleanup complete"
+              envFrom:
+                - secretRef:
+                    name: platform-postgres-credentials
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backups
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: backup-storage
+
+---
+# --- 每週備份 ---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-db-weekly
+  namespace: aigo-system
+  labels:
+    app: backup
+    aigo.dev/component: backup
+spec:
+  schedule: "0 4 * * 0"       # 每週日凌晨 4:00
+  timeZone: "Asia/Taipei"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 600
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            app: backup
+            aigo.dev/job: db-weekly
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: pgvector/pgvector:pg17
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+                  FILENAME="aigo_weekly_${TIMESTAMP}.sql.gz"
+                  BACKUP_DIR="/backups/db"
+                  mkdir -p "$BACKUP_DIR"
+
+                  echo "[BACKUP] Starting weekly PostgreSQL backup..."
+                  PGPASSWORD="$POSTGRES_PASSWORD" pg_dump \
+                    -h platform-postgres \
+                    -U "$POSTGRES_USER" \
+                    -d "$POSTGRES_DB" \
+                    --no-owner --no-privileges --clean --if-exists \
+                    | gzip > "${BACKUP_DIR}/${FILENAME}"
+
+                  SIZE=$(stat -c%s "${BACKUP_DIR}/${FILENAME}" 2>/dev/null || echo "0")
+                  echo "[BACKUP] Completed: ${FILENAME} (${SIZE} bytes)"
+
+                  # Cleanup: keep last 4 weekly backups
+                  find "$BACKUP_DIR" -name "aigo_weekly_*.sql.gz" -mtime +28 -delete 2>/dev/null || true
+                  echo "[BACKUP] Cleanup complete"
+              envFrom:
+                - secretRef:
+                    name: platform-postgres-credentials
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backups
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: backup-storage
+
+---
+# --- MinIO 每日備份 ---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-minio-daily
+  namespace: aigo-system
+  labels:
+    app: backup
+    aigo.dev/component: backup
+spec:
+  schedule: "30 3 * * *"      # 每日凌晨 3:30（DB 備份後）
+  timeZone: "Asia/Taipei"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 600
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800
+      template:
+        metadata:
+          labels:
+            app: backup
+            aigo.dev/job: minio-daily
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: minio/mc:latest
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+                  BACKUP_DIR="/backups/minio/minio_daily_${TIMESTAMP}"
+                  mkdir -p "$BACKUP_DIR"
+
+                  echo "[BACKUP] Configuring MinIO client..."
+                  mc alias set src http://builtin-minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" --api S3v4
+
+                  echo "[BACKUP] Starting MinIO mirror..."
+                  for bucket in $(mc ls src/ | awk '{print $NF}' | tr -d '/'); do
+                    echo "[BACKUP] Mirroring bucket: $bucket"
+                    mkdir -p "${BACKUP_DIR}/${bucket}"
+                    mc mirror "src/${bucket}" "${BACKUP_DIR}/${bucket}" --overwrite 2>/dev/null || \
+                      echo "[WARN] $bucket mirror failed (may be empty)"
+                  done
+
+                  echo "[BACKUP] MinIO backup complete"
+
+                  # Cleanup: keep last 7 daily backups
+                  find /backups/minio -maxdepth 1 -name "minio_daily_*" -type d -mtime +7 -exec rm -rf {} + 2>/dev/null || true
+                  echo "[BACKUP] Cleanup complete"
+              env:
+                - name: MINIO_ROOT_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: builtin-minio-credentials
+                      key: MINIO_ROOT_USER
+                - name: MINIO_ROOT_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: builtin-minio-credentials
+                      key: MINIO_ROOT_PASSWORD
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backups
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: backup-storage
+
+---
+# --- 備份 PVC ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-storage
+  namespace: aigo-system
+  labels:
+    app: backup
+    aigo.dev/component: backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
