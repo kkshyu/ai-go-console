@@ -11,6 +11,9 @@ COPY tsconfig.json ./
 
 RUN npm install
 
+# Backup node_modules and lockfile outside /app so they survive emptyDir mount
+RUN cp -a /app/node_modules /opt/node_modules_cache && cp -a /app/package-lock.json /opt/package-lock.json.cache 2>/dev/null || true
+
 ENV PORT=3000
 EXPOSE 3000
 CMD ["npx", "tsx", "watch", "src/index.ts"]

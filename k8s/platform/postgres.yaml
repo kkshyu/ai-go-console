@@ -3,7 +3,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: postgres-credentials
+  name: platform-postgres-credentials
   namespace: aigo-system
 type: Opaque
 stringData:
@@ -14,21 +14,21 @@ stringData:
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: postgres
+  name: platform-postgres
   namespace: aigo-system
   labels:
-    app: postgres
+    app: platform-postgres
     aigo.dev/component: platform-db
 spec:
-  serviceName: postgres
+  serviceName: platform-postgres
   replicas: 1
   selector:
     matchLabels:
-      app: postgres
+      app: platform-postgres
   template:
     metadata:
       labels:
-        app: postgres
+        app: platform-postgres
     spec:
       containers:
         - name: postgres
@@ -37,7 +37,7 @@ spec:
             - containerPort: 5432
           envFrom:
             - secretRef:
-                name: postgres-credentials
+                name: platform-postgres-credentials
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
@@ -79,7 +79,7 @@ metadata:
   name: platform-postgres
   namespace: aigo-system
   labels:
-    app: postgres
+    app: platform-postgres
 spec:
   type: NodePort
   ports:
@@ -87,4 +87,4 @@ spec:
       targetPort: 5432
       nodePort: 30432
   selector:
-    app: postgres
+    app: platform-postgres

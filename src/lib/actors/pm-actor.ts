@@ -631,6 +631,11 @@ export class PMActor extends Actor {
         return { role: m.role, content: m.content };
       });
 
+      // Ensure conversation ends with a user message (required by some providers like Azure)
+      if (chatMessages.length > 0 && chatMessages[chatMessages.length - 1].role === "assistant") {
+        chatMessages.push({ role: "user", content: "Please continue based on the above context. What is your next action?" });
+      }
+
       // Progress updates while PM generates
       let progressIdx = 0;
       const progressTimer = setInterval(async () => {

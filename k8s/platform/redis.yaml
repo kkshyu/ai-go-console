@@ -3,21 +3,21 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: redis
+  name: platform-redis
   namespace: aigo-system
   labels:
-    app: redis
+    app: platform-redis
     aigo.dev/component: message-queue
 spec:
-  serviceName: redis
+  serviceName: platform-redis
   replicas: 1
   selector:
     matchLabels:
-      app: redis
+      app: platform-redis
   template:
     metadata:
       labels:
-        app: redis
+        app: platform-redis
     spec:
       containers:
         - name: redis
@@ -71,7 +71,7 @@ metadata:
   name: platform-redis
   namespace: aigo-system
   labels:
-    app: redis
+    app: platform-redis
 spec:
   type: NodePort
   ports:
@@ -79,4 +79,4 @@ spec:
       targetPort: 6379
       nodePort: 30379
   selector:
-    app: redis
+    app: platform-redis

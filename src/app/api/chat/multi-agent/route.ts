@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
     } finally {
       // Unregister from monitoring registry
       actorSystemRegistry.unregister(traceId);
-      writer.close();
+      try { writer.close(); } catch { /* already closed */ }
     }
   })();
 

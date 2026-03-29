@@ -19,6 +19,7 @@ export interface PresetOverlay {
 
 const PRESET_LOADERS: Record<string, () => Promise<PresetOverlay>> = {
   // CRM
+  "sales-crm": () => import("./crm/sales-pipeline").then((m) => m.CRM_SALES_PIPELINE),
   "crm-sales-pipeline": () => import("./crm/sales-pipeline").then((m) => m.CRM_SALES_PIPELINE),
   "crm-realestate": () => import("./crm/realestate").then((m) => m.CRM_REALESTATE),
   "crm-client-portal": () => import("./crm/client-portal").then((m) => m.CRM_CLIENT_PORTAL),

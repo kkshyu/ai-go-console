@@ -700,6 +700,22 @@
     "languageEn": "English",
     "languageZhTW": "繁體中文"
   },
+  "chat": {
+    "placeholder": "輸入訊息...",
+    "emptyState": "開始對話",
+    "generating": "產生中...",
+    "totalTokens": "Token 用量",
+    "errorApi": "聊天 API 錯誤",
+    "errorNoResponse": "無回應內容",
+    "errorApiKey": "抱歉，發生錯誤。請確認 OpenRouter API Key 是否已設定。",
+    "attachFile": "附加檔案",
+    "dropFilesHere": "拖放檔案到這裡",
+    "fileTooLarge": "檔案過大（上限 {max}MB）",
+    "unsupportedType": "不支援的檔案類型",
+    "maxFilesReached": "最多附加 {max} 個檔案",
+    "fileProcessing": "檔案處理中...",
+    "fileReady": "檔案已就緒"
+  },
   "agents": {
     "subtitle": "PM Agent 統籌調度專家團隊，為你打造應用",
     "emptyState": "描述你想建立的應用 — PM 將協調團隊完成",
@@ -723,25 +739,7 @@
       "running": "進行中",
       "completed": "已完成",
       "error": "錯誤"
-    }
-  },
-  "chat": {
-    "placeholder": "輸入訊息...",
-    "emptyState": "開始對話",
-    "generating": "產生中...",
-    "totalTokens": "Token 用量",
-    "errorApi": "聊天 API 錯誤",
-    "errorNoResponse": "無回應內容",
-    "errorApiKey": "抱歉，發生錯誤。請確認 OpenRouter API Key 是否已設定。",
-    "attachFile": "附加檔案",
-    "dropFilesHere": "拖放檔案到這裡",
-    "fileTooLarge": "檔案過大（上限 {max}MB）",
-    "unsupportedType": "不支援的檔案類型",
-    "maxFilesReached": "最多附加 {max} 個檔案",
-    "fileProcessing": "檔案處理中...",
-    "fileReady": "檔案已就緒"
-  },
-  "agents": {
+    },
     "title": "Agent 觀測",
     "activeSessions": "進行中的編排工作階段",
     "backgroundQueues": "背景工作佇列",
