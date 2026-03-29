@@ -257,6 +257,10 @@ export async function recreateDevContainer(
   port: number,
   envVars: Record<string, string> = {},
 ): Promise<void> {
+  const { mkdtemp, rm } = await import("fs/promises");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+
   const tmpDir = await mkdtemp(join(tmpdir(), "aigo-recreate-"));
   try {
     await exportSource(orgSlug, slug, tmpDir);

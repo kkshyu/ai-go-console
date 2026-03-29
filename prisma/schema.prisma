@@ -301,6 +301,3 @@ model ImportSession {
   @@index([userId])
   @@map("import_sessions")
 }
-
-// Note: "content_chunks" table is managed via raw SQL (pgvector).
-// See migration 20260328170000 and src/lib/vector-search.ts.

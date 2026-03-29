@@ -3,8 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { chat, getModelForAgent } from "@/lib/ai";
-import { generateEmbedding } from "@/lib/embeddings";
-import { searchSimilarChunks, assembleContext } from "@/lib/vector-search";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 /** Max content size for priority files in the prompt (3KB each) */
@@ -153,35 +151,13 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 2. RAG search for additional context
-  let ragContext = "";
-  try {
-    const queryEmbedding = await generateEmbedding(
-      "What is this project? What is its name, purpose, and main functionality?"
-    );
-
-    if (queryEmbedding.length > 0) {
-      const results = await searchSimilarChunks(importSessionId, queryEmbedding, {
-        limit: 30,
-        minSimilarity: 0.2,
-      });
-      ragContext = assembleContext(results, 12000);
-    }
-  } catch (err) {
-    console.warn("[import/analyze] RAG search failed, proceeding with priority files only:", err);
-  }
-
-  // 3. Assemble prompt
+  // 2. Assemble prompt
   const parts: string[] = [];
   parts.push(`Project contains ${allFiles.length} files.\n`);
   parts.push(`File tree:\n${fileTree}\n`);
 
   if (priorityContents.length > 0) {
     parts.push(`\nKey configuration files:\n${priorityContents.join("\n\n")}`);
-  }
-
-  if (ragContext) {
-    parts.push(`\nAdditional context from project files:${ragContext}`);
   }
 
   // Include summaries of non-priority files for broader understanding
