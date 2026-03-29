@@ -2,26 +2,16 @@
  * PM Agent Actor
  *
  * The PM (Product Manager) is the central orchestrator in the actor system.
- * It receives user messages, runs LLM to decide actions, dispatches to
- * specialist actors, and handles parallel developer coordination.
+ * It receives user messages, runs LLM to decide actions, and delegates
+ * execution (dispatch, parallel, DAG) to WorkflowRunner.
  *
- * PM actively tracks worker status and handles both task_result and report
- * messages from workers (report includes discussion logs from peer communication).
- *
- * Post-processing side effects (file operations, service binding) are
- * delegated to PostProcessor to keep this class focused on orchestration.
+ * PM retains: LLM decision loop, message history, orchestration state.
+ * WorkflowRunner handles: dispatch, parallel merge, DAG, worker tracking, post-processing.
  */
 
 import { Actor } from "./actor";
-import { ActorSystem } from "./actor-system";
-import { DAGExecutor, type DAGExecutorConfig } from "./dag-executor";
-import { Blackboard } from "./blackboard";
-import { EventBus } from "./event-bus";
 import type {
   ActorMessage,
-  TaskPayload,
-  ParallelResultPayload,
-  ParallelTaskPayload,
 } from "./types";
 import { createMessage } from "./types";
 import {
@@ -35,31 +25,22 @@ import { getModelForTier } from "../model-tiers";
 import type { AgentRole, OrchestrationState, AgentMessage as AgentMsg } from "../agents/types";
 import { createInitialOrchestrationState } from "../agents/types";
 import {
-  stateForDispatch,
   stateForAgentComplete,
   stateForComplete,
   parsePMActions,
 } from "../agents/orchestrator";
-import { createSpecialistActor, type SpecialistConfig } from "./specialist-actors";
-import { PostProcessor, type PostProcessorConfig } from "./post-processor";
-import {
-  mergeParallelOutputs,
-  mergeResultToContent,
-  type MergeResult,
-} from "../services/parallel-merge";
 import { validatePMAction } from "../services/llm-output-validator";
 import { actorLog } from "./logger";
 import { pruneMessages } from "../ai/token-budget";
 import type { BackgroundActorSystem } from "./background-system";
+import type { ActorSystem } from "./actor-system";
+import { WorkflowRunner, type WorkflowRunnerConfig, type WorkflowCallbacks } from "./workflow-runner";
 import {
   getDispatchMessage as i18nDispatchMessage,
   getParallelDispatchMessage as i18nParallelDispatchMessage,
   getFallbackMessage as i18nFallbackMessage,
   getRateLimitMessage,
   getApiTimeoutMessage,
-  getPartialTimeoutMessage,
-  getAllDevelopersDoneMessage,
-  getWorkerLongRunningMessage,
   getProgressMessage,
 } from "../../i18n/pm-messages";
 
@@ -76,25 +57,7 @@ function calculateBackoff(attempt: number): number {
   return Math.round(jitter);
 }
 
-/** Worker status tracking interval */
-const STATUS_CHECK_INTERVAL_MS = 30_000;
-
-/** Worker stale threshold (no heartbeat) */
-const WORKER_STALE_MS = 60_000;
-
-/** Worker long-running threshold */
-const WORKER_LONG_RUNNING_MS = 180_000;
-
 const PROGRESS_INTERVAL_MS = 2500;
-
-interface WorkerStatus {
-  role: AgentRole;
-  actorId: string;
-  dispatchedAt: number;
-  lastHeartbeat: number;
-  status: "running" | "completed" | "error";
-  retryCount: number;
-}
 
 export interface PMActorConfig {
   model: string;
@@ -121,26 +84,7 @@ export class PMActor extends Actor {
   private orchState: OrchestrationState;
   private interactionCount = 0;
   private messages: AgentMsg[] = [];
-  private postProcessor: PostProcessor;
-
-  // Parallel execution tracking
-  private pendingParallelResults: Map<string, ParallelResultPayload> = new Map();
-  private expectedParallelCount = 0;
-  private currentGroupId: string | null = null;
-  private parallelTimeout: ReturnType<typeof setTimeout> | null = null;
-  /** Maps actorId → taskId for consistent key usage in parallel error path */
-  private actorToTaskId: Map<string, string> = new Map();
-  /** Active DAG executor (non-null during DAG execution) */
-  private activeDAGExecutor: DAGExecutor | null = null;
-  /** Set of actor IDs spawned by the active DAG executor */
-  private dagActorIds: Set<string> = new Set();
-
-  /** Timeout for collecting all parallel results (3 minutes). */
-  private static readonly PARALLEL_TIMEOUT_MS = 3 * 60 * 1000;
-
-  // Worker status tracking
-  private workerStatusTracker: Map<string, WorkerStatus> = new Map();
-  private statusCheckTimer: ReturnType<typeof setInterval> | null = null;
+  private workflow: WorkflowRunner;
 
   // Timer tracking for GC
   private activeTimers: Set<ReturnType<typeof setInterval>> = new Set();
@@ -155,17 +99,37 @@ export class PMActor extends Actor {
     this.config = config;
     this.orchState = initialState || createInitialOrchestrationState();
 
-    // Initialize post-processor with delegated config
-    const ppConfig: PostProcessorConfig = {
+    // Build WorkflowRunner with callbacks into PM state
+    const runnerConfig: WorkflowRunnerConfig = {
+      model: config.model,
+      serviceInstances: config.serviceInstances,
+      appContext: config.appContext,
+      artifactContext: config.artifactContext,
+      fileContext: config.fileContext,
+      sendEvent: config.sendEvent,
+      saveArtifact: config.saveArtifact,
+      system: config.system,
+      locale: config.locale,
+      conversationId: config.conversationId,
+      backgroundSystem: config.backgroundSystem,
+      orgModelConfigs: config.orgModelConfigs,
       appSlug: config.appSlug,
       appId: config.appId,
       userId: config.userId,
       orgSlug: config.orgSlug,
-      serviceInstances: config.serviceInstances,
-      sendEvent: config.sendEvent,
+    };
+
+    const callbacks: WorkflowCallbacks = {
+      getOrchState: () => this.orchState,
+      setOrchState: (state) => { this.orchState = state; },
+      getMessages: () => this.messages,
+      addMessage: (msg) => { this.messages.push(msg); },
+      continueLoop: () => this.runPMLoop(),
+      pmActorId: this.id,
       traceId: config.system.traceId,
     };
-    this.postProcessor = new PostProcessor(ppConfig);
+
+    this.workflow = new WorkflowRunner(runnerConfig, callbacks);
   }
 
   async onStart(): Promise<void> {
@@ -178,8 +142,8 @@ export class PMActor extends Actor {
       this.config.system.signalCompletion(this.orchState);
     }, PMActor.REQUEST_TIMEOUT_MS);
 
-    // Start worker status tracking
-    this.startStatusTracking();
+    // Start worker status tracking via workflow runner
+    this.workflow.startStatusTracking();
   }
 
   onStop(): void {
@@ -195,24 +159,11 @@ export class PMActor extends Actor {
       this.requestTimeout = null;
     }
 
-    // Clear parallel timeout
-    if (this.parallelTimeout) {
-      clearTimeout(this.parallelTimeout);
-      this.parallelTimeout = null;
-    }
-
-    // Clear status check timer
-    if (this.statusCheckTimer) {
-      clearInterval(this.statusCheckTimer);
-      this.statusCheckTimer = null;
-    }
-
     // Abort any in-flight operations
     this.abortController.abort();
 
-    // Reject pending parallel results
-    this.pendingParallelResults.clear();
-    this.expectedParallelCount = 0;
+    // Stop workflow runner (clears parallel/DAG/worker state)
+    this.workflow.stop();
   }
 
   /** Check if the orchestration has been aborted. */
@@ -250,67 +201,6 @@ export class PMActor extends Actor {
     }
   }
 
-  // ---- Worker Status Tracking ----
-
-  private startStatusTracking(): void {
-    this.statusCheckTimer = setInterval(async () => {
-      const now = Date.now();
-      for (const [actorId, status] of this.workerStatusTracker) {
-        if (status.status !== "running") continue;
-
-        const elapsed = now - status.dispatchedAt;
-        const sinceLast = now - status.lastHeartbeat;
-
-        // Worker is stale — send heartbeat ping
-        if (sinceLast > WORKER_STALE_MS) {
-          actorLog("warn", this.id, `Worker ${actorId} (${status.role}) stale for ${Math.round(sinceLast / 1000)}s`, this.traceId);
-          const ping = createMessage("heartbeat_ping", this.id, actorId, {});
-          this.config.system.send(ping);
-        }
-
-        // Worker has been running for too long — notify client
-        if (elapsed > WORKER_LONG_RUNNING_MS) {
-          try {
-            await this.config.sendEvent({
-              statusUpdate: getWorkerLongRunningMessage(status.role, Math.round(elapsed / 60000), this.config.locale),
-              agentRole: "pm",
-            });
-          } catch { /* stream may have closed */ }
-        }
-      }
-    }, STATUS_CHECK_INTERVAL_MS);
-  }
-
-  private registerWorker(actorId: string, role: AgentRole): void {
-    this.workerStatusTracker.set(actorId, {
-      role,
-      actorId,
-      dispatchedAt: Date.now(),
-      lastHeartbeat: Date.now(),
-      status: "running",
-      retryCount: 0,
-    });
-  }
-
-  private markWorkerComplete(actorId: string): void {
-    const status = this.workerStatusTracker.get(actorId);
-    if (status) {
-      status.status = "completed";
-      status.lastHeartbeat = Date.now();
-    }
-  }
-
-  /** Build peer registry from currently active workers */
-  private buildPeerRegistry(): Map<AgentRole, string> {
-    const registry = new Map<AgentRole, string>();
-    for (const [actorId, status] of this.workerStatusTracker) {
-      if (status.status === "running") {
-        registry.set(status.role, actorId);
-      }
-    }
-    return registry;
-  }
-
   // ---- User Message ----
 
   private async handleUserMessage(message: ActorMessage & { type: "task" }): Promise<ActorMessage | null> {
@@ -330,42 +220,32 @@ export class PMActor extends Actor {
     return null;
   }
 
-  // ---- Agent Result (task_result — backward compatible) ----
+  // ---- Agent Result (task_result) ----
 
   private async handleAgentResult(message: ActorMessage & { type: "task_result" }): Promise<ActorMessage | null> {
     const payload = message.payload;
     const { sendEvent, saveArtifact } = this.config;
 
-    // If this is a DAG-spawned agent result, route completion to the active executor
-    // and skip normal PM flow (DAG executor manages its own state & continuation)
-    if (payload.dagNodeId && this.activeDAGExecutor) {
-      actorLog("info", this.id, `DAG node ${payload.dagNodeId} completed via ${message.from}`, this.traceId);
-      this.markWorkerComplete(message.from);
+    // Check if this is a DAG result — delegate to workflow runner
+    if (this.workflow.handleDAGResult(payload, message.from)) {
       await saveArtifact(payload.agentRole, payload.content, message.from, payload.dagNodeId);
-      this.activeDAGExecutor.notifyNodeComplete(
-        payload.dagNodeId,
-        payload.content,
-        payload.summary,
-        !payload.blocked,
-      );
       return null;
     }
 
     // Mark worker as complete
-    this.markWorkerComplete(message.from);
+    this.workflow.markWorkerComplete(message.from);
 
     // Save artifact
     await saveArtifact(payload.agentRole, payload.content);
 
-    // Delegate post-processing (file ops + service binding)
-    // Wrapped in try/catch to prevent post-processing failures from killing the PM actor
+    // Delegate post-processing
     try {
-      await this.postProcessor.process(payload.content);
+      await this.workflow.postProcess(payload.content);
     } catch (ppErr) {
       actorLog("warn", this.id, `Post-processing failed (non-fatal): ${ppErr instanceof Error ? ppErr.message : ppErr}`, this.traceId);
     }
 
-    // Update state (pass actorId for precise matching in parallel scenarios)
+    // Update state (pass actorId for precise matching)
     this.orchState = stateForAgentComplete(
       this.orchState,
       payload.agentRole,
@@ -400,15 +280,14 @@ export class PMActor extends Actor {
     const { sendEvent, saveArtifact } = this.config;
 
     // Mark worker as complete
-    this.markWorkerComplete(message.from);
+    this.workflow.markWorkerComplete(message.from);
 
     // Save artifact
     await saveArtifact(payload.agentRole, payload.content);
 
     // Delegate post-processing
-    // Wrapped in try/catch to prevent post-processing failures from killing the PM actor
     try {
-      await this.postProcessor.process(payload.content);
+      await this.workflow.postProcess(payload.content);
     } catch (ppErr) {
       actorLog("warn", this.id, `Post-processing failed (non-fatal): ${ppErr instanceof Error ? ppErr.message : ppErr}`, this.traceId);
     }
@@ -456,34 +335,10 @@ export class PMActor extends Actor {
     return null;
   }
 
-  // ---- Parallel Result ----
+  // ---- Parallel Result (delegated to WorkflowRunner) ----
 
   private async handleParallelResult(message: ActorMessage & { type: "parallel_result" }): Promise<ActorMessage | null> {
-    const payload = message.payload;
-    const { saveArtifact } = this.config;
-
-    // Mark worker as complete
-    this.markWorkerComplete(message.from);
-
-    // Save artifact with actor/task IDs
-    await saveArtifact(payload.agentRole, payload.content, payload.actorId, payload.taskId);
-
-    // Post-process individual worker result (file ops, service binding)
-    // This ensures each worker's side effects execute even if merge fails later
-    try {
-      await this.postProcessor.process(payload.content);
-    } catch (ppErr) {
-      actorLog("warn", this.id, `Parallel worker ${payload.actorId} post-processing failed (non-fatal): ${ppErr instanceof Error ? ppErr.message : ppErr}`, this.traceId);
-    }
-
-    // Collect result
-    this.pendingParallelResults.set(payload.taskId, payload);
-
-    // Check if all parallel results are in
-    if (this.pendingParallelResults.size >= this.expectedParallelCount) {
-      await this.mergeAndContinue();
-    }
-
+    await this.workflow.handleParallelResult(message.payload, message.from);
     return null;
   }
 
@@ -494,62 +349,25 @@ export class PMActor extends Actor {
     const { sendEvent } = this.config;
 
     // Mark worker as error
-    const workerStatus = this.workerStatusTracker.get(payload.actorId);
-    if (workerStatus) {
-      workerStatus.status = "error";
-    }
+    this.workflow.markWorkerError(payload.actorId);
 
-    // If this is a DAG-spawned actor error, route to the DAG executor
-    if (this.activeDAGExecutor && this.dagActorIds.has(payload.actorId)) {
-      const nodeId = this.activeDAGExecutor.resolveNodeId(payload.actorId);
-      if (nodeId) {
-        actorLog("warn", this.id, `DAG node ${nodeId} (actor ${payload.actorId}) error: ${payload.error}`, this.traceId);
-        this.activeDAGExecutor.notifyNodeError(nodeId, payload.error);
-      } else {
-        actorLog("warn", this.id, `DAG actor ${payload.actorId} error but no node mapping: ${payload.error}`, this.traceId);
-      }
+    // Check if this is a DAG error — delegate to workflow runner
+    if (this.workflow.handleDAGError(payload.actorId, payload.error)) {
       return null;
     }
 
     actorLog("warn", this.id, `Agent error: ${payload.agentRole} (${payload.errorType}): ${payload.error}`, this.traceId);
 
-    // If we're in parallel mode, treat failed worker as a completed result with error
-    if (this.expectedParallelCount > 0 && this.currentGroupId) {
-      // Resolve taskId from actorId mapping (fall back to actorId for robustness)
-      const resolvedTaskId = this.actorToTaskId.get(payload.actorId) || payload.actorId;
-      actorLog("warn", this.id, `Parallel worker ${payload.actorId} (task: ${resolvedTaskId}) failed — injecting error result`, this.traceId);
-      this.pendingParallelResults.set(resolvedTaskId, {
-        groupId: this.currentGroupId,
-        taskId: resolvedTaskId,
-        agentRole: payload.agentRole,
-        actorId: payload.actorId,
-        content: `\`\`\`json\n{"status": "blocked", "blockedReason": "${payload.error}"}\n\`\`\``,
-        summary: `Failed: ${payload.error}`,
-        blocked: true,
-        blockedReason: payload.error,
-      } as ParallelResultPayload);
-
-      await sendEvent({
-        parallelActorStatus: {
-          actorId: payload.actorId,
-          taskId: resolvedTaskId,
-          groupId: this.currentGroupId,
-          status: "error",
-          agentRole: payload.agentRole,
-          error: payload.error,
-        },
-      });
-
-      // Check if all parallel results (including errors) are collected
-      if (this.pendingParallelResults.size >= this.expectedParallelCount) {
-        await this.mergeAndContinue();
-      }
+    // If we're in parallel mode, delegate to workflow runner
+    if (this.workflow.isInParallelMode) {
+      await this.workflow.handleParallelError(payload.actorId, payload.agentRole, payload.error);
       return null;
     }
 
     // Deterministic recovery based on error type
     switch (payload.errorType) {
       case "rate_limit": {
+        const workerStatus = this.workflow.getWorkerStatus(payload.actorId);
         const retryCount = workerStatus?.retryCount ?? 0;
         const backoffMs = calculateBackoff(retryCount);
         if (workerStatus) workerStatus.retryCount = retryCount + 1;
@@ -648,7 +466,7 @@ export class PMActor extends Actor {
         chatMessages.push({ role: "user", content: "Please continue based on the above context. What is your next action?" });
       }
 
-      // Progress updates while PM generates — show which agent (PM) is working
+      // Progress updates while PM generates
       let progressIdx = 0;
       const progressTimer = setInterval(async () => {
         const msg = getProgressMessage(progressIdx, "pm", this.config.locale);
@@ -727,9 +545,8 @@ export class PMActor extends Actor {
         actorLog("warn", this.id, `PM action validation: ${validated.error}`, this.traceId);
       }
 
-      // ---- Handle dispatch ----
+      // ---- Handle dispatch (delegated to WorkflowRunner) ----
       if (pmAction?.action === "dispatch") {
-        // Send friendly dispatch message to user
         await sendEvent({
           pmMessage: i18nDispatchMessage(pmAction.target, pmAction.task, this.config.locale),
           agentRole: "pm",
@@ -741,15 +558,13 @@ export class PMActor extends Actor {
           orchestrationState: this.orchState,
         });
 
-        // Dispatch to specialist
-        await this.dispatchSingle(pmAction.target, pmAction.task);
-        return; // Wait for specialist result (will re-enter via handleAgentResult)
+        await this.workflow.dispatchSingle(pmAction.target, pmAction.task);
+        return; // Wait for specialist result
       }
 
-      // ---- Handle dispatch_parallel ----
+      // ---- Handle dispatch_parallel (delegated to WorkflowRunner) ----
       if (pmAction?.action === "dispatch_parallel") {
         const parallelTasks = (pmAction as { tasks: Array<{ taskId: string; task: string; files: string[] }> }).tasks;
-        // Send friendly parallel dispatch message to user
         await sendEvent({
           pmMessage: i18nParallelDispatchMessage(parallelTasks.length, this.config.locale),
           agentRole: "pm",
@@ -761,12 +576,11 @@ export class PMActor extends Actor {
           orchestrationState: this.orchState,
         });
 
-        // Dispatch parallel developers
-        await this.dispatchParallel(parallelTasks);
+        await this.workflow.dispatchParallel(parallelTasks);
         return; // Wait for all parallel results
       }
 
-      // ---- Handle execute_dag ----
+      // ---- Handle execute_dag (delegated to WorkflowRunner) ----
       if (pmAction?.action === "execute_dag") {
         const dag = (pmAction as unknown as { dag: import("../agents/types").ExecutionDAG }).dag;
         await sendEvent({
@@ -780,8 +594,7 @@ export class PMActor extends Actor {
           orchestrationState: this.orchState,
         });
 
-        // Execute the DAG
-        await this.executeDAG(dag);
+        await this.workflow.executeDAG(dag);
         return; // Wait for DAG completion
       }
 
@@ -867,360 +680,6 @@ export class PMActor extends Actor {
     // Max interactions reached
     this.orchState = stateForComplete(this.orchState, "Max interactions reached");
     this.config.system.signalCompletion(this.orchState);
-  }
-
-  // ---- Dispatch Helpers ----
-
-  private async executeDAG(dag: import("../agents/types").ExecutionDAG): Promise<void> {
-    const { system, sendEvent, saveArtifact } = this.config;
-
-    const specialistConfig: SpecialistConfig = {
-      model: this.config.model,
-      serviceInstances: this.config.serviceInstances,
-      appContext: this.config.appContext,
-      sendEvent: this.config.sendEvent,
-      locale: this.config.locale,
-      conversationId: this.config.conversationId,
-      backgroundSystem: this.config.backgroundSystem,
-      system: this.config.system,
-    };
-
-    const blackboard = new Blackboard();
-    const eventBus = new EventBus();
-
-    this.dagActorIds.clear();
-
-    const dagConfig: DAGExecutorConfig = {
-      system,
-      blackboard,
-      eventBus,
-      sendEvent,
-      createAgent: (role, index) => {
-        const agent = createSpecialistActor(role, index, specialistConfig);
-        // Track immediately so error routing works during execution
-        this.dagActorIds.add(agent.id);
-        this.registerWorker(agent.id, role);
-        return agent;
-      },
-      artifactContext: this.config.artifactContext,
-      fileContext: this.config.fileContext,
-      messages: this.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-        agentRole: m.agentRole,
-      })),
-      saveArtifact,
-      traceId: this.traceId,
-      pmActorId: this.id,
-    };
-
-    const executor = new DAGExecutor(dagConfig);
-    this.activeDAGExecutor = executor;
-
-    try {
-      const dagState = await executor.execute(dag);
-
-      // Merge DAG results into message history
-      const dagSummary = dagState.tasks
-        .map((t) => `[${t.agentRole}] ${t.summary || t.description || "completed"}`)
-        .join("\n");
-
-      this.messages.push({
-        role: "assistant",
-        content: `[DAG EXECUTION COMPLETE]\n${dagSummary}`,
-        agentRole: "pm",
-      });
-
-      // Update orchestration state with DAG results
-      this.orchState = {
-        ...this.orchState,
-        tasks: [...this.orchState.tasks, ...dagState.tasks],
-      };
-
-      await sendEvent({
-        dagComplete: true,
-        orchestrationState: this.orchState,
-      });
-
-      // Delegate post-processing for each successful task
-      for (const task of dagState.tasks) {
-        if (task.status === "completed") {
-          const output = blackboard.get<string>(`${task.agentRole}_output`);
-          if (output) {
-            try {
-              await this.postProcessor.process(output);
-            } catch (ppErr) {
-              actorLog("warn", this.id, `DAG post-processing failed for ${task.agentRole}: ${ppErr instanceof Error ? ppErr.message : ppErr}`, this.traceId);
-            }
-          }
-        }
-      }
-
-      // Continue PM loop for final summary
-      await this.runPMLoop();
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : "Unknown DAG error";
-      actorLog("error", this.id, `DAG execution failed: ${errMsg}`, this.traceId);
-      await sendEvent({ error: `DAG execution failed: ${errMsg}` });
-
-      this.messages.push({
-        role: "assistant",
-        content: `[DAG EXECUTION FAILED]: ${errMsg}`,
-        agentRole: "pm",
-      });
-
-      // Continue PM loop so PM can decide recovery
-      await this.runPMLoop();
-    } finally {
-      this.activeDAGExecutor = null;
-      this.dagActorIds.clear();
-      eventBus.clear();
-      blackboard.clear();
-    }
-  }
-
-  private async dispatchSingle(target: AgentRole, task: string): Promise<void> {
-    const { system } = this.config;
-
-    // Update orchestration state
-    this.orchState = stateForDispatch(this.orchState, target, task);
-
-    // Build peer registry from active workers
-    const peerRegistry = this.buildPeerRegistry();
-
-    // Create specialist config
-    const specialistConfig: SpecialistConfig = {
-      model: this.config.model,
-      serviceInstances: this.config.serviceInstances,
-      appContext: this.config.appContext,
-      sendEvent: this.config.sendEvent,
-      locale: this.config.locale,
-      peerRegistry,
-      conversationId: this.config.conversationId,
-      backgroundSystem: this.config.backgroundSystem,
-      system: this.config.system,
-    };
-
-    // Create and spawn specialist actor
-    const specialist = createSpecialistActor(target, 0, specialistConfig);
-    await system.spawn(specialist);
-
-    // Register worker for status tracking
-    this.registerWorker(specialist.id, target);
-
-    // Update peer registry for all active workers (they now have a new peer)
-    // Note: existing actors won't see the updated registry until next dispatch,
-    // but new actors will have the full picture
-
-    // Send agent metadata
-    await this.config.sendEvent({
-      agentRole: target,
-      orchestrationState: this.orchState,
-    });
-
-    // Send task to specialist
-    const taskMsg = createMessage("task", this.id, specialist.id, {
-      task,
-      context: this.config.artifactContext,
-      messages: this.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-        agentRole: m.agentRole,
-      })),
-    } satisfies TaskPayload);
-
-    system.send(taskMsg);
-  }
-
-  private async dispatchParallel(
-    tasks: Array<{ taskId: string; task: string; files: string[] }>
-  ): Promise<void> {
-    const { system, sendEvent } = this.config;
-
-    const groupId = `parallel-${Date.now()}`;
-    this.currentGroupId = groupId;
-    this.expectedParallelCount = tasks.length;
-    this.pendingParallelResults.clear();
-
-    // Clear any previous parallel timeout
-    if (this.parallelTimeout) {
-      clearTimeout(this.parallelTimeout);
-    }
-
-    // Set timeout for parallel collection — force merge with whatever results we have
-    this.parallelTimeout = setTimeout(async () => {
-      if (this.expectedParallelCount > 0 && this.pendingParallelResults.size < this.expectedParallelCount) {
-        actorLog("warn", this.id, `Parallel timeout: only ${this.pendingParallelResults.size}/${this.expectedParallelCount} results collected — forcing merge`, this.traceId);
-        await sendEvent({
-          statusUpdate: getPartialTimeoutMessage(this.pendingParallelResults.size, this.expectedParallelCount, this.config.locale),
-          agentRole: "pm",
-        });
-        await this.mergeAndContinue();
-      }
-    }, PMActor.PARALLEL_TIMEOUT_MS);
-
-    // Send parallel group event
-    await sendEvent({
-      parallelGroup: {
-        groupId,
-        tasks: tasks.map((t, i) => ({
-          taskId: t.taskId,
-          actorId: `developer-${i}`,
-          agentRole: "developer" as const,
-          status: "running" as const,
-          description: t.task.slice(0, 100),
-        })),
-      },
-    });
-
-    // Create specialist config with background system access
-    const specialistConfig: SpecialistConfig = {
-      model: this.config.model,
-      serviceInstances: this.config.serviceInstances,
-      appContext: this.config.appContext,
-      sendEvent: this.config.sendEvent,
-      locale: this.config.locale,
-      conversationId: this.config.conversationId,
-      backgroundSystem: this.config.backgroundSystem,
-      system: this.config.system,
-    };
-
-    // Spawn all developers and dispatch tasks concurrently
-    for (let index = 0; index < tasks.length; index++) {
-      const task = tasks[index];
-
-      // Update state for each developer
-      this.orchState = stateForDispatch(
-        this.orchState,
-        "developer",
-        `[${task.taskId}] ${task.task.slice(0, 80)}`
-      );
-      // Set actorId on the last task
-      const lastTask = this.orchState.tasks[this.orchState.tasks.length - 1];
-      if (lastTask) lastTask.actorId = `developer-${index}`;
-
-      const developer = createSpecialistActor("developer", index, specialistConfig);
-      await system.spawn(developer);
-
-      // Register worker for status tracking
-      this.registerWorker(developer.id, "developer");
-
-      // Track actorId → taskId mapping for consistent error-path key resolution
-      this.actorToTaskId.set(developer.id, task.taskId);
-
-      const parallelMsg = createMessage("parallel_task", this.id, developer.id, {
-        groupId,
-        taskId: task.taskId,
-        task: task.task,
-        files: task.files,
-        context: this.config.artifactContext,
-        messages: this.messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-          agentRole: m.agentRole,
-        })),
-      } satisfies ParallelTaskPayload);
-
-      system.send(parallelMsg);
-    }
-  }
-
-  // ---- Merge Parallel Results ----
-
-  private async mergeAndContinue(): Promise<void> {
-    // Guard: prevent double-merge (timeout vs normal completion race)
-    if (this.expectedParallelCount === 0) return;
-
-    const { sendEvent, saveArtifact } = this.config;
-
-    // Clear parallel timeout
-    if (this.parallelTimeout) {
-      clearTimeout(this.parallelTimeout);
-      this.parallelTimeout = null;
-    }
-
-    // Merge all developer outputs (with conflict detection)
-    const { content: mergedContent, mergeResult } = this.mergeParallelResults();
-
-    // Report conflicts via SSE if any
-    if (mergeResult.conflicts.length > 0) {
-      await sendEvent({
-        mergeConflicts: mergeResult.conflicts.map((c) => ({
-          path: c.path,
-          sources: c.sources.map((s) => s.taskId),
-        })),
-        agentRole: "developer",
-      });
-    }
-
-    // Update state for each completed developer (pass actorId for precise matching)
-    for (const [, result] of this.pendingParallelResults) {
-      this.markWorkerComplete(result.actorId);
-      this.orchState = stateForAgentComplete(
-        this.orchState,
-        "developer",
-        result.summary,
-        result.actorId
-      );
-    }
-
-    // Send merged completion
-    await sendEvent({
-      agentComplete: true,
-      agentRole: "developer",
-      orchestrationState: this.orchState,
-    });
-
-    // Translate merged result
-    const translated = await translateForUser(mergedContent, "developer", this.config.locale);
-    const displayContent = translated.content || stripJsonBlocks(mergedContent) || getAllDevelopersDoneMessage(this.config.locale);
-    await sendEvent({ content: displayContent, agentRole: "developer" });
-    if (translated.usage) {
-      await sendEvent({ usage: translated.usage, model: getOutputModel() });
-    }
-
-    // Add merged result to message history
-    this.messages.push({
-      role: "assistant",
-      content: mergedContent,
-      agentRole: "developer",
-    });
-
-    // Save merged artifact
-    await saveArtifact("developer", mergedContent);
-
-    // Delegate post-processing (file ops + service binding)
-    await this.postProcessor.process(mergedContent);
-
-    // Reset parallel tracking
-    this.pendingParallelResults.clear();
-    this.expectedParallelCount = 0;
-    this.currentGroupId = null;
-    this.actorToTaskId.clear();
-
-    // Continue PM loop
-    await this.runPMLoop();
-  }
-
-  private mergeParallelResults(): { content: string; mergeResult: MergeResult } {
-    const outputs = Array.from(this.pendingParallelResults.entries()).map(
-      ([taskId, result]) => ({ taskId, content: result.content }),
-    );
-
-    const mergeResult = mergeParallelOutputs(outputs);
-
-    // Log conflicts if any
-    if (mergeResult.conflicts.length > 0) {
-      actorLog(
-        "warn",
-        this.id,
-        `Parallel merge conflicts: ${mergeResult.conflicts.map((c) => c.path).join(", ")}`,
-        this.traceId,
-      );
-    }
-
-    const content = mergeResultToContent(mergeResult);
-    return { content, mergeResult };
   }
 
   // ---- Translation Helper ----
