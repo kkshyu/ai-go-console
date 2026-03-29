@@ -28,6 +28,12 @@ export interface MultiAgentRequest {
   organizationId?: string;
 }
 
+/** Per-agent model override from organization settings */
+export interface AgentModelConfigEntry {
+  agentRole: string;
+  modelId: string;
+}
+
 /** Resolved context the actor system needs to run */
 export interface MultiAgentContext {
   conversationId: string;
@@ -41,6 +47,7 @@ export interface MultiAgentContext {
   agentMessages: AgentMessage[];
   pmPrompt: string;
   model?: string;
+  agentModelConfigs: AgentModelConfigEntry[];
   appId?: string;
   userId?: string;
 }
@@ -359,6 +366,23 @@ export async function resolveMultiAgentContext(
     ? buildAppDevPMPrompt(appContext)
     : buildPMPrompt(serviceInstances);
 
+  // 7. Load organization agent model configs
+  let agentModelConfigs: AgentModelConfigEntry[] = [];
+  if (req.organizationId) {
+    const dbConfigs = await prisma.agentModelConfig.findMany({
+      where: { organizationId: req.organizationId },
+    });
+    agentModelConfigs = dbConfigs.map((c) => ({
+      agentRole: c.agentRole,
+      modelId: c.modelId,
+    }));
+  }
+
+  // Use the PM agent model config as the default model if no explicit model given
+  const resolvedModel =
+    req.model ||
+    agentModelConfigs.find((c) => c.agentRole === "pm")?.modelId;
+
   return {
     conversationId,
     locale: req.locale,
@@ -370,7 +394,8 @@ export async function resolveMultiAgentContext(
     fileContext,
     agentMessages,
     pmPrompt,
-    model: req.model,
+    model: resolvedModel,
+    agentModelConfigs,
     appId: req.appId,
     userId: req.userId,
   };

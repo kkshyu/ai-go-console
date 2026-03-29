@@ -11,7 +11,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Building2, Globe, Plus, Trash2, Check, Link, Copy, Wifi, WifiOff } from "lucide-react";
+import { Building2, Globe, Plus, Trash2, Check, Link, Copy, Wifi, WifiOff, Bot } from "lucide-react";
+import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/models";
+
+const AGENT_ROLES = [
+  { role: "pm", label: "PM" },
+  { role: "architect", label: "Architect" },
+  { role: "developer", label: "Developer" },
+  { role: "reviewer", label: "Reviewer" },
+  { role: "devops", label: "DevOps" },
+  { role: "ux_designer", label: "UX Designer" },
+  { role: "tester", label: "Tester" },
+  { role: "db_migrator", label: "DB Migrator" },
+  { role: "doc_writer", label: "Doc Writer" },
+] as const;
 
 interface OrgDomain {
   id: string;
@@ -48,6 +61,8 @@ export default function OrganizationSettingsPage() {
   const [slugError, setSlugError] = useState("");
   const [proxyStatus, setProxyStatus] = useState<ProxyStatus | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [agentModels, setAgentModels] = useState<Record<string, string>>({});
+  const [savingModels, setSavingModels] = useState(false);
 
   useEffect(() => {
     fetch("/api/organizations")
@@ -63,6 +78,14 @@ export default function OrganizationSettingsPage() {
         fetch(`/api/organizations/${data.id}/domains`)
           .then((r) => r.json())
           .then(setDomains)
+          .catch(() => {});
+        fetch(`/api/organizations/${data.id}/agent-models`)
+          .then((r) => r.json())
+          .then((configs: { agentRole: string; modelId: string }[]) => {
+            const map: Record<string, string> = {};
+            configs.forEach((c) => { map[c.agentRole] = c.modelId; });
+            setAgentModels(map);
+          })
           .catch(() => {});
       })
       .catch(() => {});
@@ -142,6 +165,25 @@ export default function OrganizationSettingsPage() {
     if (res.ok) {
       setDomains((prev) => prev.filter((d) => d.id !== domainId));
     }
+  }
+
+  async function handleSaveAgentModels() {
+    if (!org) return;
+    setSavingModels(true);
+    const configs = Object.entries(agentModels)
+      .filter(([, modelId]) => modelId && modelId !== DEFAULT_MODEL)
+      .map(([agentRole, modelId]) => ({ agentRole, modelId }));
+
+    const res = await fetch(`/api/organizations/${org.id}/agent-models`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ configs }),
+    });
+
+    if (!res.ok) {
+      alert(t("agentModelsSaveFailed"));
+    }
+    setSavingModels(false);
   }
 
   function handleCopyUrl(url: string) {
@@ -352,6 +394,42 @@ export default function OrganizationSettingsPage() {
               <p className="text-sm text-muted-foreground">{t("noDomainsYet")}</p>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Agent Model Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bot className="h-5 w-5" />
+            {t("agentModels")}
+          </CardTitle>
+          <CardDescription>{t("agentModelsDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3">
+            {AGENT_ROLES.map(({ role, label }) => (
+              <div key={role} className="flex items-center gap-3">
+                <label className="w-32 text-sm font-medium shrink-0">{label}</label>
+                <select
+                  value={agentModels[role] || DEFAULT_MODEL}
+                  onChange={(e) =>
+                    setAgentModels((prev) => ({ ...prev, [role]: e.target.value }))
+                  }
+                  className="flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+                >
+                  {AVAILABLE_MODELS.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+          <Button onClick={handleSaveAgentModels} disabled={savingModels}>
+            {savingModels ? tc("loading") : t("save")}
+          </Button>
         </CardContent>
       </Card>
     </div>

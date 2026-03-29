@@ -87,7 +87,7 @@ export function AgentChatPanel({
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL);
+  const selectedModel = DEFAULT_MODEL;
   const [tokenUsage, setTokenUsage] = useState<Record<string, ModelTokenUsage>>({});
   const [orchState, setOrchState] = useState<OrchestrationState>(
     createInitialOrchestrationState()
@@ -440,7 +440,6 @@ export function AgentChatPanel({
       isLoading,
       externalLoading,
       messages,
-      selectedModel,
       extraRequestBody,
       conversationId,
       orchState,
@@ -666,18 +665,6 @@ export function AgentChatPanel({
                   disabled={disabled}
                   className="flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 />
-                <select
-                  value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
-                  disabled={disabled}
-                  className="h-full border-l bg-transparent px-2 py-2 text-xs text-muted-foreground outline-none cursor-pointer hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {AVAILABLE_MODELS.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.label}
-                    </option>
-                  ))}
-                </select>
               </div>
               <Button
                 type="submit"
