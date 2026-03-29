@@ -9,7 +9,12 @@ metadata:
   namespace: aigo-system
 data:
   00-roles.sql: |
-    -- Supabase required roles for PostgREST
+    -- Supabase required roles
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'postgres') THEN
+        CREATE ROLE postgres SUPERUSER LOGIN;
+      END IF;
+    END $$;
     DO $$ BEGIN
       IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'anon') THEN
         CREATE ROLE anon NOLOGIN NOINHERIT;
@@ -25,8 +30,24 @@ data:
         CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS;
       END IF;
     END $$;
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'supabase_auth_admin') THEN
+        CREATE ROLE supabase_auth_admin NOLOGIN NOINHERIT CREATEROLE;
+      END IF;
+    END $$;
     GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
     GRANT anon, authenticated, service_role TO supabase_admin;
+    GRANT supabase_auth_admin TO supabase_admin;
+  01-schemas.sql: |
+    -- Schemas required by GoTrue (auth) and extensions
+    CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION supabase_admin;
+    CREATE SCHEMA IF NOT EXISTS extensions AUTHORIZATION supabase_admin;
+    GRANT ALL ON SCHEMA auth TO supabase_auth_admin;
+    GRANT ALL ON SCHEMA auth TO supabase_admin;
+    -- Common extensions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA extensions;
+    CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;
+    CREATE EXTENSION IF NOT EXISTS pgjwt SCHEMA extensions;
 ---
 apiVersion: v1
 kind: Secret
