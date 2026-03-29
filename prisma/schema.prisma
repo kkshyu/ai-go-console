@@ -294,6 +294,7 @@ model ImportSession {
   fileCount        Int      @default(0) @map("file_count")
   errorMessage     String?  @map("error_message") @db.Text
   progressMessage  String?  @map("progress_message")
+  progressDetail   String?  @map("progress_detail") @db.Text // JSON: structured progress for UI
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 

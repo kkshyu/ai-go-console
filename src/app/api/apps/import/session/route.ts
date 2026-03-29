@@ -38,12 +38,23 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // Parse progressDetail JSON if present
+  let progressDetail = null;
+  if (importSession.progressDetail) {
+    try {
+      progressDetail = JSON.parse(importSession.progressDetail);
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
   return NextResponse.json({
     id: importSession.id,
     status: importSession.status,
     fileCount: importSession.fileCount,
     errorMessage: importSession.errorMessage,
     progressMessage: importSession.progressMessage,
+    progressDetail,
     createdAt: importSession.createdAt,
     updatedAt: importSession.updatedAt,
   });
