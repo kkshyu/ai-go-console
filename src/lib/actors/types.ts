@@ -46,6 +46,7 @@ export interface TaskPayload {
   context?: string;       // artifact context from previous agents
   fileContext?: string;    // context from uploaded files
   messages?: Array<{ role: string; content: string; agentRole?: string; fileIds?: string[] }>;
+  dagNodeId?: string;     // DAG node ID for correlation (set by DAGExecutor, echoed by agents)
 }
 
 export interface TaskResultPayload {
@@ -54,6 +55,7 @@ export interface TaskResultPayload {
   summary: string;
   blocked: boolean;
   blockedReason?: string;
+  dagNodeId?: string;     // DAG node ID echoed from task (enables DAGExecutor completion routing)
 }
 
 export interface ParallelTaskPayload {

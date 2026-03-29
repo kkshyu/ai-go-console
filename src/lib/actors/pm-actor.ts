@@ -130,6 +130,10 @@ export class PMActor extends Actor {
   private parallelTimeout: ReturnType<typeof setTimeout> | null = null;
   /** Maps actorId → taskId for consistent key usage in parallel error path */
   private actorToTaskId: Map<string, string> = new Map();
+  /** Active DAG executor (non-null during DAG execution) */
+  private activeDAGExecutor: DAGExecutor | null = null;
+  /** Set of actor IDs spawned by the active DAG executor */
+  private dagActorIds: Set<string> = new Set();
 
   /** Timeout for collecting all parallel results (3 minutes). */
   private static readonly PARALLEL_TIMEOUT_MS = 3 * 60 * 1000;
@@ -332,6 +336,21 @@ export class PMActor extends Actor {
     const payload = message.payload;
     const { sendEvent, saveArtifact } = this.config;
 
+    // If this is a DAG-spawned agent result, route completion to the active executor
+    // and skip normal PM flow (DAG executor manages its own state & continuation)
+    if (payload.dagNodeId && this.activeDAGExecutor) {
+      actorLog("info", this.id, `DAG node ${payload.dagNodeId} completed via ${message.from}`, this.traceId);
+      this.markWorkerComplete(message.from);
+      await saveArtifact(payload.agentRole, payload.content, message.from, payload.dagNodeId);
+      this.activeDAGExecutor.notifyNodeComplete(
+        payload.dagNodeId,
+        payload.content,
+        payload.summary,
+        !payload.blocked,
+      );
+      return null;
+    }
+
     // Mark worker as complete
     this.markWorkerComplete(message.from);
 
@@ -449,6 +468,14 @@ export class PMActor extends Actor {
     // Save artifact with actor/task IDs
     await saveArtifact(payload.agentRole, payload.content, payload.actorId, payload.taskId);
 
+    // Post-process individual worker result (file ops, service binding)
+    // This ensures each worker's side effects execute even if merge fails later
+    try {
+      await this.postProcessor.process(payload.content);
+    } catch (ppErr) {
+      actorLog("warn", this.id, `Parallel worker ${payload.actorId} post-processing failed (non-fatal): ${ppErr instanceof Error ? ppErr.message : ppErr}`, this.traceId);
+    }
+
     // Collect result
     this.pendingParallelResults.set(payload.taskId, payload);
 
@@ -470,6 +497,18 @@ export class PMActor extends Actor {
     const workerStatus = this.workerStatusTracker.get(payload.actorId);
     if (workerStatus) {
       workerStatus.status = "error";
+    }
+
+    // If this is a DAG-spawned actor error, route to the DAG executor
+    if (this.activeDAGExecutor && this.dagActorIds.has(payload.actorId)) {
+      const nodeId = this.activeDAGExecutor.resolveNodeId(payload.actorId);
+      if (nodeId) {
+        actorLog("warn", this.id, `DAG node ${nodeId} (actor ${payload.actorId}) error: ${payload.error}`, this.traceId);
+        this.activeDAGExecutor.notifyNodeError(nodeId, payload.error);
+      } else {
+        actorLog("warn", this.id, `DAG actor ${payload.actorId} error but no node mapping: ${payload.error}`, this.traceId);
+      }
+      return null;
     }
 
     actorLog("warn", this.id, `Agent error: ${payload.agentRole} (${payload.errorType}): ${payload.error}`, this.traceId);
@@ -849,12 +888,20 @@ export class PMActor extends Actor {
     const blackboard = new Blackboard();
     const eventBus = new EventBus();
 
+    this.dagActorIds.clear();
+
     const dagConfig: DAGExecutorConfig = {
       system,
       blackboard,
       eventBus,
       sendEvent,
-      createAgent: (role, index) => createSpecialistActor(role, index, specialistConfig),
+      createAgent: (role, index) => {
+        const agent = createSpecialistActor(role, index, specialistConfig);
+        // Track immediately so error routing works during execution
+        this.dagActorIds.add(agent.id);
+        this.registerWorker(agent.id, role);
+        return agent;
+      },
       artifactContext: this.config.artifactContext,
       fileContext: this.config.fileContext,
       messages: this.messages.map((m) => ({
@@ -864,9 +911,11 @@ export class PMActor extends Actor {
       })),
       saveArtifact,
       traceId: this.traceId,
+      pmActorId: this.id,
     };
 
     const executor = new DAGExecutor(dagConfig);
+    this.activeDAGExecutor = executor;
 
     try {
       const dagState = await executor.execute(dag);
@@ -923,6 +972,8 @@ export class PMActor extends Actor {
       // Continue PM loop so PM can decide recovery
       await this.runPMLoop();
     } finally {
+      this.activeDAGExecutor = null;
+      this.dagActorIds.clear();
       eventBus.clear();
       blackboard.clear();
     }

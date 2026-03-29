@@ -21,6 +21,7 @@ import type {
   SubTaskPayload,
   SubTaskResultPayload,
   SeniorPlanPayload,
+  TaskPayload,
 } from "./types";
 import { createMessage } from "./types";
 import type { ActorSystem } from "./actor-system";
@@ -210,6 +211,7 @@ abstract class BaseSpecialistActor extends Actor {
       summary: parsed.summary,
       blocked: parsed.blocked,
       blockedReason: parsed.blockedReason,
+      dagNodeId: payload.dagNodeId,
     } satisfies TaskResultPayload);
   }
 
@@ -1100,12 +1102,15 @@ abstract class SeniorSpecialistActor extends BaseSpecialistActor {
       const parsed = parseAgentResult(result.content);
 
       // Return task_result to PM — PM doesn't know about the internal hierarchy
+      // Echo dagNodeId from original task for DAG completion routing
+      const origDagNodeId = (this.originalMessage.payload as TaskPayload).dagNodeId;
       const responseMsg = createMessage("task_result", this.id, this.originalMessage.from, {
         agentRole: this.role,
         content: result.content,
         summary: parsed.summary,
         blocked: parsed.blocked,
         blockedReason: parsed.blockedReason,
+        dagNodeId: origDagNodeId,
       } satisfies TaskResultPayload);
 
       // Route through system
@@ -1117,12 +1122,14 @@ abstract class SeniorSpecialistActor extends BaseSpecialistActor {
       // Fall back: concatenate all junior results
       const fallbackContent = subTaskResults.map(r => r.content).join("\n\n---\n\n");
       const parsed = parseAgentResult(fallbackContent);
+      const origDagNodeId = (this.originalMessage.payload as TaskPayload).dagNodeId;
 
       const responseMsg = createMessage("task_result", this.id, this.originalMessage.from, {
         agentRole: this.role,
         content: fallbackContent,
         summary: parsed.summary,
         blocked: false,
+        dagNodeId: origDagNodeId,
       } satisfies TaskResultPayload);
 
       if (this._getSystemSendFn()) {

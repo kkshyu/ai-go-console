@@ -34,6 +34,8 @@ export interface DAGExecutorConfig {
   messages: Array<{ role: string; content: string; agentRole?: string }>;
   saveArtifact: (agentRole: AgentRole, content: string, actorId?: string, taskId?: string) => Promise<void>;
   traceId?: string;
+  /** The PM actor ID — task messages are sent with this as `from` so replies route back to PM */
+  pmActorId: string;
 }
 
 interface NodeResult {
@@ -53,6 +55,8 @@ export class DAGExecutor {
     resolve: (result: NodeResult) => void;
     reject: (err: Error) => void;
   }>();
+  /** Maps spawned actorId → DAG nodeId for error routing */
+  private actorToNodeId = new Map<string, string>();
 
   constructor(config: DAGExecutorConfig) {
     this.config = config;
@@ -214,6 +218,9 @@ export class DAGExecutor {
       const agent = this.config.createAgent(node.role, index);
       await system.spawn(agent);
 
+      // Track actorId → nodeId mapping for error routing
+      this.actorToNodeId.set(agent.id, node.id);
+
       // Send agent metadata event
       await sendEvent({
         agentRole: node.role,
@@ -240,15 +247,16 @@ export class DAGExecutor {
         });
       });
 
-      // Send task to agent
+      // Send task to agent — use pmActorId as `from` so replies route back to PM
       const fullContext = [this.config.artifactContext, bbContext, upstreamContext, this.config.fileContext]
         .filter(Boolean)
         .join("\n\n");
 
-      const taskMsg = createMessage("task", "dag-executor", agent.id, {
+      const taskMsg = createMessage("task", this.config.pmActorId, agent.id, {
         task: node.task,
         context: fullContext,
         messages: this.config.messages,
+        dagNodeId: node.id,
       } satisfies TaskPayload, traceId);
 
       system.send(taskMsg);
@@ -379,5 +387,15 @@ export class DAGExecutor {
   /** Get the current orchestration state. */
   getOrchestrationState(): OrchestrationState {
     return this.orchState;
+  }
+
+  /** Resolve an actor ID to its DAG node ID (for error routing from PM). */
+  resolveNodeId(actorId: string): string | undefined {
+    return this.actorToNodeId.get(actorId);
+  }
+
+  /** Get all actor IDs spawned by this DAG executor. */
+  getSpawnedActorIds(): Set<string> {
+    return new Set(this.actorToNodeId.keys());
   }
 }

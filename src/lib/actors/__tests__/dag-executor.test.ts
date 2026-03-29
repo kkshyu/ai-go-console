@@ -37,6 +37,7 @@ function createTestConfig(overrides?: Partial<DAGExecutorConfig>): DAGExecutorCo
     messages: [],
     saveArtifact: vi.fn().mockResolvedValue(undefined),
     traceId: "test-trace",
+    pmActorId: "pm-0",
     ...overrides,
   };
 }
