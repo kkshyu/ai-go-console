@@ -6,9 +6,12 @@ import { writeFileToMinIO, buildImportFileKey } from "@/lib/minio-storage";
 import { randomUUID } from "node:crypto";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import ignore from "ignore";
+import AdmZip from "adm-zip";
 
 /** Max size for a single file (10MB) */
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+/** Max size for a zip file (100MB) */
+const MAX_ZIP_SIZE = 100 * 1024 * 1024;
 /** Max total files per import session */
 const MAX_FILES = 500;
 
@@ -85,9 +88,63 @@ function buildIgnoreFilter(
 }
 
 /**
+ * Extract files from a zip archive, returning them as an array of
+ * { buffer, relativePath, mimeType } objects.
+ * Strips the common root folder prefix if all entries share one.
+ */
+function extractZipFiles(
+  zipBuffer: Buffer
+): Array<{ buffer: Buffer; relativePath: string; fileName: string }> {
+  const zip = new AdmZip(zipBuffer);
+  const entries = zip.getEntries();
+  const result: Array<{
+    buffer: Buffer;
+    relativePath: string;
+    fileName: string;
+  }> = [];
+
+  // Determine common root prefix (e.g., "my-project/")
+  const allPaths = entries
+    .filter((e) => !e.isDirectory)
+    .map((e) => e.entryName);
+  let commonPrefix = "";
+  if (allPaths.length > 0) {
+    const firstParts = allPaths[0].split("/");
+    if (firstParts.length > 1) {
+      const candidate = firstParts[0] + "/";
+      if (allPaths.every((p) => p.startsWith(candidate))) {
+        commonPrefix = candidate;
+      }
+    }
+  }
+
+  for (const entry of entries) {
+    if (entry.isDirectory) continue;
+
+    const entryData = entry.getData();
+    if (!entryData || entryData.length === 0) continue;
+    if (entryData.length > MAX_FILE_SIZE) continue;
+
+    let relativePath = entry.entryName;
+    if (commonPrefix && relativePath.startsWith(commonPrefix)) {
+      relativePath = relativePath.slice(commonPrefix.length);
+    }
+    if (!relativePath) continue;
+
+    // Skip macOS resource fork files
+    if (relativePath.startsWith("__MACOSX/") || relativePath.includes("/__MACOSX/")) continue;
+
+    const fileName = relativePath.split("/").pop() || relativePath;
+    result.push({ buffer: entryData, relativePath, fileName });
+  }
+
+  return result;
+}
+
+/**
  * POST /api/apps/import/upload
  *
- * Upload project folder files for import.
+ * Upload project folder files or a zip archive for import.
  * Files are filtered using .gitignore/.dockerignore patterns,
  * stored in MinIO, and processed via background pipeline.
  */
@@ -120,21 +177,79 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No files provided" }, { status: 400 });
   }
 
-  if (files.length > MAX_FILES) {
-    return NextResponse.json(
-      { error: `Too many files (max ${MAX_FILES})` },
-      { status: 400 }
+  // Check if single zip file upload
+  const isZipUpload =
+    files.length === 1 &&
+    (files[0].name.toLowerCase().endsWith(".zip") ||
+      files[0].type === "application/zip" ||
+      files[0].type === "application/x-zip-compressed");
+
+  // If zip, extract and convert to the same format as folder uploads
+  let processFiles: File[];
+  let processPaths: string[];
+
+  if (isZipUpload) {
+    const zipFile = files[0];
+    if (zipFile.size > MAX_ZIP_SIZE) {
+      return NextResponse.json(
+        { error: `Zip file too large (max ${MAX_ZIP_SIZE / 1024 / 1024}MB)` },
+        { status: 400 }
+      );
+    }
+
+    const zipBuffer = Buffer.from(await zipFile.arrayBuffer());
+    let extracted: Array<{
+      buffer: Buffer;
+      relativePath: string;
+      fileName: string;
+    }>;
+    try {
+      extracted = extractZipFiles(zipBuffer);
+    } catch {
+      return NextResponse.json(
+        { error: "Failed to extract zip file. Please ensure it is a valid zip archive." },
+        { status: 400 }
+      );
+    }
+
+    if (extracted.length === 0) {
+      return NextResponse.json(
+        { error: "Zip file contains no valid files" },
+        { status: 400 }
+      );
+    }
+
+    if (extracted.length > MAX_FILES) {
+      return NextResponse.json(
+        { error: `Too many files in zip (max ${MAX_FILES})` },
+        { status: 400 }
+      );
+    }
+
+    // Convert extracted entries to File objects for uniform processing
+    processFiles = extracted.map(
+      (e) => new File([e.buffer], e.fileName, { type: "application/octet-stream" })
     );
+    processPaths = extracted.map((e) => e.relativePath);
+  } else {
+    if (files.length > MAX_FILES) {
+      return NextResponse.json(
+        { error: `Too many files (max ${MAX_FILES})` },
+        { status: 400 }
+      );
+    }
+    processFiles = files;
+    processPaths = paths;
   }
 
   // Step 1: Extract ignore file contents for filtering
   const ignoreContents = new Map<string, string>();
-  for (let i = 0; i < files.length; i++) {
-    const relativePath = paths[i] || files[i].name;
+  for (let i = 0; i < processFiles.length; i++) {
+    const relativePath = processPaths[i] || processFiles[i].name;
     const baseName = relativePath.split("/").pop() || "";
     if (baseName === ".gitignore" || baseName === ".dockerignore") {
       try {
-        const text = await files[i].text();
+        const text = await processFiles[i].text();
         ignoreContents.set(baseName, text);
       } catch {
         // Skip unreadable ignore files
@@ -143,7 +258,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Step 2: Build filter and apply
-  const shouldInclude = buildIgnoreFilter(files, paths, ignoreContents);
+  const shouldInclude = buildIgnoreFilter(processFiles, processPaths, ignoreContents);
 
   const orgSlug = await getOrgSlug(session.user.id);
   const importSessionId = randomUUID();
@@ -162,9 +277,9 @@ export async function POST(request: NextRequest) {
   let storedCount = 0;
   let skippedCount = 0;
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const relativePath = paths[i] || file.name;
+  for (let i = 0; i < processFiles.length; i++) {
+    const file = processFiles[i];
+    const relativePath = processPaths[i] || file.name;
 
     if (file.size > MAX_FILE_SIZE) {
       skippedCount++;

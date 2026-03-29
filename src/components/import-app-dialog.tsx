@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   FolderUp,
+  FileArchive,
   Loader2,
   CheckCircle2,
   AlertTriangle,
@@ -76,6 +77,7 @@ export function ImportAppDialog({
     }
   }, []);
   const folderInputClickRef = useRef<HTMLInputElement>(null);
+  const zipInputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -107,6 +109,42 @@ export function ImportAppDialog({
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, []);
+
+  // Upload a zip file directly to server (backend handles extraction)
+  const uploadZipFile = useCallback(
+    async (file: File) => {
+      setStep("uploading");
+      setFileCount(0);
+
+      try {
+        const formData = new FormData();
+        formData.append("files", file);
+        formData.append("paths", file.name);
+
+        const res = await fetch("/api/apps/import/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
+
+        const result = await res.json();
+        setImportSessionId(result.importSessionId);
+        setFileCount(result.fileCount);
+        setStep("processing");
+
+        startPolling(result.importSessionId);
+      } catch (err) {
+        setErrorMsg(err instanceof Error ? err.message : t("importError"));
+        setStep("error");
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startPolling is stable ref-based
+    [t]
+  );
 
   // Upload files to server
   const uploadFiles = useCallback(
@@ -246,6 +284,13 @@ export function ImportAppDialog({
       setIsDragging(false);
       dragCounter.current = 0;
 
+      // Check for dropped zip file
+      const dtFiles = e.dataTransfer.files;
+      if (dtFiles.length === 1 && dtFiles[0].name.toLowerCase().endsWith(".zip")) {
+        await uploadZipFile(dtFiles[0]);
+        return;
+      }
+
       const items = e.dataTransfer.items;
       if (!items || items.length === 0) return;
 
@@ -260,7 +305,7 @@ export function ImportAppDialog({
 
       await uploadFiles(allFiles);
     },
-    [uploadFiles]
+    [uploadFiles, uploadZipFile]
   );
 
   const handleFolderSelect = useCallback(
@@ -274,6 +319,18 @@ export function ImportAppDialog({
       if (folderInputClickRef.current) folderInputClickRef.current.value = "";
     },
     [uploadFiles]
+  );
+
+  const handleZipSelect = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const fileList = e.target.files;
+      if (!fileList || fileList.length === 0) return;
+
+      await uploadZipFile(fileList[0]);
+
+      if (zipInputRef.current) zipInputRef.current.value = "";
+    },
+    [uploadZipFile]
   );
 
   // Confirm and create app in background
@@ -361,13 +418,29 @@ export function ImportAppDialog({
                 className="hidden"
                 onChange={handleFolderSelect}
               />
-              <Button
-                variant="outline"
-                onClick={() => folderInputClickRef.current?.click()}
-              >
-                <FolderUp className="h-4 w-4" />
-                {t("importSelectFolder")}
-              </Button>
+              <input
+                ref={zipInputRef}
+                type="file"
+                accept=".zip"
+                className="hidden"
+                onChange={handleZipSelect}
+              />
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => folderInputClickRef.current?.click()}
+                >
+                  <FolderUp className="h-4 w-4" />
+                  {t("importSelectFolder")}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => zipInputRef.current?.click()}
+                >
+                  <FileArchive className="h-4 w-4" />
+                  {t("importSelectZip")}
+                </Button>
+              </div>
             </div>
           )}
 
