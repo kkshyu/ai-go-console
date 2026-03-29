@@ -20,6 +20,13 @@ import type { BackgroundAgentRole } from "../agents/types";
 import type { BackgroundMessage } from "./types";
 import { enqueueTask, enqueueAndWait, getAllQueueStats } from "../queue";
 import type { QueueName, QueueStats } from "../queue/types";
+import {
+  BackgroundActorRegistry,
+  InMemoryStateStore,
+  type StateStore,
+  type StatefulBackgroundActor,
+} from "./stateful-background-actor";
+import { EventBus } from "./event-bus";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000; // 30 seconds
 
@@ -38,6 +45,9 @@ function roleToQueue(role: BackgroundAgentRole): QueueName {
 
 export class BackgroundActorSystem {
   private _initialized = false;
+  private _registry: BackgroundActorRegistry | null = null;
+  private _eventBus: EventBus | null = null;
+  private _stateStore: StateStore | null = null;
 
   /**
    * Register the factory for creating background actors.
@@ -50,20 +60,45 @@ export class BackgroundActorSystem {
 
   /**
    * Initialize the queue-based background system.
-   * Simply marks as initialized since Redis handles the actual queuing.
+   * Creates the stateful actor registry for persistent identity and event subscriptions.
    */
-  async initialize(): Promise<void> {
+  async initialize(stateStore?: StateStore): Promise<void> {
     if (this._initialized) return;
+
+    this._stateStore = stateStore ?? new InMemoryStateStore();
+    this._eventBus = new EventBus();
+    this._registry = new BackgroundActorRegistry(this._stateStore, this._eventBus);
+
     this._initialized = true;
-    console.log("[BackgroundActorSystem] Initialized (k8s queue mode)");
+    console.log("[BackgroundActorSystem] Initialized (k8s queue mode + stateful registry)");
   }
 
   get initialized(): boolean {
     return this._initialized;
   }
 
+  /** Get the event bus for subscribing to system events. */
+  get eventBus(): EventBus | null {
+    return this._eventBus;
+  }
+
+  /** Get the stateful actor registry. */
+  get registry(): BackgroundActorRegistry | null {
+    return this._registry;
+  }
+
+  /**
+   * Get or create a stateful background actor by role.
+   * The actor has persistent state and can subscribe to events.
+   */
+  async getStatefulActor(role: BackgroundAgentRole): Promise<StatefulBackgroundActor | null> {
+    if (!this._registry) return null;
+    return this._registry.register(role);
+  }
+
   /**
    * Request-response pattern: enqueue task to Redis, wait for worker result.
+   * Automatically records success/failure on the stateful actor.
    */
   async request<TResult = unknown>(
     role: BackgroundAgentRole,
@@ -72,7 +107,16 @@ export class BackgroundActorSystem {
     timeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS,
   ): Promise<TResult> {
     const queueName = roleToQueue(role);
-    return enqueueAndWait<TResult>(queueName, { type, payload }, timeoutMs);
+    const actor = this._registry?.get(role);
+
+    try {
+      const result = await enqueueAndWait<TResult>(queueName, { type, payload }, timeoutMs);
+      await actor?.recordSuccess();
+      return result;
+    } catch (err) {
+      await actor?.recordFailure();
+      throw err;
+    }
   }
 
   /**
@@ -135,9 +179,29 @@ export class BackgroundActorSystem {
   }
 
   /**
-   * Shutdown — close queue connections.
+   * Get health status of all stateful background actors.
+   */
+  getActorHealthStatus(): Record<string, { healthy: boolean; state: unknown }> {
+    return this._registry?.getHealthStatus() ?? {};
+  }
+
+  /**
+   * Publish an event to the background event bus.
+   * Stateful actors subscribed to this event type will react.
+   */
+  async publishEvent(eventType: string, payload: unknown, source = "system"): Promise<void> {
+    await this._eventBus?.publish(eventType, payload, source);
+  }
+
+  /**
+   * Shutdown — close queue connections and cleanup stateful actors.
    */
   shutdown(): void {
+    this._registry?.shutdown();
+    this._eventBus?.clear();
+    this._registry = null;
+    this._eventBus = null;
+    this._stateStore = null;
     this._initialized = false;
     console.log("[BackgroundActorSystem] Shutdown (k8s queue mode)");
   }

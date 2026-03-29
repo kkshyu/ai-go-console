@@ -141,19 +141,27 @@ export class ActorSystem {
     if (!target) {
       actorLog("warn", "system", `No actor found with ID: ${message.to} (type=${message.type}, from=${message.from})`, this._traceId);
 
-      // If the message was a task/parallel_task and the target is gone,
-      // route the failure back to PM so it doesn't wait forever
-      if (message.type === "task" || message.type === "parallel_task") {
-        const pmActor = this.getActorsByRole("pm")[0];
-        if (pmActor && pmActor.id !== message.from) {
-          const errorMsg = createMessage("error", message.to, pmActor.id, {
+      // If the message was a meaningful dispatch and the target is gone,
+      // route the failure back to PM (or parent) so it doesn't wait forever
+      const dispatchTypes = ["task", "parallel_task", "sub_task", "discuss"];
+      if (dispatchTypes.includes(message.type)) {
+        // Infer agent role from actor ID (e.g. "architect-0" → "architect")
+        const inferredRole = (message.to.split("-")[0] || "developer") as AgentRole;
+
+        // For sub_task, try to route error to the parent (senior) actor first
+        const errorTarget = message.type === "sub_task"
+          ? (this.actors.get(message.from) || this.getActorsByRole("pm")[0])
+          : this.getActorsByRole("pm")[0];
+
+        if (errorTarget && errorTarget.id !== message.from) {
+          const errorMsg = createMessage("error", message.to, errorTarget.id, {
             actorId: message.to,
-            agentRole: "developer" as AgentRole, // best guess from ID
-            error: `Target actor ${message.to} no longer exists — message dropped`,
+            agentRole: inferredRole,
+            error: `Target actor ${message.to} no longer exists — ${message.type} message dropped`,
             errorType: "unknown" as ActorErrorType,
             recoverable: false,
           } satisfies ErrorPayload);
-          pmActor.send(errorMsg);
+          errorTarget.send(errorMsg);
         }
       }
       return;
@@ -285,6 +293,7 @@ export class ActorSystem {
 
     // Restart: stop old, create new with same role
     const lastTask = actor.getLastTaskMessage();
+    const pendingMessages = actor.getMailboxSnapshot();
     this.stop(actorId);
 
     if (this.actorFactory) {
@@ -295,10 +304,12 @@ export class ActorSystem {
       await this.spawn(newActor);
       await newActor.onRestart(error);
 
-      // Re-send the last task message
-      if (lastTask) {
-        const retryMsg = { ...lastTask, to: newActor.id };
-        this.send(retryMsg);
+      // Re-send the last task message and any pending mailbox messages
+      const messagesToReplay = [lastTask, ...pendingMessages].filter(
+        (msg): msg is ActorMessage => msg !== null
+      );
+      for (const msg of messagesToReplay) {
+        this.send({ ...msg, to: newActor.id });
       }
     }
   }

@@ -166,6 +166,30 @@ function parseSingleAction(parsed: Record<string, unknown>): PMAction | null {
     };
   }
 
+  if (action === "execute_dag" && parsed.dag) {
+    const dag = parsed.dag as Record<string, unknown>;
+    const nodes = Array.isArray(dag.nodes) ? dag.nodes : [];
+    const metadata = (dag.metadata as Record<string, unknown>) || {};
+    return {
+      action: "execute_dag",
+      dag: {
+        nodes: nodes.map((n: Record<string, unknown>) => ({
+          id: (n.id as string) || "",
+          role: (n.role as AgentRole) || ("developer" as AgentRole),
+          task: (n.task as string) || "",
+          dependsOn: Array.isArray(n.dependsOn) ? n.dependsOn : [],
+          timeout: typeof n.timeout === "number" ? n.timeout : undefined,
+          retryPolicy: n.retryPolicy as { maxRetries: number; strategy: "retry" | "skip" | "escalate" } | undefined,
+        })),
+        metadata: {
+          phases: Array.isArray(metadata.phases) ? metadata.phases : [],
+          parallelismDegree: typeof metadata.parallelismDegree === "number" ? metadata.parallelismDegree : 1,
+          estimatedDuration: typeof metadata.estimatedDuration === "number" ? metadata.estimatedDuration : 0,
+        },
+      },
+    };
+  }
+
   return null;
 }
 

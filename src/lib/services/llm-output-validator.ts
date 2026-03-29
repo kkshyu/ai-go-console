@@ -88,7 +88,7 @@ export function extractAllJson<T = Record<string, unknown>>(
 
 // ---- PM Action Validation ----
 
-export type ValidAgentTarget = "architect" | "developer" | "reviewer" | "devops";
+export type ValidAgentTarget = "architect" | "developer" | "reviewer" | "devops" | "ux_designer" | "tester" | "db_migrator" | "doc_writer";
 
 export interface ValidPMDispatch {
   action: "dispatch";
@@ -112,11 +112,17 @@ export interface ValidPMComplete {
   summary: string;
 }
 
+export interface ValidPMExecuteDAG {
+  action: "execute_dag";
+  dag: import("../agents/types").ExecutionDAG;
+}
+
 export type ValidPMAction =
   | ValidPMDispatch
   | ValidPMDispatchParallel
   | ValidPMRespond
-  | ValidPMComplete;
+  | ValidPMComplete
+  | ValidPMExecuteDAG;
 
 /**
  * Validate and extract PM action from LLM output.
@@ -170,7 +176,7 @@ export function validatePMAction(
       if (typeof obj.task !== "string" || !obj.task) {
         return { error: "dispatch: missing 'task'" };
       }
-      const validTargets = ["architect", "developer", "reviewer", "devops"];
+      const validTargets = ["architect", "developer", "reviewer", "devops", "ux_designer", "tester", "db_migrator", "doc_writer"];
       if (!validTargets.includes(obj.target)) {
         return { error: `dispatch: invalid target '${obj.target}'` };
       }
@@ -228,6 +234,22 @@ export function validatePMAction(
         action: {
           action: "complete",
           summary: obj.summary,
+        },
+      };
+    }
+
+    case "execute_dag": {
+      if (!obj.dag || typeof obj.dag !== "object") {
+        return { error: "execute_dag: missing 'dag' object" };
+      }
+      const dag = obj.dag as Record<string, unknown>;
+      if (!Array.isArray(dag.nodes) || dag.nodes.length === 0) {
+        return { error: "execute_dag: missing or empty 'dag.nodes'" };
+      }
+      return {
+        action: {
+          action: "execute_dag",
+          dag: obj.dag as ValidPMExecuteDAG["dag"],
         },
       };
     }

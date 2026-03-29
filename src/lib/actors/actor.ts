@@ -181,6 +181,11 @@ export abstract class Actor {
     return this._lastTaskMessage;
   }
 
+  /** Get a snapshot of pending messages in the mailbox (for restart resilience). */
+  getMailboxSnapshot(): ActorMessage[] {
+    return [...this.mailbox];
+  }
+
   // ---- Event handler ----
 
   setEventHandler(handler: ActorEventHandler): void {

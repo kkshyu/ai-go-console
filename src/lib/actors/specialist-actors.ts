@@ -300,11 +300,18 @@ Respond with your perspective on this topic. Be concise and technical.`;
     const hasUncertainty = UNCERTAINTY_MARKERS.some(marker => marker.test(content));
     if (!hasUncertainty) return null;
 
-    // Developer → Architect, Architect → Developer
-    const targetRole: AgentRole | null =
-      this.role === "developer" ? "architect" :
-      this.role === "architect" ? "developer" :
-      null;
+    // Peer discussion routing: each agent discusses with the most relevant hub
+    const PEER_DISCUSSION_MAP: Partial<Record<AgentRole, AgentRole>> = {
+      developer: "architect",      // implementation questions → designer
+      architect: "developer",      // design feasibility → implementer
+      reviewer: "developer",       // security/quality issues → implementer
+      ux_designer: "developer",    // design specs → implementer
+      tester: "developer",         // test issues → implementer
+      db_migrator: "architect",    // schema design → architect
+      devops: "architect",         // infrastructure → architect
+      doc_writer: "architect",     // architecture understanding → architect
+    };
+    const targetRole: AgentRole | null = PEER_DISCUSSION_MAP[this.role] ?? null;
     if (!targetRole || !this.config.peerRegistry.has(targetRole)) return null;
 
     return {

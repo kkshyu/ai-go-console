@@ -14,6 +14,9 @@
 
 import { Actor } from "./actor";
 import { ActorSystem } from "./actor-system";
+import { DAGExecutor, type DAGExecutorConfig } from "./dag-executor";
+import { Blackboard } from "./blackboard";
+import { EventBus } from "./event-bus";
 import type {
   ActorMessage,
   TaskPayload,
@@ -718,6 +721,25 @@ export class PMActor extends Actor {
         return; // Wait for all parallel results
       }
 
+      // ---- Handle execute_dag ----
+      if (pmAction?.action === "execute_dag") {
+        const dag = (pmAction as unknown as { dag: import("../agents/types").ExecutionDAG }).dag;
+        await sendEvent({
+          pmMessage: `Executing DAG pipeline with ${dag.nodes.length} agents...`,
+          agentRole: "pm",
+        });
+        await sendEvent({
+          agentComplete: true,
+          agentRole: "pm",
+          rawContent: result.content,
+          orchestrationState: this.orchState,
+        });
+
+        // Execute the DAG
+        await this.executeDAG(dag);
+        return; // Wait for DAG completion
+      }
+
       // ---- Handle respond ----
       if (pmAction?.action === "respond") {
         const displayContent = await this.getDisplayContent(result.content, "respond");
@@ -803,6 +825,102 @@ export class PMActor extends Actor {
   }
 
   // ---- Dispatch Helpers ----
+
+  private async executeDAG(dag: import("../agents/types").ExecutionDAG): Promise<void> {
+    const { system, sendEvent, saveArtifact } = this.config;
+
+    const specialistConfig: SpecialistConfig = {
+      model: this.config.model,
+      serviceInstances: this.config.serviceInstances,
+      appContext: this.config.appContext,
+      sendEvent: this.config.sendEvent,
+      locale: this.config.locale,
+      conversationId: this.config.conversationId,
+      backgroundSystem: this.config.backgroundSystem,
+      system: this.config.system,
+    };
+
+    const blackboard = new Blackboard();
+    const eventBus = new EventBus();
+
+    const dagConfig: DAGExecutorConfig = {
+      system,
+      blackboard,
+      eventBus,
+      sendEvent,
+      createAgent: (role, index) => createSpecialistActor(role, index, specialistConfig),
+      artifactContext: this.config.artifactContext,
+      fileContext: this.config.fileContext,
+      messages: this.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        agentRole: m.agentRole,
+      })),
+      saveArtifact,
+      traceId: this.traceId,
+    };
+
+    const executor = new DAGExecutor(dagConfig);
+
+    try {
+      const dagState = await executor.execute(dag);
+
+      // Merge DAG results into message history
+      const dagSummary = dagState.tasks
+        .map((t) => `[${t.agentRole}] ${t.summary || t.description || "completed"}`)
+        .join("\n");
+
+      this.messages.push({
+        role: "assistant",
+        content: `[DAG EXECUTION COMPLETE]\n${dagSummary}`,
+        agentRole: "pm",
+      });
+
+      // Update orchestration state with DAG results
+      this.orchState = {
+        ...this.orchState,
+        tasks: [...this.orchState.tasks, ...dagState.tasks],
+      };
+
+      await sendEvent({
+        dagComplete: true,
+        orchestrationState: this.orchState,
+      });
+
+      // Delegate post-processing for each successful task
+      for (const task of dagState.tasks) {
+        if (task.status === "completed") {
+          const output = blackboard.get<string>(`${task.agentRole}_output`);
+          if (output) {
+            try {
+              await this.postProcessor.process(output);
+            } catch (ppErr) {
+              actorLog("warn", this.id, `DAG post-processing failed for ${task.agentRole}: ${ppErr instanceof Error ? ppErr.message : ppErr}`, this.traceId);
+            }
+          }
+        }
+      }
+
+      // Continue PM loop for final summary
+      await this.runPMLoop();
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "Unknown DAG error";
+      actorLog("error", this.id, `DAG execution failed: ${errMsg}`, this.traceId);
+      await sendEvent({ error: `DAG execution failed: ${errMsg}` });
+
+      this.messages.push({
+        role: "assistant",
+        content: `[DAG EXECUTION FAILED]: ${errMsg}`,
+        agentRole: "pm",
+      });
+
+      // Continue PM loop so PM can decide recovery
+      await this.runPMLoop();
+    } finally {
+      eventBus.clear();
+      blackboard.clear();
+    }
+  }
 
   private async dispatchSingle(target: AgentRole, task: string): Promise<void> {
     const { system } = this.config;

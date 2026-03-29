@@ -123,6 +123,18 @@ describe("validatePMAction", () => {
     });
   });
 
+  test("accepts all extended agent targets in dispatch", () => {
+    const extendedTargets = ["ux_designer", "tester", "db_migrator", "doc_writer"];
+    for (const target of extendedTargets) {
+      const input = `\`\`\`json
+{"action": "dispatch", "target": "${target}", "task": "Do the work"}
+\`\`\``;
+      const result = validatePMAction(input);
+      expect(result).toHaveProperty("action");
+      expect((result as { action: { target: string } }).action.target).toBe(target);
+    }
+  });
+
   test("rejects invalid target in dispatch", () => {
     const input = `\`\`\`json
 {"action": "dispatch", "target": "invalid_agent", "task": "Do something"}
