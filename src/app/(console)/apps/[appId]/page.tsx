@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { AgentChatPanel, type AgentMessage } from "@/components/chat/agent-chat-panel";
 import { FileManager } from "@/components/file-manager/file-manager";
-import type { AgentRole } from "@/lib/agents/types";
+import type { AgentRole, OrchestrationState } from "@/lib/agents/types";
 
 interface AppService {
   service: { id: string; name: string; type: string };
@@ -220,15 +220,18 @@ export default function AppDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appId]);
 
-  // Auto-develop: trigger multi-agent after chat is loaded
+  // Auto-develop: trigger multi-agent after chat and app data are loaded
   useEffect(() => {
-    if (!isDevelop || !chatLoaded || developInitRef.current) return;
+    if (!isDevelop || !chatLoaded || !app || developInitRef.current) return;
     developInitRef.current = true;
 
-    setAutoSendMessage("請根據上面的需求開始開發此應用程式。");
+    const message = app.description
+      ? `以下是使用者的需求：\n\n${app.description}\n\n請根據以上需求開始開發此應用程式。`
+      : "請根據上面的需求開始開發此應用程式。";
+    setAutoSendMessage(message);
     // Clean up URL query param to prevent re-trigger on refresh
     router.replace(`/apps/${appId}`, { scroll: false });
-  }, [isDevelop, chatLoaded, appId, router]);
+  }, [isDevelop, chatLoaded, app, appId, router]);
 
   async function checkDevServerStatus(_slug: string) {
     try {
@@ -464,6 +467,25 @@ export default function AppDetailPage() {
       // Refresh file manager by forcing re-mount
       setFileManagerKey((k) => k + 1);
     },
+    [appId]
+  );
+
+  const handleOrchestrationUpdate = useCallback(
+    (state: OrchestrationState) => {
+      if (state.status === "completed") {
+        // Refresh app data
+        fetch(`/api/apps/${appId}`)
+          .then((res) => res.json())
+          .then((data: AppData) => {
+            setApp(data);
+            checkDevServerStatus(data.slug);
+          })
+          .catch(() => {});
+        // Refresh file manager
+        setFileManagerKey((k) => k + 1);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [appId]
   );
 
@@ -759,6 +781,7 @@ export default function AppDetailPage() {
                 onAssistantComplete={handleAssistantComplete}
                 onAssistantResponse={handleAssistantResponse}
                 onFilesWritten={handleFilesWritten}
+                onOrchestrationUpdate={handleOrchestrationUpdate}
                 showProgress={true}
                 conversationId={conversationId}
                 autoSendMessage={autoSendMessage}
