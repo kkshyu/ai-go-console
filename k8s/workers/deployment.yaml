@@ -1,6 +1,7 @@
 ---
 # Background Worker Deployment
-# Processes embedding, retrieval, summarization, and file tasks from Redis queues
+# Processes embedding, retrieval, summarization, import, and file tasks from Redis queues
+# Autoscaling via KEDA ScaledObject (see below) — scales by Redis queue depth
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -34,6 +35,10 @@ spec:
                   optional: true
             - name: NODE_ENV
               value: production
+            - name: WORKER_CONCURRENCY
+              value: "3"
+            - name: WORKER_CONCURRENCY_IMPORT_ORCHESTRATOR
+              value: "1"
           resources:
             requests:
               memory: "256Mi"
@@ -58,3 +63,76 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 10
       restartPolicy: Always
+---
+# KEDA ScaledObject — autoscales background-workers by BullMQ queue depth
+# Prerequisite: KEDA must be installed in the cluster:
+#   helm repo add kedacore https://kedacore.github.io/charts
+#   helm install keda kedacore/keda --namespace keda --create-namespace
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: background-workers-scaledobject
+  namespace: aigo-workers
+  labels:
+    app: background-worker
+    aigo.dev/component: background-worker
+spec:
+  scaleTargetRef:
+    name: background-workers
+  minReplicaCount: 2
+  maxReplicaCount: 10
+  pollingInterval: 15
+  cooldownPeriod: 120
+  advanced:
+    restoreToOriginalReplicaCount: true
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 30
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 60
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 120
+  triggers:
+    - type: redis
+      metadata:
+        address: redis.aigo-system.svc.cluster.local:6379
+        listName: "bull:embedding:wait"
+        listLength: "5"
+        activationListLength: "1"
+    - type: redis
+      metadata:
+        address: redis.aigo-system.svc.cluster.local:6379
+        listName: "bull:retrieval:wait"
+        listLength: "5"
+        activationListLength: "1"
+    - type: redis
+      metadata:
+        address: redis.aigo-system.svc.cluster.local:6379
+        listName: "bull:summarizer:wait"
+        listLength: "5"
+        activationListLength: "1"
+    - type: redis
+      metadata:
+        address: redis.aigo-system.svc.cluster.local:6379
+        listName: "bull:import-orchestrator:wait"
+        listLength: "3"
+        activationListLength: "1"
+    - type: redis
+      metadata:
+        address: redis.aigo-system.svc.cluster.local:6379
+        listName: "bull:file-processing:wait"
+        listLength: "5"
+        activationListLength: "1"
+    - type: redis
+      metadata:
+        address: redis.aigo-system.svc.cluster.local:6379
+        listName: "bull:file-analysis:wait"
+        listLength: "5"
+        activationListLength: "1"

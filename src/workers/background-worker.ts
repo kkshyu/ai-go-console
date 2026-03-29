@@ -56,6 +56,24 @@ async function main() {
     }),
   ];
 
+  // Register import orchestrator worker
+  try {
+    const { ImportOrchestratorActor } = await import("../lib/actors/import-orchestrator-actor");
+    const importOrchestrator = new ImportOrchestratorActor(`k8s-import-orchestrator-${process.pid}`);
+    await importOrchestrator.start();
+
+    workers.push(
+      createWorker("import-orchestrator", async (job: Job<QueueJobPayload>) => {
+        const msg = jobToMessage(job);
+        return importOrchestrator.process(msg);
+      }),
+    );
+
+    console.log("[BackgroundWorker] Import orchestrator worker registered");
+  } catch (err) {
+    console.warn("[BackgroundWorker] Import orchestrator actor not available:", err);
+  }
+
   // Optionally register file processing workers
   try {
     const { FileProcessorActor } = await import("../lib/actors/file-processor-actor");
