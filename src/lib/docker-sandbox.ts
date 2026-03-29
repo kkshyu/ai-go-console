@@ -109,7 +109,6 @@ export async function createDevContainer(
   orgSlug: string,
   slug: string,
   template: string,
-  port: number,
   envVars: Record<string, string> = {}
 ): Promise<string> {
   const tmpl = getTemplate(template);
@@ -122,7 +121,6 @@ export async function createDevContainer(
   const args: string[] = [
     "create",
     "--name", containerName,
-    "-p", `${port}:${tmpl.internalDevPort}`,
     // Allow container to reach the host (for service proxy)
     "--add-host", "host.docker.internal:host-gateway",
   ];
@@ -259,7 +257,6 @@ export async function recreateDevContainer(
   orgSlug: string,
   slug: string,
   template: string,
-  port: number,
   envVars: Record<string, string> = {}
 ): Promise<void> {
   const tmpDir = path.join(os.tmpdir(), `aigo-recreate-${crypto.randomUUID()}`);
@@ -272,7 +269,7 @@ export async function recreateDevContainer(
     await removeDevContainer(orgSlug, slug);
 
     // Create new container with updated env vars
-    await createDevContainer(orgSlug, slug, template, port, envVars);
+    await createDevContainer(orgSlug, slug, template, envVars);
 
     // Re-inject files (read from temp and write back into container)
     await execFileAsync(

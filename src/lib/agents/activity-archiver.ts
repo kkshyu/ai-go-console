@@ -32,15 +32,15 @@ let _archiveClient: Client | null = null;
 function getArchiveClient(): Client {
   if (_archiveClient) return _archiveClient;
 
-  const endpoint = process.env.PLATFORM_MINIO_URL || "http://localhost:9000";
+  const endpoint = process.env.BUILTIN_MINIO_URL || "http://localhost:9000";
   const url = new URL(endpoint);
 
   _archiveClient = new Client({
     endPoint: url.hostname,
     port: Number(url.port) || 9000,
     useSSL: url.protocol === "https:",
-    accessKey: process.env.PLATFORM_MINIO_ROOT_USER || "minioadmin",
-    secretKey: process.env.PLATFORM_MINIO_ROOT_PASSWORD || "minioadmin",
+    accessKey: process.env.BUILTIN_MINIO_ROOT_USER || "minioadmin",
+    secretKey: process.env.BUILTIN_MINIO_ROOT_PASSWORD || "minioadmin",
   });
 
   return _archiveClient;

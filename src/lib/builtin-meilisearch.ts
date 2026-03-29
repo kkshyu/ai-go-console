@@ -5,18 +5,18 @@
  * Each org gets its own index prefix for tenant isolation.
  *
  * Reads connection details from environment variables:
- *   PLATFORM_MEILISEARCH_URL — Meilisearch HTTP URL (default: http://localhost:7700)
- *   PLATFORM_MEILISEARCH_API_KEY — Master API key
+ *   BUILTIN_MEILISEARCH_URL — Meilisearch HTTP URL (default: http://localhost:7700)
+ *   BUILTIN_MEILISEARCH_API_KEY — Master API key
  */
 export async function provisionMeilisearchIndex(
   orgSlug: string
 ): Promise<{ url: string; apiKey: string; indexPrefix: string }> {
-  const url = process.env.PLATFORM_MEILISEARCH_URL || "http://localhost:7700";
-  const apiKey = process.env.PLATFORM_MEILISEARCH_API_KEY || "";
+  const url = process.env.BUILTIN_MEILISEARCH_URL || "http://localhost:7700";
+  const apiKey = process.env.BUILTIN_MEILISEARCH_API_KEY || "";
 
   if (!url) {
     throw new Error(
-      "PLATFORM_MEILISEARCH_URL must be set — cannot provision built-in Meilisearch"
+      "BUILTIN_MEILISEARCH_URL must be set — cannot provision built-in Meilisearch"
     );
   }
 

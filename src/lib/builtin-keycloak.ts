@@ -5,20 +5,20 @@
  * Each org gets its own realm for tenant isolation.
  *
  * Reads connection details from environment variables:
- *   PLATFORM_KEYCLOAK_URL — Keycloak base URL (default: http://localhost:8180)
- *   PLATFORM_KEYCLOAK_ADMIN_USER — Admin username
- *   PLATFORM_KEYCLOAK_ADMIN_PASSWORD — Admin password
+ *   BUILTIN_KEYCLOAK_URL — Keycloak base URL (default: http://localhost:8180)
+ *   BUILTIN_KEYCLOAK_ADMIN_USER — Admin username
+ *   BUILTIN_KEYCLOAK_ADMIN_PASSWORD — Admin password
  */
 export async function provisionKeycloakRealm(
   orgSlug: string
 ): Promise<{ url: string; realm: string; clientId: string; clientSecret: string }> {
-  const url = process.env.PLATFORM_KEYCLOAK_URL || "http://localhost:8180";
-  const _adminUser = process.env.PLATFORM_KEYCLOAK_ADMIN_USER || "admin";
-  const _adminPassword = process.env.PLATFORM_KEYCLOAK_ADMIN_PASSWORD || "admin";
+  const url = process.env.BUILTIN_KEYCLOAK_URL || "http://localhost:8180";
+  const _adminUser = process.env.BUILTIN_KEYCLOAK_ADMIN_USER || "admin";
+  const _adminPassword = process.env.BUILTIN_KEYCLOAK_ADMIN_PASSWORD || "admin";
 
   if (!url) {
     throw new Error(
-      "PLATFORM_KEYCLOAK_URL must be set — cannot provision built-in Keycloak"
+      "BUILTIN_KEYCLOAK_URL must be set — cannot provision built-in Keycloak"
     );
   }
 

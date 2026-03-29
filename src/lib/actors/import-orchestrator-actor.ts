@@ -153,8 +153,6 @@ export class ImportOrchestratorActor extends BackgroundActor {
         name: app.name,
         description: app.description || undefined,
         template: "blank",
-        port: app.port!,
-        prodPort: app.prodPort!,
         files,
       });
 
@@ -175,7 +173,6 @@ export class ImportOrchestratorActor extends BackgroundActor {
         orgSlug,
         app.slug,
         app.template,
-        app.port!,
         async (event) => {
           // Map autostart events to detailed progress
           if (event.attempt !== undefined) {

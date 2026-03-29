@@ -5,8 +5,8 @@
       "name": "ai-go-console",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["next", "dev", "--turbopack"],
-      "port": 3333,
-      "autoPort": true
+      "port": 3000,
+      "autoPort": false
     },
     {
       "name": "background-worker",

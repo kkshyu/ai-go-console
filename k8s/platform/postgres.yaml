@@ -76,23 +76,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: postgres
-  namespace: aigo-system
-  labels:
-    app: postgres
-spec:
-  type: ClusterIP
-  ports:
-    - port: 5432
-      targetPort: 5432
-  selector:
-    app: postgres
----
-# NodePort for external access (dev convenience — Next.js on host connects to DB)
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres-external
+  name: platform-postgres
   namespace: aigo-system
   labels:
     app: postgres

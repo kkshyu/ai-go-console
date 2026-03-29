@@ -51,19 +51,6 @@ export async function POST(request: NextRequest) {
     slug = `${slug}-${Date.now().toString(36)}`;
   }
 
-  // Allocate ports
-  const lastApp = await prisma.app.findFirst({
-    where: { port: { not: null } },
-    orderBy: { port: "desc" },
-  });
-  const port = (lastApp?.port ?? 3099) + 1;
-
-  const lastProdApp = await prisma.app.findFirst({
-    where: { prodPort: { not: null } },
-    orderBy: { prodPort: "desc" },
-  });
-  const prodPort = (lastProdApp?.prodPort ?? 4099) + 1;
-
   // Create app with "importing" status
   const app = await prisma.app.create({
     data: {
@@ -72,8 +59,6 @@ export async function POST(request: NextRequest) {
       description,
       template: "blank",
       status: "importing",
-      port,
-      prodPort,
       config: {},
       userId: session.user.id,
     },

@@ -5,18 +5,18 @@
  * Each org gets its own collection prefix for tenant isolation.
  *
  * Reads connection details from environment variables:
- *   PLATFORM_QDRANT_URL — Qdrant HTTP API URL (default: http://localhost:6333)
- *   PLATFORM_QDRANT_API_KEY — Qdrant API key (optional in dev)
+ *   BUILTIN_QDRANT_URL — Qdrant HTTP API URL (default: http://localhost:6333)
+ *   BUILTIN_QDRANT_API_KEY — Qdrant API key (optional in dev)
  */
 export async function provisionQdrantCollection(
   orgSlug: string
 ): Promise<{ url: string; apiKey: string; collectionPrefix: string }> {
-  const url = process.env.PLATFORM_QDRANT_URL || "http://localhost:6333";
-  const apiKey = process.env.PLATFORM_QDRANT_API_KEY || "";
+  const url = process.env.BUILTIN_QDRANT_URL || "http://localhost:6333";
+  const apiKey = process.env.BUILTIN_QDRANT_API_KEY || "";
 
   if (!url) {
     throw new Error(
-      "PLATFORM_QDRANT_URL must be set — cannot provision built-in Qdrant"
+      "BUILTIN_QDRANT_URL must be set — cannot provision built-in Qdrant"
     );
   }
 

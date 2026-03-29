@@ -18,7 +18,7 @@ bash scripts/setup.sh
 |------|------|------|
 | 1. 環境變數 | `ln -s /path/to/main/.env .env` | Worktree 需 symlink 主專案的 .env |
 | 2. 基礎服務 | `bash scripts/k3d-setup.sh` | 啟動 k3d 叢集（PostgreSQL, Redis, Traefik, Supabase） |
-| 3. 等待 DB | `kubectl port-forward svc/postgres 5432:5432 -n aigo-system &` | 確認 PostgreSQL 可連線 |
+| 3. 等待 DB | 核心服務由 k3d 自動暴露（PostgreSQL:5432, Redis:6379, MinIO:9001） | 確認 PostgreSQL 可連線 |
 | 4. 安裝依賴 | `pnpm install` | 必須使用 pnpm，不可用 npm/yarn |
 | 5. DB 遷移 | `npx prisma migrate deploy` | 套用 schema 至資料庫 |
 | 6. Prisma Client | `npx prisma generate` | 產生 Prisma Client |
@@ -30,13 +30,13 @@ bash scripts/setup.sh
 | 問題 | 解法 |
 |------|------|
 | `.env` 不存在 | 從主專案 `ln -s` 建立 symlink，或 `cp .env.example .env` |
-| PostgreSQL 連不上 | `kubectl port-forward svc/postgres 5432:5432 -n aigo-system &` |
+| PostgreSQL 連不上 | 確認 k3d 叢集 running：`k3d cluster start aigo`（核心服務由 k3d port mapping 管理） |
 | k3d 叢集未啟動 | `k3d cluster start aigo` |
 | Pod 未就緒 | `kubectl get pods -n aigo-system` 查看狀態 |
 | Prisma Client 錯誤 | `npx prisma generate` |
 | Seed 重複執行失敗 | 可忽略，或 `npx prisma migrate reset --force` 重置 |
-| Port 3000 被佔用 | launch.json 已設定 `autoPort: true`，會自動換 port |
-| Supabase 連不上 | `kubectl port-forward svc/supabase-kong 54321:8000 -n aigo-system &` |
+| Port 3000 被佔用 | 確認沒有其他 Next.js 在 port 3000 |
+| Supabase 連不上 | `kubectl port-forward svc/builtin-supabase-kong 54321:8000 -n aigo-system &` |
 
 ---
 

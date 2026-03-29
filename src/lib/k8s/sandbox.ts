@@ -66,7 +66,6 @@ export async function createDevContainer(
   orgSlug: string,
   slug: string,
   template: string,
-  port: number,
   envVars: Record<string, string> = {},
 ): Promise<string> {
   const tmpl = getTemplate(template);
@@ -254,7 +253,6 @@ export async function recreateDevContainer(
   orgSlug: string,
   slug: string,
   template: string,
-  port: number,
   envVars: Record<string, string> = {},
 ): Promise<void> {
   const { mkdtemp, rm } = await import("fs/promises");
@@ -265,7 +263,7 @@ export async function recreateDevContainer(
   try {
     await exportSource(orgSlug, slug, tmpDir);
     await removeDevContainer(orgSlug, slug);
-    await createDevContainer(orgSlug, slug, template, port, envVars);
+    await createDevContainer(orgSlug, slug, template, envVars);
 
     // Wait for Pod to be ready
     await waitForPodReady(orgSlug, slug);

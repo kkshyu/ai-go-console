@@ -44,7 +44,12 @@ kubectl wait --for=condition=ready pod -l app=redis \
 kubectl wait --for=condition=available deployment/builtin-supabase-kong \
   -n aigo-system --timeout=60s 2>/dev/null || warn "Supabase Kong 尚未就緒"
 
-# ── Port-forward（跳過已存在的）────────────────────────────────────────────
+# ── 核心服務由 k3d port mapping 管理（不需 port-forward）────────────────────
+# PostgreSQL: localhost:5432 → k3d → NodePort 30432
+# Redis:      localhost:6379 → k3d → NodePort 30379
+# MinIO UI:   localhost:9001 → k3d → NodePort 30901
+
+# ── Builtin 平台服務 port-forward（僅本地開發用）──────────────────────────
 forward_if_needed() {
   local label=$1 svc=$2 ports=$3
   if ! pgrep -f "kubectl port-forward.*${svc}.*${ports}" >/dev/null 2>&1; then
@@ -53,9 +58,14 @@ forward_if_needed() {
   fi
 }
 
-forward_if_needed "PostgreSQL" "postgres"              "5432:5432"
-forward_if_needed "Redis"      "redis"                 "6379:6379"
-forward_if_needed "Supabase"   "builtin-supabase-kong" "54321:8000"
+forward_if_needed "Supabase"    "builtin-supabase-kong" "54321:8000"
+forward_if_needed "MinIO API"   "builtin-minio"         "9000:9000"
+forward_if_needed "Qdrant"      "builtin-qdrant"        "6333:6333"
+forward_if_needed "Meilisearch" "builtin-meilisearch"   "7700:7700"
+forward_if_needed "n8n"         "builtin-n8n"           "5678:5678"
+forward_if_needed "Metabase"    "builtin-metabase"      "3001:3000"
+forward_if_needed "PostHog"     "builtin-posthog"       "8100:8000"
+forward_if_needed "Keycloak"    "builtin-keycloak"      "8180:8080"
 sleep 1
 
 info "基礎服務就緒"

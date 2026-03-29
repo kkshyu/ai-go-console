@@ -91,27 +91,12 @@ export async function POST(request: NextRequest) {
     slug = `${slug}-${Date.now().toString(36)}`;
   }
 
-  const lastApp = await prisma.app.findFirst({
-    where: { port: { not: null } },
-    orderBy: { port: "desc" },
-  });
-  const port = (lastApp?.port ?? 3099) + 1;
-
-  // Allocate separate production port (starts from 4100 range)
-  const lastProdApp = await prisma.app.findFirst({
-    where: { prodPort: { not: null } },
-    orderBy: { prodPort: "desc" },
-  });
-  const prodPort = (lastProdApp?.prodPort ?? 4099) + 1;
-
   const app = await prisma.app.create({
     data: {
       name,
       slug,
       description,
       template,
-      port,
-      prodPort,
       config: config || {},
       userId: resolvedUserId,
       services: serviceIds
@@ -142,8 +127,6 @@ export async function POST(request: NextRequest) {
       name,
       description,
       template,
-      port,
-      prodPort,
       files: files || overlay?.files,
       npmPackages: npmPackages || overlay?.npmPackages,
     });

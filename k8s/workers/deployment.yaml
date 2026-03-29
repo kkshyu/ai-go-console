@@ -26,7 +26,7 @@ spec:
           image: localhost:5111/aigo-worker:latest
           env:
             - name: REDIS_URL
-              value: redis://redis.aigo-system.svc.cluster.local:6379
+              value: redis://platform-redis.aigo-system.svc.cluster.local:6379
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -102,37 +102,37 @@ spec:
   triggers:
     - type: redis
       metadata:
-        address: redis.aigo-system.svc.cluster.local:6379
+        address: platform-redis.aigo-system.svc.cluster.local:6379
         listName: "bull:embedding:wait"
         listLength: "5"
         activationListLength: "1"
     - type: redis
       metadata:
-        address: redis.aigo-system.svc.cluster.local:6379
+        address: platform-redis.aigo-system.svc.cluster.local:6379
         listName: "bull:retrieval:wait"
         listLength: "5"
         activationListLength: "1"
     - type: redis
       metadata:
-        address: redis.aigo-system.svc.cluster.local:6379
+        address: platform-redis.aigo-system.svc.cluster.local:6379
         listName: "bull:summarizer:wait"
         listLength: "5"
         activationListLength: "1"
     - type: redis
       metadata:
-        address: redis.aigo-system.svc.cluster.local:6379
+        address: platform-redis.aigo-system.svc.cluster.local:6379
         listName: "bull:import-orchestrator:wait"
         listLength: "3"
         activationListLength: "1"
     - type: redis
       metadata:
-        address: redis.aigo-system.svc.cluster.local:6379
+        address: platform-redis.aigo-system.svc.cluster.local:6379
         listName: "bull:file-processing:wait"
         listLength: "5"
         activationListLength: "1"
     - type: redis
       metadata:
-        address: redis.aigo-system.svc.cluster.local:6379
+        address: platform-redis.aigo-system.svc.cluster.local:6379
         listName: "bull:file-analysis:wait"
         listLength: "5"
         activationListLength: "1"

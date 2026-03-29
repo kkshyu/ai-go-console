@@ -104,6 +104,9 @@ if [ "${SKIP_CREATE:-false}" = false ]; then
   k3d cluster create "$CLUSTER_NAME" \
     --port "80:80@loadbalancer" \
     --port "443:443@loadbalancer" \
+    --port "5432:30432@server:0" \
+    --port "6379:30379@server:0" \
+    --port "9001:30901@server:0" \
     --registry-use "k3d-${REGISTRY_NAME}:${REGISTRY_PORT}" \
     --k3s-arg "--disable=traefik@server:0" \
     --wait

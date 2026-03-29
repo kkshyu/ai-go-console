@@ -93,3 +93,20 @@ spec:
       targetPort: 9001
   selector:
     app: builtin-minio
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platform-minio
+  namespace: aigo-system
+  labels:
+    app: builtin-minio
+spec:
+  type: NodePort
+  ports:
+    - name: console
+      port: 9001
+      targetPort: 9001
+      nodePort: 30901
+  selector:
+    app: builtin-minio

@@ -5,18 +5,18 @@
  * Each org gets its own group/collection for tenant isolation.
  *
  * Reads connection details from environment variables:
- *   PLATFORM_METABASE_URL — Metabase base URL (default: http://localhost:3001)
- *   PLATFORM_METABASE_API_KEY — Metabase API key
+ *   BUILTIN_METABASE_URL — Metabase base URL (default: http://localhost:3001)
+ *   BUILTIN_METABASE_API_KEY — Metabase API key
  */
 export async function provisionMetabaseGroup(
   orgSlug: string
 ): Promise<{ url: string; apiKey: string; groupName: string }> {
-  const url = process.env.PLATFORM_METABASE_URL || "http://localhost:3001";
-  const apiKey = process.env.PLATFORM_METABASE_API_KEY || "";
+  const url = process.env.BUILTIN_METABASE_URL || "http://localhost:3001";
+  const apiKey = process.env.BUILTIN_METABASE_API_KEY || "";
 
   if (!url) {
     throw new Error(
-      "PLATFORM_METABASE_URL must be set — cannot provision built-in Metabase"
+      "BUILTIN_METABASE_URL must be set — cannot provision built-in Metabase"
     );
   }
 

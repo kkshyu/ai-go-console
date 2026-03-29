@@ -118,55 +118,44 @@ info "Step 4/7: 確認服務連線..."
 if [ "$SKIP_INFRA" = false ]; then
   kubectl config use-context k3d-aigo 2>/dev/null || error "無法切換至 k3d-aigo context"
 
-  # 停止已有的 port-forward
-  pkill -f "kubectl port-forward.*postgres.*5432" 2>/dev/null || true
-  pkill -f "kubectl port-forward.*redis.*6379" 2>/dev/null || true
-  pkill -f "kubectl port-forward.*builtin-supabase-kong.*54321" 2>/dev/null || true
-  sleep 1
+  # 核心服務由 k3d port mapping 管理（不需 port-forward）
+  # PostgreSQL: localhost:5432 → k3d → NodePort 30432
+  # Redis:      localhost:6379 → k3d → NodePort 30379
+  # MinIO UI:   localhost:9001 → k3d → NodePort 30901
 
-  # PostgreSQL (平台資料庫)
+  # 等待核心服務就緒
   kubectl wait --for=condition=ready pod -l app=postgres \
     -n aigo-system --timeout=60s 2>/dev/null || error "PostgreSQL Pod 未就緒"
+  info "  PostgreSQL 就緒 (localhost:5432 via k3d) ✓"
 
-  kubectl port-forward svc/postgres 5432:5432 -n aigo-system &>/dev/null &
-  PF_PID=$!
-  sleep 2
-
-  if ! kill -0 $PF_PID 2>/dev/null; then
-    error "PostgreSQL port-forward 啟動失敗"
-  fi
-
-  info "  PostgreSQL port-forward 已啟動 (PID: $PF_PID, localhost:5432) ✓"
-
-  # Redis (BullMQ 訊息佇列)
   kubectl wait --for=condition=ready pod -l app=redis \
     -n aigo-system --timeout=60s 2>/dev/null || error "Redis Pod 未就緒"
+  info "  Redis 就緒 (localhost:6379 via k3d) ✓"
 
-  kubectl port-forward svc/redis 6379:6379 -n aigo-system &>/dev/null &
-  REDIS_PF_PID=$!
-  sleep 2
+  kubectl wait --for=condition=ready pod -l app=builtin-minio \
+    -n aigo-system --timeout=60s 2>/dev/null || warn "MinIO 尚未就緒"
+  info "  MinIO Console 就緒 (localhost:9001 via k3d) ✓"
 
-  if ! kill -0 $REDIS_PF_PID 2>/dev/null; then
-    error "Redis port-forward 啟動失敗"
-  fi
+  # Builtin 平台服務 port-forward（僅本地開發用）
+  forward_if_needed() {
+    local label=$1 svc=$2 ports=$3
+    if ! pgrep -f "kubectl port-forward.*${svc}.*${ports}" >/dev/null 2>&1; then
+      kubectl port-forward "svc/${svc}" "$ports" -n aigo-system &>/dev/null &
+      info "  ${label} → localhost:${ports%%:*}"
+    fi
+  }
 
-  info "  Redis port-forward 已啟動 (PID: $REDIS_PF_PID, localhost:6379) ✓"
-
-  # Supabase Kong (API Gateway)
-  kubectl wait --for=condition=available deployment/builtin-supabase-kong \
-    -n aigo-system --timeout=60s 2>/dev/null || error "Supabase Kong Deployment 未就緒"
-
-  kubectl port-forward svc/builtin-supabase-kong 54321:8000 -n aigo-system &>/dev/null &
-  SB_PF_PID=$!
-  sleep 2
-
-  if ! kill -0 $SB_PF_PID 2>/dev/null; then
-    error "Supabase port-forward 啟動失敗"
-  fi
-
-  info "  Supabase port-forward 已啟動 (PID: $SB_PF_PID, localhost:54321) ✓"
+  forward_if_needed "Supabase"    "builtin-supabase-kong" "54321:8000"
+  forward_if_needed "MinIO API"   "builtin-minio"         "9000:9000"
+  forward_if_needed "Qdrant"      "builtin-qdrant"        "6333:6333"
+  forward_if_needed "Meilisearch" "builtin-meilisearch"   "7700:7700"
+  forward_if_needed "n8n"         "builtin-n8n"           "5678:5678"
+  forward_if_needed "Metabase"    "builtin-metabase"      "3001:3000"
+  forward_if_needed "PostHog"     "builtin-posthog"       "8100:8000"
+  forward_if_needed "Keycloak"    "builtin-keycloak"      "8180:8080"
+  sleep 1
 else
-  info "  使用既有的服務連線 (PostgreSQL:5432, Redis:6379, Supabase:54321)"
+  info "  使用既有的服務連線"
 fi
 
 # ── Step 5: 安裝依賴 ─────────────────────────────────────────────────────

@@ -3,26 +3,27 @@ import * as sandbox from "@/lib/k8s/sandbox";
 /**
  * Start a dev server for an app inside a k8s Pod.
  * The Pod must already exist (created by generateApp).
+ * Apps are accessed via Traefik domain routing (<slug>.dev.localhost),
+ * no localhost port-forward needed.
  */
 export async function startDevServer(
   orgSlug: string,
   slug: string,
   _template: string,
-  port: number
-): Promise<{ pid: number; port: number }> {
+): Promise<{ pid: number }> {
   const status = await sandbox.getDevContainerStatus(orgSlug, slug);
 
   if (status === "running") {
     // Pod is already running (created by generateApp) — just inject console bridge
     await sandbox.injectConsoleBridge(orgSlug, slug);
-    return { pid: 0, port };
+    return { pid: 0 };
   }
 
   // Pod exists but not running — start it
   if (status !== "not_found") {
     await sandbox.startDevContainer(orgSlug, slug);
     await sandbox.injectConsoleBridge(orgSlug, slug);
-    return { pid: 0, port };
+    return { pid: 0 };
   }
 
   // Pod not found — cannot start

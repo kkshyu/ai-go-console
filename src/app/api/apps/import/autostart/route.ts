@@ -57,7 +57,6 @@ export async function POST(request: NextRequest) {
         orgSlug,
         app.slug,
         app.template,
-        app.port!,
         async (event: AutostartEvent) => {
           await sendSSE(event as unknown as Record<string, unknown>);
         },

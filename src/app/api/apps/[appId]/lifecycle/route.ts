@@ -30,10 +30,9 @@ export async function POST(
     switch (action) {
       case "dev-start": {
         // Start dev server inside Docker container
-        if (!app.port) {
-          return NextResponse.json({ error: "No port assigned" }, { status: 400 });
-        }
-        const result = await startDevServer(orgSlug, app.slug, app.template, app.port);
+        const result = await startDevServer(orgSlug, app.slug, app.template);
+        // Ensure Traefik IngressRoute exists for the dev container
+        syncRoutes().catch(() => {});
         return NextResponse.json({ success: true, ...result });
       }
 

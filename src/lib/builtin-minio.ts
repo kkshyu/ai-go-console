@@ -5,20 +5,20 @@
  * Each org gets its own bucket prefix for tenant isolation.
  *
  * Reads connection details from environment variables:
- *   PLATFORM_MINIO_URL — MinIO API endpoint (default: http://localhost:9000)
- *   PLATFORM_MINIO_ROOT_USER — Root username
- *   PLATFORM_MINIO_ROOT_PASSWORD — Root password
+ *   BUILTIN_MINIO_URL — MinIO API endpoint (default: http://localhost:9000)
+ *   BUILTIN_MINIO_ROOT_USER — Root username
+ *   BUILTIN_MINIO_ROOT_PASSWORD — Root password
  */
 export async function provisionMinioBucket(
   orgSlug: string
 ): Promise<{ endpoint: string; accessKey: string; secretKey: string; bucket: string }> {
-  const endpoint = process.env.PLATFORM_MINIO_URL || "http://localhost:9000";
-  const accessKey = process.env.PLATFORM_MINIO_ROOT_USER || "minioadmin";
-  const secretKey = process.env.PLATFORM_MINIO_ROOT_PASSWORD || "minioadmin";
+  const endpoint = process.env.BUILTIN_MINIO_URL || "http://localhost:9000";
+  const accessKey = process.env.BUILTIN_MINIO_ROOT_USER || "minioadmin";
+  const secretKey = process.env.BUILTIN_MINIO_ROOT_PASSWORD || "minioadmin";
 
   if (!endpoint) {
     throw new Error(
-      "PLATFORM_MINIO_URL must be set — cannot provision built-in MinIO"
+      "BUILTIN_MINIO_URL must be set — cannot provision built-in MinIO"
     );
   }
 

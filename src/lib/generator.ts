@@ -21,8 +21,6 @@ export interface GenerateAppOptions {
   name: string;
   description?: string;
   template: string;
-  port: number;
-  prodPort: number;
   files?: Array<{ path: string; content: string }>;
   npmPackages?: string[];
 }
@@ -32,7 +30,7 @@ export interface GenerateAppOptions {
  * Template files are rendered in memory and injected via docker cp.
  */
 export async function generateApp(options: GenerateAppOptions): Promise<string> {
-  const { appId, slug, orgSlug, name, description, template, port, prodPort } = options;
+  const { appId, slug, orgSlug, name, description, template } = options;
 
   const tmpl = getTemplate(template);
   if (!tmpl) {
@@ -48,10 +46,11 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
   // Blank template: user files go directly into the container, no template rendering
   if (template === "blank") {
     await sandbox.tagBaseImage(orgSlug, slug, template);
-    await sandbox.createDevContainer(orgSlug, slug, template, port, envVars);
+    await sandbox.createDevContainer(orgSlug, slug, template, envVars);
     if (options.files && options.files.length > 0) {
       await sandbox.writeFiles(orgSlug, slug, options.files);
     }
+    await sandbox.writeFiles(orgSlug, slug, [{ path: ".ready", content: "1" }]);
     return sandbox.devContainerName(orgSlug, slug);
   }
 
@@ -61,8 +60,8 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
     slug,
     orgSlug,
     description: description || "",
-    port,
-    prodPort,
+    port: tmpl.defaultPort,
+    prodPort: tmpl.defaultPort,
     envVars,
   };
 
@@ -144,10 +143,13 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
   }
 
   // Create the dev container with service env vars
-  await sandbox.createDevContainer(orgSlug, slug, template, port, envVars);
+  await sandbox.createDevContainer(orgSlug, slug, template, envVars);
 
   // Inject all rendered files into the container
   await sandbox.writeFiles(orgSlug, slug, renderedFiles);
+
+  // Write sentinel file to signal the startup script that all files are ready
+  await sandbox.writeFiles(orgSlug, slug, [{ path: ".ready", content: "1" }]);
 
   return sandbox.devContainerName(orgSlug, slug);
 }

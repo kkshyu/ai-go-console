@@ -14,15 +14,15 @@ let _client: Client | null = null;
 function getClient(): Client {
   if (_client) return _client;
 
-  const endpoint = process.env.PLATFORM_MINIO_URL || "http://localhost:9000";
+  const endpoint = process.env.BUILTIN_MINIO_URL || "http://localhost:9000";
   const url = new URL(endpoint);
 
   _client = new Client({
     endPoint: url.hostname,
     port: Number(url.port) || 9000,
     useSSL: url.protocol === "https:",
-    accessKey: process.env.PLATFORM_MINIO_ROOT_USER || "minioadmin",
-    secretKey: process.env.PLATFORM_MINIO_ROOT_PASSWORD || "minioadmin",
+    accessKey: process.env.BUILTIN_MINIO_ROOT_USER || "minioadmin",
+    secretKey: process.env.BUILTIN_MINIO_ROOT_PASSWORD || "minioadmin",
   });
 
   return _client;

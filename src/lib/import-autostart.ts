@@ -193,7 +193,6 @@ export async function runAutostartLoop(
   orgSlug: string,
   appSlug: string,
   template: string,
-  port: number,
   onEvent?: (event: AutostartEvent) => void | Promise<void>,
 ): Promise<{ success: boolean; errors?: string[] }> {
   const emit = async (event: AutostartEvent) => {
@@ -210,7 +209,7 @@ export async function runAutostartLoop(
       }
 
       try {
-        await startDevServer(orgSlug, appSlug, template, port);
+        await startDevServer(orgSlug, appSlug, template);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to start dev server";
         await emit({ step: "error", attempt, message: `啟動失敗: ${msg}` });
