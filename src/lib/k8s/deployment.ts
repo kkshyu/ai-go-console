@@ -12,7 +12,7 @@ import {
   generateProdDeploymentSpec,
   generateProdServiceSpec,
 } from "./manifests";
-import { tagImage as tagRegistryImage, getImageUrl } from "./builder";
+import { tagImage as tagRegistryImage, getInClusterImageUrl } from "./builder";
 import { isClusterAvailable } from "./client";
 
 // ── Tag Image ────────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ export async function startAppFromImage(
 ): Promise<string> {
   const ns = config.prodNamespace;
   const deployName = prodDeploymentName(orgSlug, slug);
-  const image = getImageUrl(orgSlug, slug, "prod", `v${version}`);
+  const image = getInClusterImageUrl(orgSlug, slug, "prod", `v${version}`);
 
   // Patch the Deployment with the new image
   const patch = {

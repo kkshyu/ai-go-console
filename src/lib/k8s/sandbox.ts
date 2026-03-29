@@ -22,7 +22,7 @@ import {
   generateDevPodSpec,
   generateDevServiceSpec,
 } from "./manifests";
-import { getImageUrl, getBaseImageUrl } from "./builder";
+import { getImageUrl, getInClusterImageUrl, getBaseImageUrl } from "./builder";
 import { getTemplate } from "@/lib/templates";
 import { CONSOLE_BRIDGE_SCRIPT } from "@/lib/console-bridge";
 
@@ -92,8 +92,8 @@ export async function createDevContainer(
     devCommand: [tmpl.devCommand, ...(tmpl.devArgs || [])],
   });
 
-  // Override image to use the app-specific dev image
-  const image = getImageUrl(orgSlug, slug, "dev");
+  // Override image to use the app-specific dev image (in-cluster URL for k8s pods)
+  const image = getInClusterImageUrl(orgSlug, slug, "dev");
   if (podSpec.spec?.containers?.[0]) {
     podSpec.spec.containers[0].image = image;
   }
@@ -111,6 +111,9 @@ export async function createDevContainer(
       await coreApi().createNamespacedService({ namespace: ns, body: svcSpec });
     }
   }
+
+  // Wait for Pod to be ready before returning
+  await waitForPodReady(orgSlug, slug);
 
   return podName;
 }
