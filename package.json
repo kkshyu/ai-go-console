@@ -4,11 +4,11 @@
   "private": true,
   "scripts": {
     "predev": "bash scripts/infra.sh",
-    "dev": "concurrently -n next,worker -c blue,yellow \"next dev --turbopack -p ${PORT:-3000}\" \"tsx watch --env-file-if-exists=.env src/workers/background-worker.ts\"",
+    "dev": "concurrently -n next,worker -c blue,yellow \"next dev --turbopack -p ${PORT:-3000}\" \"NODE_OPTIONS='--disable-warning=DEP0040' tsx watch --env-file-if-exists=.env src/workers/background-worker.ts\"",
     "dev:next": "next dev --turbopack -p ${PORT:-3000}",
     "build": "bash scripts/build-base-images.sh && next build",
     "start": "next start",
-    "dev:worker": "tsx watch --env-file-if-exists=.env src/workers/background-worker.ts",
+    "dev:worker": "NODE_OPTIONS='--disable-warning=DEP0040' tsx watch --env-file-if-exists=.env src/workers/background-worker.ts",
     "lint": "next lint",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
