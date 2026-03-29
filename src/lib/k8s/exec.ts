@@ -9,13 +9,6 @@
 import * as k8s from "@kubernetes/client-node";
 import { Writable, PassThrough } from "stream";
 import { execApi, cpApi, coreApi, isK8sNotFound } from "./client";
-import { tmpdir } from "os";
-import { join } from "path";
-import { mkdtemp, writeFile, rm } from "fs/promises";
-import { execFile } from "child_process";
-import { promisify } from "util";
-
-const execFileAsync = promisify(execFile);
 
 const DEFAULT_CONTAINER = "app";
 const EXEC_TIMEOUT_MS = 120_000; // 2 minutes
@@ -109,7 +102,8 @@ export async function execInPod(
  * Write files into a pod container.
  * Equivalent to `docker cp` (host → container).
  *
- * Creates a tar archive from the provided files and extracts it inside the pod.
+ * Writes each file via exec + stdin to avoid the problematic k8s Cp API
+ * which uses WebSocket tar streams that can fail with 400 errors.
  */
 export async function copyToPod(
   namespace: string,
@@ -123,34 +117,33 @@ export async function copyToPod(
   const container = options?.container || DEFAULT_CONTAINER;
   const basePath = options?.basePath || "/app";
 
-  // Create a temp directory with the files
-  const tempDir = await mkdtemp(join(tmpdir(), "k8s-cp-"));
+  // Collect all unique directories needed
+  const dirs = new Set<string>();
+  for (const file of files) {
+    const targetPath = `${basePath}/${file.path}`;
+    const dir = targetPath.substring(0, targetPath.lastIndexOf("/"));
+    dirs.add(dir);
+  }
 
-  try {
-    // Write files to temp directory preserving relative paths
-    for (const file of files) {
-      const fullPath = join(tempDir, file.path);
-      const dir = fullPath.substring(0, fullPath.lastIndexOf("/"));
+  // Create all directories in one call
+  if (dirs.size > 0) {
+    await execInPod(namespace, podName, ["mkdir", "-p", ...dirs], { container });
+  }
 
-      await execFileAsync("mkdir", ["-p", dir]);
+  // Write each file via base64 stdin to avoid shell argument limits
+  for (const file of files) {
+    const targetPath = `${basePath}/${file.path}`;
+    const content = typeof file.content === "string"
+      ? Buffer.from(file.content, "utf-8")
+      : file.content;
+    const b64 = content.toString("base64");
 
-      if (typeof file.content === "string") {
-        await writeFile(fullPath, file.content, "utf-8");
-      } else {
-        await writeFile(fullPath, file.content);
-      }
-    }
-
-    // Use kubectl cp (via k8s Cp API) to copy the temp directory to the pod
-    await cpApi().cpToPod(
+    await execInPod(
       namespace,
       podName,
-      container,
-      tempDir,
-      basePath,
+      ["sh", "-c", `base64 -d > '${targetPath}'`],
+      { container, stdin: b64 },
     );
-  } finally {
-    await rm(tempDir, { recursive: true, force: true });
   }
 }
 
