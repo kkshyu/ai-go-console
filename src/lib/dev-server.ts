@@ -51,13 +51,41 @@ export async function getDevServerStatus(orgSlug: string, slug: string): Promise
   return { running: false };
 }
 
+// Log lines matching these patterns are filtered from the dev logs display.
+// These are known non-critical messages that would confuse users.
+const FILTERED_LOG_PATTERNS = [
+  /Found lockfile missing swc dependencies/,
+  /Lockfile was successfully patched/,
+  /please run "npm install" to ensure @next\/swc/,
+  /Attention: Next\.js now collects completely anonymous telemetry/,
+  /This information is used to shape Next\.js/,
+  /You can learn more, including how to opt-out/,
+  /by visiting the following URL:/,
+  /https:\/\/nextjs\.org\/telemetry/,
+  /Waiting for app files\.\.\./,
+  /App files detected\./,
+  /Restoring cached node_modules\.\.\./,
+  /Installing dependencies\.\.\./,
+  /packages are looking for funding/,
+  /run `npm fund` for details/,
+  /found 0 vulnerabilities/,
+  /up to date, audited \d+ packages/,
+];
+
 /**
  * Get dev server logs.
  */
 export function getDevServerLogs(orgSlug: string, slug: string, lines = 50): Promise<string[]> {
-  return sandbox.getDevContainerLogs(orgSlug, slug, lines).then((logs) =>
-    logs.split("\n").slice(-lines)
-  );
+  return sandbox.getDevContainerLogs(orgSlug, slug, lines).then((logs) => {
+    const filtered = logs
+      .split("\n")
+      .filter((line) => !FILTERED_LOG_PATTERNS.some((pattern) => pattern.test(line)));
+    // Trim leading empty lines
+    while (filtered.length > 0 && filtered[0].trim() === "") {
+      filtered.shift();
+    }
+    return filtered.slice(-lines);
+  });
 }
 
 /**

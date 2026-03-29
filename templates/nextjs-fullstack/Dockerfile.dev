@@ -11,6 +11,12 @@ COPY next.config.ts tsconfig.json postcss.config.mjs ./
 
 RUN npm install
 
+# Install platform-specific swc binaries to prevent lockfile patching warnings
+RUN npm install --save-optional @next/swc-linux-x64-musl 2>/dev/null || true
+
+# Backup node_modules and lockfile outside /app so they survive emptyDir mount
+RUN cp -a /app/node_modules /opt/node_modules_cache && cp -a /app/package-lock.json /opt/package-lock.json.cache 2>/dev/null || true
+
 ENV PORT=3000
 EXPOSE 3000
 CMD ["npx", "next", "dev", "--turbopack"]

@@ -329,13 +329,23 @@ export default function AppDetailPage() {
       const res = await fetch(`/api/apps/${appId}/lifecycle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "dev-logs" }),
+        body: JSON.stringify({ action: "dev-status" }),
       });
       const data = await res.json();
-      // If dev-logs returns non-empty, dev server is likely running
-      setDevRunning(data.logs && data.logs.trim().length > 0);
+      setDevRunning(data.running === true);
     } catch {
-      setDevRunning(false);
+      // Fallback: check if dev-logs returns non-empty
+      try {
+        const res = await fetch(`/api/apps/${appId}/lifecycle`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "dev-logs" }),
+        });
+        const data = await res.json();
+        setDevRunning(data.logs && data.logs.trim().length > 0);
+      } catch {
+        setDevRunning(false);
+      }
     }
   }
 

@@ -4,7 +4,7 @@ import path from "node:path";
 import fsp from "node:fs/promises";
 import crypto from "node:crypto";
 import { prisma, getOrgSlug } from "@/lib/db";
-import { startDevServer, stopDevServer, getDevServerLogs } from "@/lib/dev-server";
+import { startDevServer, stopDevServer, getDevServerLogs, getDevServerStatus } from "@/lib/dev-server";
 import { startApp, stopApp, restartApp, getAppLogs, getAppDockerStatus, tagImage, startAppFromImage } from "@/lib/k8s/deployment";
 import { syncRoutes } from "@/lib/k8s/ingress";
 import * as sandbox from "@/lib/k8s/sandbox";
@@ -219,6 +219,11 @@ export async function POST(
           const logs = await getDevServerLogs(orgSlug, app.slug);
           return NextResponse.json({ logs: logs.join("\n") });
         }
+      }
+
+      case "dev-status": {
+        const status = await getDevServerStatus(orgSlug, app.slug);
+        return NextResponse.json(status);
       }
 
       case "dev-logs": {

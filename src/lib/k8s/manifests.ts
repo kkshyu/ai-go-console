@@ -90,6 +90,34 @@ export function generateDevPodSpec(opts: DevPodOptions): k8s.V1Pod {
   const memoryLimit = `${opts.memoryLimitMb || 512}Mi`;
   const cpuLimit = `${opts.cpuLimitMillis || 500}m`;
 
+  // Build a startup wrapper that:
+  // 1. Waits for template files to be written (package.json as sentinel)
+  // 2. Restores node_modules from the base image cache
+  // 3. Runs npm install to reconcile dependencies
+  // 4. Exec's the original dev command
+  const devCmd = opts.devCommand || ["npx", "next", "dev"];
+  const execCmd = devCmd.map((c) => `"${c}"`).join(" ");
+  const startupScript = [
+    // Wait for package.json to appear (written by writeFiles after pod creation)
+    `echo "Waiting for app files..."`,
+    `while [ ! -f /app/package.json ]; do sleep 0.5; done`,
+    `echo "App files detected."`,
+    // Restore cached node_modules and lockfile if not present
+    `if [ ! -d /app/node_modules ] && [ -d /opt/node_modules_cache ]; then`,
+    `  echo "Restoring cached node_modules..."`,
+    `  cp -a /opt/node_modules_cache /app/node_modules`,
+    `  [ -f /opt/package-lock.json.cache ] && cp -a /opt/package-lock.json.cache /app/package-lock.json`,
+    `fi`,
+    // Install/reconcile dependencies
+    `echo "Installing dependencies..."`,
+    `npm install 2>&1`,
+    // Disable Next.js telemetry
+    `export NEXT_TELEMETRY_DISABLED=1`,
+    // Start dev server
+    `echo "Starting dev server..."`,
+    `exec ${execCmd}`,
+  ].join("\n");
+
   return {
     apiVersion: "v1",
     kind: "Pod",
@@ -106,7 +134,7 @@ export function generateDevPodSpec(opts: DevPodOptions): k8s.V1Pod {
           ports: [{ containerPort: opts.internalPort }],
           env: envList,
           workingDir: "/app",
-          command: opts.devCommand,
+          command: ["sh", "-c", startupScript],
           resources: {
             requests: {
               memory: "256Mi",
