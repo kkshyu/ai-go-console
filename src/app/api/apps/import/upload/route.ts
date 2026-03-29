@@ -38,7 +38,7 @@ function detectFileType(mimeType: string, fileName: string): string {
     mimeType === "application/xml" ||
     mimeType === "application/javascript" ||
     mimeType === "application/typescript" ||
-    /\.(ts|tsx|js|jsx|py|go|rs|java|kt|swift|rb|php|c|cpp|h|hpp|vue|svelte|sql|sh|yaml|yml|toml|ini|cfg|conf|env|log|csv|md|prisma|graphql)$/i.test(
+    /\.(ts|tsx|js|jsx|py|go|rs|java|kt|swift|rb|php|c|cpp|h|hpp|vue|svelte|sql|sh|yaml|yml|toml|ini|cfg|conf|env|log|csv|md|prisma|graphql|html|htm|css|scss|sass|less|xml|json5|jsonc|pug|ejs|hbs|mustache)$/i.test(
       fileName
     )
   ) {
