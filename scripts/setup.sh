@@ -88,16 +88,14 @@ else
   info "  .env 已存在 ✓"
 fi
 
-# .env.local（機密資訊）— worktree 使用 symlink
-if [ ! -f "$PROJECT_DIR/.env.local" ]; then
-  if [ -f "$MAIN_PROJECT_DIR/.env.local" ]; then
-    ln -s "$MAIN_PROJECT_DIR/.env.local" "$PROJECT_DIR/.env.local"
-    info "  已建立 .env.local symbolic link -> $MAIN_PROJECT_DIR/.env.local"
+# Worktree: symlink .env from main project
+if [ "$PROJECT_DIR" != "$MAIN_PROJECT_DIR" ] && [ ! -f "$PROJECT_DIR/.env" ]; then
+  if [ -f "$MAIN_PROJECT_DIR/.env" ]; then
+    ln -s "$MAIN_PROJECT_DIR/.env" "$PROJECT_DIR/.env"
+    info "  已建立 .env symbolic link -> $MAIN_PROJECT_DIR/.env"
   else
-    error ".env.local 不存在於主專案 ($MAIN_PROJECT_DIR)，請先建立。參考 .env.example"
+    error ".env 不存在於主專案 ($MAIN_PROJECT_DIR)，請先建立 (cp .env.example .env)"
   fi
-else
-  info "  .env.local 已存在 ✓"
 fi
 
 # ── Step 3: 啟動 k3d 叢集 ────────────────────────────────────────────────
@@ -178,8 +176,7 @@ pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 # ── 載入環境變數（Prisma CLI 僅讀 .env，需手動 export） ──────────────────
 info "  載入環境變數..."
 set -a
-[ -f "$PROJECT_DIR/.env" ] && source "$PROJECT_DIR/.env"
-source "$PROJECT_DIR/.env.local"
+source "$PROJECT_DIR/.env"
 set +a
 
 # ── Step 6: 資料庫遷移與 Seed ────────────────────────────────────────────
