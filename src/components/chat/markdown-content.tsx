@@ -19,6 +19,75 @@ const ACTION_LABELS: Record<string, string> = {
   complete: "流程完成",
 };
 
+/**
+ * Friendly labels for agent role headers that may appear in PM output.
+ * These replace the raw `[ROLE AGENT OUTPUT]:` markers.
+ */
+const AGENT_ROLE_LABELS: Record<string, string> = {
+  REVIEWER: "審查回饋",
+  DEVELOPER: "開發結果",
+  ARCHITECT: "架構設計",
+  DEVOPS: "部署結果",
+  UX_DESIGNER: "設計建議",
+  TESTER: "測試結果",
+  DB_MIGRATOR: "資料庫異動",
+  DOC_WRITER: "文件更新",
+};
+
+/**
+ * Strip `[ROLE AGENT OUTPUT]:` markers and replace with friendly headings.
+ */
+function cleanAgentLabels(content: string): string {
+  return content.replace(
+    /\[([A-Z_]+)\s+AGENT\s+OUTPUT\]\s*[:：]\s*/g,
+    (_match, role: string) => {
+      const label = AGENT_ROLE_LABELS[role] || role;
+      return `**${label}：**\n`;
+    },
+  );
+}
+
+/**
+ * Check if content is ONLY code blocks with no meaningful readable text.
+ * If so, extract a summary line from the JSON action to prepend.
+ */
+function extractSummaryIfCodeOnly(content: string): string {
+  // Strip code blocks and see if anything meaningful remains
+  const withoutCodeBlocks = content
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/\[([A-Z_]+)\s+AGENT\s+OUTPUT\]\s*[:：]\s*/g, "")
+    .trim();
+
+  // If there's already readable text, no need to add summary
+  if (withoutCodeBlocks.length > 10) return content;
+
+  // Try to extract meaningful info from JSON code blocks
+  const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/);
+  if (!jsonMatch) return content;
+
+  try {
+    const parsed = JSON.parse(jsonMatch[1]);
+    if (parsed && typeof parsed === "object") {
+      const actionLabel = parsed.action ? ACTION_LABELS[parsed.action] : null;
+      const summary = parsed.summary || parsed.message || parsed.name || "";
+
+      if (actionLabel && summary) {
+        return `${actionLabel}：${summary}\n\n${content}`;
+      }
+      if (actionLabel) {
+        return `${actionLabel}\n\n${content}`;
+      }
+      if (summary) {
+        return `${summary}\n\n${content}`;
+      }
+    }
+  } catch {
+    // not valid JSON
+  }
+
+  return content;
+}
+
 const LANG_LABELS: Record<string, string> = {
   json: "系統資訊",
   typescript: "程式碼",
@@ -138,10 +207,12 @@ const components: Components = {
 };
 
 export function MarkdownContent({ content }: { content: string }) {
+  const withSummary = extractSummaryIfCodeOnly(content);
+  const cleaned = cleanAgentLabels(withSummary);
   return (
     <div className="markdown-content">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {content}
+        {cleaned}
       </ReactMarkdown>
     </div>
   );

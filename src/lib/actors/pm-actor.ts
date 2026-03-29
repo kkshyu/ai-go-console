@@ -93,6 +93,30 @@ const FALLBACK_MESSAGES: Record<string, Record<string, string>> = {
   },
 };
 
+/** Friendly role names for dispatch messages */
+const ROLE_DISPLAY_NAMES: Record<string, string> = {
+  architect: "架構師",
+  developer: "開發者",
+  reviewer: "審查員",
+  devops: "部署專家",
+  ux_designer: "設計師",
+  tester: "測試專家",
+  db_migrator: "資料庫專家",
+  doc_writer: "文件撰寫者",
+};
+
+function getDispatchMessage(target: string, task: string): string {
+  const roleName = ROLE_DISPLAY_NAMES[target] || target;
+  // Truncate long tasks for display
+  const shortTask = task.length > 80 ? task.slice(0, 77) + "..." : task;
+  return `正在請**${roleName}**處理：${shortTask}`;
+}
+
+function getParallelDispatchMessage(tasks: Array<{ taskId: string; task: string; files: string[] }>): string {
+  const count = tasks.length;
+  return `正在同時安排 **${count} 位開發者**平行處理不同模組...`;
+}
+
 function getFallbackMessage(action?: string): string {
   return (action && FALLBACK_MESSAGES.pm[action]) || FALLBACK_MESSAGES.pm.default || "處理完成。";
 }
@@ -683,7 +707,11 @@ export class PMActor extends Actor {
 
       // ---- Handle dispatch ----
       if (pmAction?.action === "dispatch") {
-        // No message to user — internal orchestration
+        // Send friendly dispatch message to user
+        await sendEvent({
+          pmMessage: getDispatchMessage(pmAction.target, pmAction.task),
+          agentRole: "pm",
+        });
         await sendEvent({
           agentComplete: true,
           agentRole: "pm",
@@ -698,7 +726,12 @@ export class PMActor extends Actor {
 
       // ---- Handle dispatch_parallel ----
       if (pmAction?.action === "dispatch_parallel") {
-        // No message to user — internal orchestration
+        const parallelTasks = (pmAction as { tasks: Array<{ taskId: string; task: string; files: string[] }> }).tasks;
+        // Send friendly parallel dispatch message to user
+        await sendEvent({
+          pmMessage: getParallelDispatchMessage(parallelTasks),
+          agentRole: "pm",
+        });
         await sendEvent({
           agentComplete: true,
           agentRole: "pm",
@@ -707,9 +740,7 @@ export class PMActor extends Actor {
         });
 
         // Dispatch parallel developers
-        await this.dispatchParallel(
-          (pmAction as { tasks: Array<{ taskId: string; task: string; files: string[] }> }).tasks
-        );
+        await this.dispatchParallel(parallelTasks);
         return; // Wait for all parallel results
       }
 
@@ -1050,15 +1081,26 @@ export class PMActor extends Actor {
     await sendEvent({ translating: true, agentRole: "pm" });
 
     const translated = await translateForUser(content, "pm", this.config.locale);
-    const displayContent =
+    // Fallback: strip JSON blocks and agent output labels for readable text
+    const fallbackContent = stripJsonBlocks(content)
+      .replace(/\[([A-Z_]+)\s+AGENT\s+OUTPUT\]\s*[:：]\s*/g, "")
+      .trim();
+    const humanMessage =
       translated.content ||
-      stripJsonBlocks(content) ||
+      fallbackContent ||
       getFallbackMessage(action);
 
     if (translated.usage) {
       await sendEvent({ usage: translated.usage, model: getOutputModel() });
     }
 
-    return displayContent;
+    // Extract JSON code blocks from raw content to append as collapsible system info
+    const jsonBlocks = content.match(/```json\s*\n[\s\S]*?\n```/g);
+    if (jsonBlocks && jsonBlocks.length > 0) {
+      // Append raw JSON blocks after the human message so MarkdownContent renders them as collapsible
+      return `${humanMessage}\n\n${jsonBlocks.join("\n\n")}`;
+    }
+
+    return humanMessage;
   }
 }

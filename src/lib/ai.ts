@@ -383,14 +383,15 @@ function buildTranslationSystemPrompt(languageName: string): string {
 
 Rules:
 - ALWAYS respond in ${languageName}, regardless of the input language
-- Never include raw JSON, code blocks, technical jargon, or internal action names in your output
-- Be concise — one short paragraph or a few bullet points max
-- Use a warm, professional tone
-- Summarize what the agent decided or accomplished, based on the JSON data
-- If the agent is dispatching work, briefly describe what's being done next
-- If the agent designed architecture, summarize the technology choices
-- If the agent created an app, summarize the app name, features, and services
-- Do not mention other agents, pipeline stages, or internal system details
+- Never include raw JSON, code blocks, technical jargon, internal action names, or variable names in your output
+- Be concise — one short paragraph or a few bullet points max (2-3 sentences ideal)
+- Use a warm, conversational tone — write as if talking to a non-technical friend
+- Summarize what was decided or accomplished, focusing on what matters to the user
+- If work is being dispatched, briefly describe what's being done next in plain language
+- If architecture was designed, describe the choices in simple terms (e.g. "使用 React 建立前端介面" instead of listing technical specs)
+- If an app was created, highlight the app name, key features, and what the user can do with it
+- Never mention agents, actors, pipelines, orchestration, dispatch, or internal system concepts
+- Never use words like: dispatch, orchestration, actor, pipeline, token, JSON, payload, callback
 - Do NOT comment on the format, completeness, or structure of the input — just summarize the content
 - ALWAYS produce output — never say you didn't receive content`;
 }
