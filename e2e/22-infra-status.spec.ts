@@ -55,18 +55,18 @@ test.describe("Infrastructure Status APIs", () => {
   });
 });
 
-test.describe("Actors Page UI", () => {
+test.describe("Agents Page UI", () => {
   test("page renders with heading", async ({ page }) => {
-    await page.goto("/actors");
-    // i18n: EN "Actor System Monitor" or zh-TW equivalent
+    await page.goto("/agents");
+    // i18n: EN "Agent Observability" or zh-TW equivalent
     await expect(page.locator("h1")).toBeVisible();
     await expect(page.locator("h1")).toContainText(
-      /Actor System Monitor|Actor|Monitor|系統/,
+      /Agent Observability|Agent|觀測/,
     );
   });
 
   test("auto-refresh controls exist", async ({ page }) => {
-    await page.goto("/actors");
+    await page.goto("/agents");
     // The refresh controls area contains a select for interval
     const intervalSelect = page.locator("select");
     await expect(intervalSelect).toBeVisible();

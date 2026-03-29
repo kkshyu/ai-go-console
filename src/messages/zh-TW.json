@@ -26,7 +26,7 @@
     "services": "服務列表",
     "users": "使用者管理",
     "organization": "組織",
-    "actors": "Actor 監控",
+    "agents": "Agent 監控",
     "settings": "設定",
     "logout": "登出"
   },
@@ -740,8 +740,8 @@
     "fileProcessing": "檔案處理中...",
     "fileReady": "檔案已就緒"
   },
-  "actors": {
-    "title": "Actor 系統監控",
+  "agents": {
+    "title": "Agent 觀測",
     "activeSessions": "進行中的編排工作階段",
     "backgroundQueues": "背景工作佇列",
     "noActiveSessions": "目前沒有進行中的編排工作階段",
@@ -767,7 +767,23 @@
     "statusWaiting": "等待中",
     "statusDead": "已停止",
     "statusRestarting": "重啟中",
-    "noQueues": "無背景工作佇列"
+    "noQueues": "無背景工作佇列",
+    "avgTime": "平均時間",
+    "backpressure": "背壓",
+    "activityFeed": "活動紀錄",
+    "filterAll": "全部",
+    "filterActor": "Actor",
+    "filterQueue": "佇列",
+    "filterSystem": "系統",
+    "errorsOnly": "僅顯示錯誤",
+    "noActivity": "最近 24 小時內無活動事件",
+    "time": "時間",
+    "source": "來源",
+    "actorOrQueue": "Actor / 佇列",
+    "message": "訊息",
+    "traceId": "追蹤 ID",
+    "archiveUnavailable": "封存儲存空間不可用",
+    "archivedEvents": "已封存 {count} 筆舊事件"
   },
   "domains": {
     "title": "自訂網域",
