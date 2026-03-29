@@ -161,9 +161,23 @@ export function AgentChatPanel({
         let rawContent = "";
         let resolvedAgent: AgentRole | null = null;
 
+        // Client-side inactivity timeout: if no data received for 2 minutes, abort
+        const SSE_INACTIVITY_TIMEOUT_MS = 2 * 60 * 1000;
+        let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
+        const resetInactivityTimer = () => {
+          if (inactivityTimer) clearTimeout(inactivityTimer);
+          inactivityTimer = setTimeout(() => {
+            console.warn("[AgentChatPanel] SSE inactivity timeout — aborting stream");
+            reader.cancel().catch(() => {});
+          }, SSE_INACTIVITY_TIMEOUT_MS);
+        };
+        resetInactivityTimer();
+
+        try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+          resetInactivityTimer();
 
           const chunk = decoder.decode(value, { stream: true });
           const lines = chunk
@@ -388,7 +402,10 @@ export function AgentChatPanel({
                   };
                 });
               }
-            } catch {}
+            } catch (parseErr) {
+              // Log SSE parse errors instead of silently swallowing
+              console.warn("[AgentChatPanel] Failed to parse SSE event:", data?.slice(0, 100), parseErr);
+            }
           }
         }
 
@@ -396,6 +413,10 @@ export function AgentChatPanel({
         if (rawContent) {
           onAssistantResponse?.(rawContent, resolvedAgent || undefined);
           onAssistantComplete?.(rawContent, resolvedAgent || undefined);
+        }
+        } finally {
+          // Clean up inactivity timer
+          if (inactivityTimer) clearTimeout(inactivityTimer);
         }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error";

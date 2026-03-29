@@ -32,6 +32,10 @@ export class ActorSystem {
   private _completionResolve: (() => void) | null = null;
   private _completionPromise: Promise<void>;
   private _finalState: OrchestrationState | null = null;
+  private _completed = false;
+
+  /** Safety timeout for the entire orchestration (6 minutes — slightly longer than PM's 5-min timeout). */
+  private static readonly SAFETY_TIMEOUT_MS = 6 * 60 * 1000;
 
   constructor(
     sendEvent: (data: unknown) => Promise<void>,
@@ -124,7 +128,23 @@ export class ActorSystem {
   send(message: ActorMessage): void {
     const target = this.actors.get(message.to);
     if (!target) {
-      actorLog("warn", "system", `No actor found with ID: ${message.to}`, this._traceId);
+      actorLog("warn", "system", `No actor found with ID: ${message.to} (type=${message.type}, from=${message.from})`, this._traceId);
+
+      // If the message was a task/parallel_task and the target is gone,
+      // route the failure back to PM so it doesn't wait forever
+      if (message.type === "task" || message.type === "parallel_task") {
+        const pmActor = this.getActorsByRole("pm")[0];
+        if (pmActor && pmActor.id !== message.from) {
+          const errorMsg = createMessage("error", message.to, pmActor.id, {
+            actorId: message.to,
+            agentRole: "developer" as AgentRole, // best guess from ID
+            error: `Target actor ${message.to} no longer exists — message dropped`,
+            errorType: "unknown" as ActorErrorType,
+            recoverable: false,
+          } satisfies ErrorPayload);
+          pmActor.send(errorMsg);
+        }
+      }
       return;
     }
 
@@ -204,6 +224,23 @@ export class ActorSystem {
       actorLog("error", actorId, "Max restarts exceeded", this._traceId);
       this.stop(actorId);
 
+      // If PM itself died permanently, signal completion immediately
+      // (there's no PM to receive the error message)
+      if (state.role === "pm") {
+        actorLog("error", actorId, "PM actor permanently failed — signaling completion with error", this._traceId);
+        await this.sendEvent({
+          error: `PM 代理程式在 ${state.maxRestarts} 次重啟後仍然失敗: ${error.message}`,
+        });
+        this.signalCompletion({
+          status: "error",
+          tasks: [],
+          parallelGroups: [],
+          currentAgent: null,
+          activeActors: [],
+        });
+        return;
+      }
+
       // Classify the error for deterministic recovery
       const errorType = classifyError(error);
 
@@ -218,6 +255,19 @@ export class ActorSystem {
           recoverable: false,
         } satisfies ErrorPayload);
         this.send(errorMsg);
+      } else {
+        // PM doesn't exist (possibly already stopped) — signal completion to prevent hang
+        actorLog("error", actorId, "No PM actor available to handle error — signaling completion", this._traceId);
+        await this.sendEvent({
+          error: `代理程式 ${actorId} (${state.role}) 永久失敗且無法恢復: ${error.message}`,
+        });
+        this.signalCompletion({
+          status: "error",
+          tasks: [],
+          parallelGroups: [],
+          currentAgent: null,
+          activeActors: [],
+        });
       }
       return;
     }
@@ -246,13 +296,35 @@ export class ActorSystem {
 
   /** Signal that the orchestration is complete. */
   signalCompletion(finalState: OrchestrationState): void {
+    if (this._completed) return; // Prevent double-signaling
+    this._completed = true;
     this._finalState = finalState;
     this._completionResolve?.();
   }
 
-  /** Wait for the orchestration to complete. */
+  /**
+   * Wait for the orchestration to complete.
+   * Includes a safety timeout to prevent infinite hangs if signalCompletion() is never called.
+   */
   async waitForCompletion(): Promise<void> {
-    return this._completionPromise;
+    const safetyTimeout = new Promise<void>((resolve) => {
+      setTimeout(() => {
+        if (!this._completed) {
+          actorLog("error", "system", "Safety timeout reached — forcing completion to prevent infinite hang", this._traceId);
+          this.sendEvent({ error: "系統安全逾時：流程未正常結束，已強制中斷。" }).catch(() => {});
+          this.signalCompletion({
+            status: "error",
+            tasks: [],
+            parallelGroups: [],
+            currentAgent: null,
+            activeActors: [],
+          });
+        }
+        resolve();
+      }, ActorSystem.SAFETY_TIMEOUT_MS);
+    });
+
+    return Promise.race([this._completionPromise, safetyTimeout]);
   }
 
   /** Get the final orchestration state after completion. */

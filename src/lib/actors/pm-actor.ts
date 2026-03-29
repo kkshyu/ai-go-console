@@ -137,6 +137,10 @@ export class PMActor extends Actor {
   private pendingParallelResults: Map<string, ParallelResultPayload> = new Map();
   private expectedParallelCount = 0;
   private currentGroupId: string | null = null;
+  private parallelTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  /** Timeout for collecting all parallel results (3 minutes). */
+  private static readonly PARALLEL_TIMEOUT_MS = 3 * 60 * 1000;
 
   // Worker status tracking
   private workerStatusTracker: Map<string, WorkerStatus> = new Map();
@@ -193,6 +197,12 @@ export class PMActor extends Actor {
     if (this.requestTimeout) {
       clearTimeout(this.requestTimeout);
       this.requestTimeout = null;
+    }
+
+    // Clear parallel timeout
+    if (this.parallelTimeout) {
+      clearTimeout(this.parallelTimeout);
+      this.parallelTimeout = null;
     }
 
     // Clear status check timer
@@ -330,7 +340,12 @@ export class PMActor extends Actor {
     await saveArtifact(payload.agentRole, payload.content);
 
     // Delegate post-processing (file ops + service binding)
-    await this.postProcessor.process(payload.content);
+    // Wrapped in try/catch to prevent post-processing failures from killing the PM actor
+    try {
+      await this.postProcessor.process(payload.content);
+    } catch (ppErr) {
+      actorLog("warn", this.id, `Post-processing failed (non-fatal): ${ppErr instanceof Error ? ppErr.message : ppErr}`, this.traceId);
+    }
 
     // Update state
     this.orchState = stateForAgentComplete(
@@ -372,7 +387,12 @@ export class PMActor extends Actor {
     await saveArtifact(payload.agentRole, payload.content);
 
     // Delegate post-processing
-    await this.postProcessor.process(payload.content);
+    // Wrapped in try/catch to prevent post-processing failures from killing the PM actor
+    try {
+      await this.postProcessor.process(payload.content);
+    } catch (ppErr) {
+      actorLog("warn", this.id, `Post-processing failed (non-fatal): ${ppErr instanceof Error ? ppErr.message : ppErr}`, this.traceId);
+    }
 
     // Update state
     this.orchState = stateForAgentComplete(
@@ -452,6 +472,38 @@ export class PMActor extends Actor {
     }
 
     actorLog("warn", this.id, `Agent error: ${payload.agentRole} (${payload.errorType}): ${payload.error}`, this.traceId);
+
+    // If we're in parallel mode, treat failed worker as a completed result with error
+    if (this.expectedParallelCount > 0 && this.currentGroupId) {
+      actorLog("warn", this.id, `Parallel worker ${payload.actorId} failed — injecting error result`, this.traceId);
+      this.pendingParallelResults.set(payload.actorId, {
+        groupId: this.currentGroupId,
+        taskId: payload.actorId,
+        agentRole: payload.agentRole,
+        actorId: payload.actorId,
+        content: `\`\`\`json\n{"status": "blocked", "blockedReason": "${payload.error}"}\n\`\`\``,
+        summary: `Failed: ${payload.error}`,
+        blocked: true,
+        blockedReason: payload.error,
+      } as ParallelResultPayload);
+
+      await sendEvent({
+        parallelActorStatus: {
+          actorId: payload.actorId,
+          taskId: payload.actorId,
+          groupId: this.currentGroupId,
+          status: "error",
+          agentRole: payload.agentRole,
+          error: payload.error,
+        },
+      });
+
+      // Check if all parallel results (including errors) are collected
+      if (this.pendingParallelResults.size >= this.expectedParallelCount) {
+        await this.mergeAndContinue();
+      }
+      return null;
+    }
 
     // Deterministic recovery based on error type
     switch (payload.errorType) {
@@ -810,6 +862,23 @@ export class PMActor extends Actor {
     this.expectedParallelCount = tasks.length;
     this.pendingParallelResults.clear();
 
+    // Clear any previous parallel timeout
+    if (this.parallelTimeout) {
+      clearTimeout(this.parallelTimeout);
+    }
+
+    // Set timeout for parallel collection — force merge with whatever results we have
+    this.parallelTimeout = setTimeout(async () => {
+      if (this.expectedParallelCount > 0 && this.pendingParallelResults.size < this.expectedParallelCount) {
+        actorLog("warn", this.id, `Parallel timeout: only ${this.pendingParallelResults.size}/${this.expectedParallelCount} results collected — forcing merge`, this.traceId);
+        await sendEvent({
+          statusUpdate: `部分開發者逾時（已收到 ${this.pendingParallelResults.size}/${this.expectedParallelCount} 個結果），正在合併已完成的工作...`,
+          agentRole: "pm",
+        });
+        await this.mergeAndContinue();
+      }
+    }, PMActor.PARALLEL_TIMEOUT_MS);
+
     // Send parallel group event
     await sendEvent({
       parallelGroup: {
@@ -876,7 +945,16 @@ export class PMActor extends Actor {
   // ---- Merge Parallel Results ----
 
   private async mergeAndContinue(): Promise<void> {
+    // Guard: prevent double-merge (timeout vs normal completion race)
+    if (this.expectedParallelCount === 0) return;
+
     const { sendEvent, saveArtifact } = this.config;
+
+    // Clear parallel timeout
+    if (this.parallelTimeout) {
+      clearTimeout(this.parallelTimeout);
+      this.parallelTimeout = null;
+    }
 
     // Merge all developer outputs (with conflict detection)
     const { content: mergedContent, mergeResult } = this.mergeParallelResults();
