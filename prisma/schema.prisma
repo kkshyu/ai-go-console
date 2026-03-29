@@ -94,23 +94,10 @@ model Organization {
 
   users           User[]
   services        Service[]
-  allowedServices OrgAllowedService[]
   domains         OrgDomain[]
   chatFiles       ChatFile[]
 
   @@map("organizations")
-}
-
-model OrgAllowedService {
-  id             String      @id @default(cuid())
-  organizationId String      @map("organization_id")
-  serviceType    ServiceType @map("service_type")
-  enabled        Boolean     @default(true)
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@unique([organizationId, serviceType])
-  @@map("org_allowed_services")
 }
 
 model User {

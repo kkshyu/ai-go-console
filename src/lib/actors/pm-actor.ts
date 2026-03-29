@@ -108,7 +108,6 @@ interface WorkerStatus {
 
 export interface PMActorConfig {
   model: string;
-  allowedServices: string[];
   serviceInstances: Array<{ id: string; name: string; type: string; status?: 'ok' | 'failed' | 'untested'; message?: string }>;
   appContext?: string;
   artifactContext: string;
@@ -620,7 +619,6 @@ export class PMActor extends Actor {
           chatMessages,
           () => { this.updateHeartbeat(); },
           pmModel,
-          this.config.allowedServices,
           systemPrompt
         );
       } catch (err) {
@@ -811,7 +809,6 @@ export class PMActor extends Actor {
     // Create specialist config
     const specialistConfig: SpecialistConfig = {
       model: this.config.model,
-      allowedServices: this.config.allowedServices,
       serviceInstances: this.config.serviceInstances,
       appContext: this.config.appContext,
       sendEvent: this.config.sendEvent,
@@ -896,7 +893,6 @@ export class PMActor extends Actor {
     // Create specialist config with background system access
     const specialistConfig: SpecialistConfig = {
       model: this.config.model,
-      allowedServices: this.config.allowedServices,
       serviceInstances: this.config.serviceInstances,
       appContext: this.config.appContext,
       sendEvent: this.config.sendEvent,

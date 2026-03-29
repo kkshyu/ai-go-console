@@ -400,43 +400,7 @@ test.describe("Service Categories - Validation", () => {
   });
 });
 
-test.describe("Service Categories - Allowed Services API", () => {
-  test("GET /api/organizations returns allowed services with all categories", async ({
-    request,
-  }) => {
-    const res = await request.get("/api/organizations");
-    if (res.status() !== 200) return; // Skip if no org context
-
-    const body = await res.json();
-    if (!body.allowedServices) return;
-
-    const serviceTypes = body.allowedServices.map(
-      (s: { serviceType: string }) => s.serviceType
-    );
-
-    // Verify at least the core types from each category exist
-    const expectedTypes = [
-      // database
-      "postgresql", "mysql", "mongodb",
-      // storage
-      "s3", "gcs", "azure_blob", "google_drive",
-      // payment
-      "stripe", "paypal", "ecpay",
-      // email
-      "sendgrid", "ses", "mailgun",
-      // sms
-      "twilio", "vonage", "aws_sns",
-      // auth
-      "auth0", "firebase_auth", "line_login",
-      // platform
-      "supabase", "hasura",
-    ];
-
-    for (const t of expectedTypes) {
-      expect(serviceTypes).toContain(t);
-    }
-  });
-});
+// OrgAllowedService has been removed — service authorization is now per-user via UserAllowedServiceInstance.
 
 test.describe("Service Categories - UI", () => {
   /** Helper: open add form and select category + type via two-step selects */

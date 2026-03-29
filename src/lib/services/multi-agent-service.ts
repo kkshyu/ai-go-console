@@ -32,7 +32,6 @@ export interface MultiAgentRequest {
 export interface MultiAgentContext {
   conversationId: string;
   locale: string;
-  allowedServices: string[];
   serviceInstances: ServiceInstance[];
   appContext?: string;
   appSlug?: string;
@@ -57,46 +56,39 @@ export interface ServiceInstance {
 // ---- Data Access Functions ----
 
 /**
- * Load allowed services and service instances for an organization.
+ * Load service instances authorized for a user.
+ * Admin users see all org services; regular users see only their allowed instances.
  */
-export async function loadOrgServices(
+export async function loadUserServiceInstances(
   organizationId: string,
   userId: string,
   userRole: string,
-): Promise<{ allowedServices: string[]; serviceInstances: ServiceInstance[] }> {
-  const orgAllowed = await prisma.orgAllowedService.findMany({
-    where: { organizationId, enabled: true },
-  });
-  const allowedServices = orgAllowed.map((s) => s.serviceType);
-
-  let serviceInstances: ServiceInstance[];
+): Promise<ServiceInstance[]> {
   if (userRole === "admin") {
     const services = await prisma.service.findMany({
       where: { organizationId },
       select: { id: true, name: true, type: true },
     });
-    serviceInstances = services.map((s) => ({
+    return services.map((s) => ({
       id: s.id,
       name: s.name,
       type: s.type,
       status: "untested" as const,
     }));
-  } else {
-    const allowed = await prisma.userAllowedServiceInstance.findMany({
-      where: { userId },
-      include: {
-        service: { select: { id: true, name: true, type: true } },
-      },
-    });
-    serviceInstances = allowed.map((a) => ({
-      id: a.service.id,
-      name: a.service.name,
-      type: a.service.type,
-      status: "untested" as const,
-    }));
   }
 
-  return { allowedServices, serviceInstances };
+  const allowed = await prisma.userAllowedServiceInstance.findMany({
+    where: { userId },
+    include: {
+      service: { select: { id: true, name: true, type: true } },
+    },
+  });
+  return allowed.map((a) => ({
+    id: a.service.id,
+    name: a.service.name,
+    type: a.service.type,
+    status: "untested" as const,
+  }));
 }
 
 /**
@@ -104,7 +96,6 @@ export async function loadOrgServices(
  */
 export async function loadAppContext(
   appId: string,
-  allowedServices: string[],
 ): Promise<{
   appContext: string;
   appSlug: string;
@@ -136,7 +127,6 @@ export async function loadAppContext(
         type: s.service.type,
       })),
     },
-    allowedServices,
     fileContext,
   );
 
@@ -307,17 +297,14 @@ export async function resolveMultiAgentContext(
     req.conversationId ||
     `conv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-  // 1. Load org services
-  let allowedServices: string[] = [];
+  // 1. Load user's authorized service instances
   let serviceInstances: ServiceInstance[] = [];
   if (req.organizationId && req.userId && req.userRole) {
-    const result = await loadOrgServices(
+    serviceInstances = await loadUserServiceInstances(
       req.organizationId,
       req.userId,
       req.userRole,
     );
-    allowedServices = result.allowedServices;
-    serviceInstances = result.serviceInstances;
   }
 
   // 2. Load app context
@@ -325,7 +312,7 @@ export async function resolveMultiAgentContext(
   let appSlug: string | undefined;
   let appOrgSlug: string | undefined;
   if (req.appId) {
-    const result = await loadAppContext(req.appId, allowedServices);
+    const result = await loadAppContext(req.appId);
     if (result) {
       appContext = result.appContext;
       appSlug = result.appSlug;
@@ -370,12 +357,11 @@ export async function resolveMultiAgentContext(
   // 6. Build PM prompt
   const pmPrompt = appContext
     ? buildAppDevPMPrompt(appContext)
-    : buildPMPrompt(allowedServices);
+    : buildPMPrompt(serviceInstances);
 
   return {
     conversationId,
     locale: req.locale,
-    allowedServices,
     serviceInstances,
     appContext,
     appSlug,

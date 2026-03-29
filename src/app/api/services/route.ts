@@ -62,23 +62,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Validate service type is allowed for this org
-  const allowed = await prisma.orgAllowedService.findUnique({
-    where: {
-      organizationId_serviceType: {
-        organizationId,
-        serviceType: type,
-      },
-    },
-  });
-
-  if (!allowed || !allowed.enabled) {
-    return NextResponse.json(
-      { error: `Service type "${type}" is not enabled for your organization` },
-      { status: 403 }
-    );
-  }
-
   const config = JSON.stringify(configFields);
   const { ciphertext, iv, authTag } = encrypt(config);
 

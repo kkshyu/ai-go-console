@@ -30,7 +30,6 @@ export interface PRDPanelProps {
   prdData: PRDData | null;
   requiredServiceTypes: string[];
   serviceInstances: ServiceInstance[];
-  allowedServices: string[];
   selectedServices: Record<string, string>;
   onServiceChange: (serviceType: string, instanceId: string) => void;
   serviceTestResults: Record<string, ServiceTestResult | null>;
@@ -85,7 +84,6 @@ export function PRDPanel({
   prdData,
   requiredServiceTypes,
   serviceInstances,
-  allowedServices,
   selectedServices,
   onServiceChange,
   serviceTestResults,
@@ -121,7 +119,6 @@ export function PRDPanel({
             <h3 className="font-semibold text-sm mb-3">{t("servicesTitle")}</h3>
             <div className="space-y-3">
               {requiredServiceTypes.map((svcType) => {
-                const isAllowed = allowedServices.includes(svcType);
                 const compatibleTypes = getCompatibleServiceTypes(svcType as ServiceType);
                 const instances = serviceInstances
                   .filter((s) => compatibleTypes.includes(s.type as ServiceType))
@@ -142,12 +139,7 @@ export function PRDPanel({
                       {selectedId && <ServiceStatusIcon result={testResult} />}
                     </div>
 
-                    {!isAllowed ? (
-                      <div className="flex items-center gap-1.5 text-xs text-red-500">
-                        <AlertTriangle className="h-3 w-3" />
-                        <span>{t("serviceNotEnabled")}</span>
-                      </div>
-                    ) : instances.length === 0 ? (
+                    {instances.length === 0 ? (
                       <div className="flex items-center gap-1.5 text-xs text-yellow-600 dark:text-yellow-400">
                         <AlertTriangle className="h-3 w-3" />
                         <span>{t("serviceNoInstance")}</span>

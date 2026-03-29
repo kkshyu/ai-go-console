@@ -39,7 +39,6 @@ import type { BackgroundActorSystem } from "./background-system";
 
 export interface SpecialistConfig {
   model: string;
-  allowedServices: string[];
   serviceInstances?: Array<{ id: string; name: string; type: string; status?: 'ok' | 'failed' | 'untested'; message?: string }>;
   appContext?: string;
   sendEvent: (data: unknown) => Promise<void>;
@@ -286,7 +285,6 @@ Respond with your perspective on this topic. Be concise and technical.`;
       [{ role: "user", content: discussPrompt }],
       () => { this.updateHeartbeat(); },
       getModelForAgent(this.role, this.config.model),
-      this.config.allowedServices,
       this.buildPrompt("")
     );
 
@@ -540,7 +538,6 @@ Respond with your perspective on this topic. Be concise and technical.`;
           this.updateHeartbeat();
         },
         effectiveModel,
-        this.config.allowedServices,
         fullSystemPrompt
       );
 
@@ -623,7 +620,6 @@ export class ArchitectActor extends BaseSpecialistActor {
 
   protected buildPrompt(task: string): string {
     const base = buildArchitectPrompt(
-      this.config.allowedServices,
       this.config.serviceInstances
     );
     return `${base}${this.buildPeerDiscussionSection()}\n\n--- TASK FROM PM ---\n${task}`;
@@ -644,7 +640,7 @@ export class DeveloperActor extends BaseSpecialistActor {
   protected buildPrompt(task: string): string {
     const base = this.config.appContext
       ? buildAppDevDeveloperPrompt(this.config.appContext)
-      : buildDeveloperPrompt(this.config.allowedServices);
+      : buildDeveloperPrompt();
     return `${base}${this.buildPeerDiscussionSection()}\n\n--- TASK FROM PM ---\n${task}`;
   }
 

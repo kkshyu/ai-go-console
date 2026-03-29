@@ -317,7 +317,6 @@ export async function POST(request: NextRequest) {
           const result = await chat(
             [{ role: "user", content: fixPrompt }],
             model,
-            undefined,
             FIX_SYSTEM_PROMPT
           );
 

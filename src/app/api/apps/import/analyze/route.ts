@@ -232,7 +232,6 @@ export async function POST(request: NextRequest) {
         },
       ],
       model,
-      undefined,
       ANALYSIS_SYSTEM_PROMPT
     );
 

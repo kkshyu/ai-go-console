@@ -44,14 +44,21 @@ export function extractServicesFromContent(content: string): ServiceSpec[] {
 
 /**
  * Get the set of service IDs authorized for a user.
+ * Only returns IDs of services that are both authorized AND verified working
+ * (i.e., present in the probed serviceInstances list which only contains status: "ok").
  */
 export async function getAuthorizedServiceIds(
   userId: string | undefined,
-  fallbackServiceInstances: Array<{ id: string }>,
+  serviceInstances: Array<{ id: string }>,
 ): Promise<Set<string>> {
   if (!userId) {
-    return new Set(fallbackServiceInstances.map((s) => s.id));
+    // Fallback: trust the pre-filtered instances list
+    return new Set(serviceInstances.map((s) => s.id));
   }
+
+  // serviceInstances already contains only probe-passed ("ok") instances.
+  // Intersect with the user's authorization.
+  const okIds = new Set(serviceInstances.map((s) => s.id));
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -59,26 +66,28 @@ export async function getAuthorizedServiceIds(
   });
 
   if (user?.role === "admin") {
+    // Admin can use all org services, but still limited to probe-passed ones
     const orgServices = await prisma.service.findMany({
       where: { organizationId: user.organizationId! },
       select: { id: true },
     });
-    return new Set(orgServices.map((s) => s.id));
+    const adminIds = new Set<string>();
+    for (const s of orgServices) {
+      if (okIds.has(s.id)) adminIds.add(s.id);
+    }
+    return adminIds;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const prismaAny = prisma as any;
-  if (prismaAny.userAllowedServiceInstance) {
-    const result = await prismaAny.userAllowedServiceInstance.findMany({
-      where: { userId },
-      select: { serviceId: true },
-    });
-    return new Set(
-      (result as Array<{ serviceId: string }>).map((a) => a.serviceId),
-    );
+  // Non-admin: intersect userAllowedServiceInstance with probe-passed
+  const allowed = await prisma.userAllowedServiceInstance.findMany({
+    where: { userId },
+    select: { serviceId: true },
+  });
+  const authorizedIds = new Set<string>();
+  for (const a of allowed) {
+    if (okIds.has(a.serviceId)) authorizedIds.add(a.serviceId);
   }
-
-  return new Set(fallbackServiceInstances.map((s) => s.id));
+  return authorizedIds;
 }
 
 /**
