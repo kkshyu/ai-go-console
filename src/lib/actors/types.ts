@@ -9,6 +9,7 @@
  */
 
 import type { AgentRole, BackgroundAgentRole } from "../agents/types";
+import type { ModelTier } from "../model-tiers";
 import type { TokenUsage } from "../ai";
 
 // ---- Message Protocol (Discriminated Union) ----
@@ -24,7 +25,10 @@ export type MessageType =
   | "parallel_result"  // One parallel developer returns result
   | "discuss"          // Worker sends discussion to another worker
   | "discuss_reply"    // Worker replies to a discussion
-  | "report";          // Worker reports conclusion to PM
+  | "report"           // Worker reports conclusion to PM
+  | "sub_task"         // Senior dispatches sub-task to junior
+  | "sub_task_result"  // Junior returns sub-task result to senior
+  | "senior_plan";     // Senior reports plan to PM (observability)
 
 /** Base fields shared by all actor messages. */
 interface ActorMessageBase {
@@ -95,6 +99,36 @@ export interface ReportPayload {
   content: string;
   summary: string;
   discussionLog?: string[]; // log of peer discussions that occurred
+}
+
+// ---- Senior/Junior Sub-Task Payloads ----
+
+export interface SubTaskPayload {
+  subTaskId: string;
+  task: string;
+  tier: ModelTier;
+  context?: string;
+  seniorStrategy?: string;  // overall strategy for junior context
+  files?: string[];
+  messages?: Array<{ role: string; content: string }>;
+}
+
+export interface SubTaskResultPayload {
+  subTaskId: string;
+  agentRole: AgentRole;
+  tier: ModelTier;
+  actorId: string;
+  content: string;
+  summary: string;
+  blocked: boolean;
+  blockedReason?: string;
+}
+
+export interface SeniorPlanPayload {
+  agentRole: AgentRole;
+  strategy: string;
+  subTaskCount: number;
+  tiers: { junior: number; intermediate: number };
 }
 
 /** Structured error types for deterministic recovery. */
@@ -173,6 +207,21 @@ export interface ReportMessage extends ActorMessageBase {
   payload: ReportPayload;
 }
 
+export interface SubTaskMessage extends ActorMessageBase {
+  type: "sub_task";
+  payload: SubTaskPayload;
+}
+
+export interface SubTaskResultMessage extends ActorMessageBase {
+  type: "sub_task_result";
+  payload: SubTaskResultPayload;
+}
+
+export interface SeniorPlanMessage extends ActorMessageBase {
+  type: "senior_plan";
+  payload: SeniorPlanPayload;
+}
+
 /** Discriminated union of all actor messages — switch on `type` for automatic payload narrowing. */
 export type ActorMessage =
   | TaskMessage
@@ -185,7 +234,10 @@ export type ActorMessage =
   | ParallelResultMessage
   | DiscussMessage
   | DiscussReplyMessage
-  | ReportMessage;
+  | ReportMessage
+  | SubTaskMessage
+  | SubTaskResultMessage
+  | SeniorPlanMessage;
 
 // ---- Actor State ----
 
@@ -198,6 +250,8 @@ export interface ActorState {
   lastHeartbeat: number;   // timestamp of last pong
   restartCount: number;
   maxRestarts: number;
+  tier?: ModelTier;          // model tier for senior/junior hierarchy
+  parentActorId?: string;    // senior actor that spawned this junior
 }
 
 // ---- Supervisor Strategy ----
@@ -343,6 +397,9 @@ export function createMessage(type: "parallel_result", from: string, to: string,
 export function createMessage(type: "discuss", from: string, to: string, payload: DiscussPayload, traceId?: string): DiscussMessage;
 export function createMessage(type: "discuss_reply", from: string, to: string, payload: DiscussReplyPayload, traceId?: string): DiscussReplyMessage;
 export function createMessage(type: "report", from: string, to: string, payload: ReportPayload, traceId?: string): ReportMessage;
+export function createMessage(type: "sub_task", from: string, to: string, payload: SubTaskPayload, traceId?: string): SubTaskMessage;
+export function createMessage(type: "sub_task_result", from: string, to: string, payload: SubTaskResultPayload, traceId?: string): SubTaskResultMessage;
+export function createMessage(type: "senior_plan", from: string, to: string, payload: SeniorPlanPayload, traceId?: string): SeniorPlanMessage;
 export function createMessage(
   type: MessageType,
   from: string,

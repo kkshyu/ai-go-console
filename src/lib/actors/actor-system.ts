@@ -101,6 +101,17 @@ export class ActorSystem {
     actorLog("info", actor.id, `Spawned (role=${actor.role})`, this._traceId);
   }
 
+  /**
+   * Spawn a child actor under a parent (for senior/junior hierarchy).
+   * Sets parentActorId on the child's state for observability.
+   */
+  async spawnChild(parentId: string, actor: Actor): Promise<void> {
+    await this.spawn(actor);
+    // Set parent relationship on the actor state for observability
+    const state = actor.getState();
+    (state as { parentActorId?: string }).parentActorId = parentId;
+  }
+
   /** Stop a specific actor. */
   stop(actorId: string): void {
     const actor = this.actors.get(actorId);

@@ -28,32 +28,45 @@ export { AVAILABLE_MODELS, DEFAULT_MODEL };
 import { llmCircuitBreaker, CircuitOpenError } from "./circuit-breaker";
 export { getLLMCircuitState, CircuitOpenError } from "./circuit-breaker";
 
-/** Per-agent model mapping for production (NODE_ENV=production) */
+import { getModelForTier } from "./model-tiers";
+export { getModelForTier } from "./model-tiers";
+export type { ModelTier } from "./model-tiers";
+
+/**
+ * @deprecated Use getModelForTier() from model-tiers.ts for the senior/junior hierarchy.
+ * Per-agent model mapping for production (NODE_ENV=production)
+ */
 const PROD_AGENT_MODEL_MAP: Record<string, string> = {
-  pm: "openai/gpt-4o",
-  architect: "anthropic/claude-sonnet-4",
-  developer: "anthropic/claude-sonnet-4",
-  reviewer: "openai/gpt-4o-mini",
-  devops: "openai/gpt-4o-mini",
+  pm: "anthropic/claude-opus-4.6",
+  architect: "anthropic/claude-opus-4.6",
+  developer: "anthropic/claude-opus-4.6",
+  reviewer: "anthropic/claude-sonnet-4.6",
+  devops: "anthropic/claude-sonnet-4.6",
 };
 
-/** Per-agent model mapping for development (NODE_ENV=development) */
+/**
+ * @deprecated Use getModelForTier() from model-tiers.ts for the senior/junior hierarchy.
+ * Per-agent model mapping for development (NODE_ENV=development)
+ */
 const DEV_AGENT_MODEL_MAP: Record<string, string> = {
-  pm: "google/gemini-2.5-flash",
-  architect: "openai/gpt-4o",
-  developer: "openai/gpt-4o",
-  reviewer: "openai/gpt-4o-mini",
-  devops: "openai/gpt-4o-mini",
+  pm: "anthropic/claude-sonnet-4.6",
+  architect: "anthropic/claude-sonnet-4.6",
+  developer: "anthropic/claude-sonnet-4.6",
+  reviewer: "openai/gpt-4.1",
+  devops: "openai/gpt-4.1",
 };
 
 /**
  * Get the appropriate model for a given agent role.
  * If the user explicitly selected a non-default model, that takes priority.
+ *
+ * @deprecated For the senior/junior hierarchy, use getModelForTier() instead.
+ * This function now delegates to getModelForTier(role, "senior") for backward compatibility.
  */
 export function getModelForAgent(agentRole: string, userModel?: string): string {
   if (userModel && userModel !== DEFAULT_MODEL) return userModel;
-  const map = process.env.NODE_ENV === "production" ? PROD_AGENT_MODEL_MAP : DEV_AGENT_MODEL_MAP;
-  return map[agentRole] || DEFAULT_MODEL;
+  // Delegate to tier system — senior tier matches the old flat model mapping
+  return getModelForTier(agentRole, "senior");
 }
 
 /**
