@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { getAllDefaults } from "@/lib/model-tiers";
+
+const ALL_AGENT_ROLES = [
+  "pm", "architect", "developer", "reviewer", "devops",
+  "ux_designer", "tester", "db_migrator", "doc_writer",
+];
 
 export async function GET(
   _request: NextRequest,
@@ -19,7 +25,9 @@ export async function GET(
     where: { organizationId: orgId },
   });
 
-  return NextResponse.json(configs);
+  const defaults = getAllDefaults(ALL_AGENT_ROLES);
+
+  return NextResponse.json({ configs, defaults });
 }
 
 export async function PUT(
@@ -47,8 +55,29 @@ export async function PUT(
     return NextResponse.json({ error: "configs array required" }, { status: 400 });
   }
 
-  const results = await prisma.$transaction(
-    configs.map((c) =>
+  // Get defaults to filter out unchanged entries
+  const defaults = getAllDefaults(ALL_AGENT_ROLES);
+
+  // Only save configs that differ from the effective default
+  const toSave = configs.filter((c) => c.modelId !== defaults[c.agentRole]);
+
+  // Delete configs that match defaults (user reset to default)
+  const toDelete = configs
+    .filter((c) => c.modelId === defaults[c.agentRole])
+    .map((c) => c.agentRole);
+
+  await prisma.$transaction([
+    // Delete entries that match defaults
+    ...(toDelete.length > 0
+      ? [prisma.agentModelConfig.deleteMany({
+          where: {
+            organizationId: orgId,
+            agentRole: { in: toDelete },
+          },
+        })]
+      : []),
+    // Upsert entries that differ from defaults
+    ...toSave.map((c) =>
       prisma.agentModelConfig.upsert({
         where: {
           organizationId_agentRole: {
@@ -63,8 +92,13 @@ export async function PUT(
           modelId: c.modelId,
         },
       })
-    )
-  );
+    ),
+  ]);
 
-  return NextResponse.json(results);
+  // Return updated state
+  const updatedConfigs = await prisma.agentModelConfig.findMany({
+    where: { organizationId: orgId },
+  });
+
+  return NextResponse.json({ configs: updatedConfigs, defaults });
 }

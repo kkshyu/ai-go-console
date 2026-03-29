@@ -68,25 +68,75 @@ export function getTierModels(): TierModelMap {
 }
 
 /**
+ * Read model from environment variable.
+ * Convention: AGENT_MODEL_{ROLE}_{TIER} e.g. AGENT_MODEL_PM_SENIOR
+ */
+function getEnvModel(agentRole: string, tier: ModelTier): string | undefined {
+  const envKey = `AGENT_MODEL_${agentRole.toUpperCase()}_${tier.toUpperCase()}`;
+  return process.env[envKey] || undefined;
+}
+
+/**
+ * Get the hard-coded default model for a given agent role and tier.
+ * Priority: per-role tier override > global tier default.
+ */
+export function getHardCodedDefault(agentRole: string, tier: ModelTier): string {
+  const isProd = process.env.NODE_ENV === "production";
+  const overrides = isProd ? ROLE_TIER_OVERRIDES : DEV_ROLE_TIER_OVERRIDES;
+  const tierModels = isProd ? PROD_TIER_MODELS : DEV_TIER_MODELS;
+
+  return overrides[agentRole]?.[tier] || tierModels[tier];
+}
+
+/**
+ * Get the effective default model (env var > hard-coded) for a role:tier.
+ * This is what the UI should show as the "default" value.
+ */
+export function getEffectiveDefault(agentRole: string, tier: ModelTier): string {
+  return getEnvModel(agentRole, tier) || getHardCodedDefault(agentRole, tier);
+}
+
+/**
+ * Build a map of all role:tier → default model for all agent roles.
+ */
+export function getAllDefaults(roles: string[]): Record<string, string> {
+  const tiers: ModelTier[] = ["senior", "intermediate", "junior"];
+  const result: Record<string, string> = {};
+  for (const role of roles) {
+    for (const tier of tiers) {
+      result[`${role}:${tier}`] = getEffectiveDefault(role, tier);
+    }
+  }
+  return result;
+}
+
+/** Org-level model config entry */
+export interface OrgModelConfig {
+  agentRole: string; // format: "role:tier"
+  modelId: string;
+}
+
+/**
  * Get the model for a given agent role and tier.
- * Priority: userModel override > per-role tier override > global tier default.
+ * Priority: orgConfig (DB) > env var > per-role tier override > global tier default.
  */
 export function getModelForTier(
   agentRole: string,
   tier: ModelTier,
   userModel?: string,
+  orgConfigs?: OrgModelConfig[],
 ): string {
-  // User explicit model override takes priority
+  // Legacy: user explicit model override takes priority (backward compat)
   if (userModel) return userModel;
 
-  const isProd = process.env.NODE_ENV === "production";
-  const overrides = isProd ? ROLE_TIER_OVERRIDES : DEV_ROLE_TIER_OVERRIDES;
-  const tierModels = isProd ? PROD_TIER_MODELS : DEV_TIER_MODELS;
+  // 1. Org DB config
+  const orgOverride = orgConfigs?.find((c) => c.agentRole === `${agentRole}:${tier}`)?.modelId;
+  if (orgOverride) return orgOverride;
 
-  // Check per-role override for this tier
-  const roleOverride = overrides[agentRole]?.[tier];
-  if (roleOverride) return roleOverride;
+  // 2. Environment variable
+  const envModel = getEnvModel(agentRole, tier);
+  if (envModel) return envModel;
 
-  // Fall back to global tier model
-  return tierModels[tier];
+  // 3. Hard-coded default
+  return getHardCodedDefault(agentRole, tier);
 }

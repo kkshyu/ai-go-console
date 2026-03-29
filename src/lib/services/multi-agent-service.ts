@@ -378,10 +378,10 @@ export async function resolveMultiAgentContext(
     }));
   }
 
-  // Use the PM agent model config as the default model if no explicit model given
+  // Use the PM senior model config as the default model if no explicit model given
   const resolvedModel =
     req.model ||
-    agentModelConfigs.find((c) => c.agentRole === "pm")?.modelId;
+    agentModelConfigs.find((c) => c.agentRole === "pm:senior")?.modelId;
 
   return {
     conversationId,

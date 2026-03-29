@@ -7,7 +7,8 @@
  */
 
 import { prisma } from "@/lib/db";
-import { chat, getModelForAgent } from "@/lib/ai";
+import { chat } from "@/lib/ai";
+import { getModelForTier } from "@/lib/model-tiers";
 import { startDevServer, getDevServerLogs, stopDevServer } from "@/lib/dev-server";
 import * as sandbox from "@/lib/k8s/sandbox";
 
@@ -296,7 +297,7 @@ export async function runAutostartLoop(
       const fixPrompt = buildFixPrompt(errorText, fileContents, fileTree);
 
       try {
-        const model = getModelForAgent("developer");
+        const model = getModelForTier("developer", "senior");
         const result = await chat(
           [{ role: "user", content: fixPrompt }],
           model,

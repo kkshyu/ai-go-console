@@ -123,11 +123,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Helper: resolve model for a given agent role from org config, fallback to default
-      const resolveModelForRole = (role: string): string => {
-        const override = ctx.agentModelConfigs.find((c) => c.agentRole === role);
-        return override?.modelId || ctx.model || DEFAULT_MODEL;
-      };
+      // Org-level model configs for getModelForTier resolution
+      const orgModelConfigs = ctx.agentModelConfigs;
 
       // 1. Create actor system with supervisor strategy and trace ID
       const system = new ActorSystem(sendEvent, undefined, traceId);
@@ -140,25 +137,26 @@ export async function POST(request: NextRequest) {
         appId: ctx.appId,
         conversationId: ctx.conversationId,
         startedAt: Date.now(),
-        model: resolveModelForRole("pm"),
+        model: ctx.model || DEFAULT_MODEL,
       });
 
       // 2. Set actor factory for restarts
       system.setActorFactory((role, index) =>
         createSpecialistActor(role, index, {
-          model: resolveModelForRole(role),
+          model: ctx.model || DEFAULT_MODEL,
           serviceInstances: ctx.serviceInstances,
           appContext: ctx.appContext,
           sendEvent,
           locale: ctx.locale,
           conversationId: ctx.conversationId,
           backgroundSystem: bgSystem,
+          orgModelConfigs,
         }),
       );
 
       // 3. Create and spawn PM actor
       const pmConfig: PMActorConfig = {
-        model: resolveModelForRole("pm"),
+        model: ctx.model || DEFAULT_MODEL,
         serviceInstances: ctx.serviceInstances,
         appContext: ctx.appContext,
         artifactContext: ctx.artifactContext,
@@ -174,6 +172,7 @@ export async function POST(request: NextRequest) {
         orgSlug: ctx.appOrgSlug,
         conversationId: ctx.conversationId,
         backgroundSystem: bgSystem,
+        orgModelConfigs,
       };
 
       const pmActor = new PMActor(pmConfig, orchState);
