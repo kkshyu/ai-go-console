@@ -53,6 +53,14 @@ const PRESET_LOADERS: Record<string, () => Promise<PresetOverlay>> = {
   "internal-project": () => import("./internal/project").then((m) => m.INTERNAL_PROJECT),
   "internal-helpdesk": () => import("./internal/helpdesk").then((m) => m.INTERNAL_HELPDESK),
 
+  // Aliases — map UI preset IDs to internal overlay modules
+  "pm-task-board": () => import("./internal/project").then((m) => m.INTERNAL_PROJECT),
+  "pm-meeting-notes": () => import("./internal/project").then((m) => m.INTERNAL_PROJECT),
+  "it-helpdesk": () => import("./internal/helpdesk").then((m) => m.INTERNAL_HELPDESK),
+  "hr-leave-system": () => import("./internal/hr").then((m) => m.INTERNAL_HR),
+  "hr-recruitment": () => import("./internal/hr").then((m) => m.INTERNAL_HR),
+  "hr-onboarding": () => import("./internal/hr").then((m) => m.INTERNAL_HR),
+
   // Dashboard
   "dashboard-analytics": () => import("./dashboard/analytics").then((m) => m.DASHBOARD_ANALYTICS),
 };
