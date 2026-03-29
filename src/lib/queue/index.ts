@@ -25,11 +25,16 @@ function parseRedisUrl(url: string): { host: string; port: number; password?: st
   };
 }
 
-const redisConnection = {
+const redisBase = {
   ...parseRedisUrl(REDIS_URL),
-  maxRetriesPerRequest: 1,
   retryStrategy: (times: number) => (times > 3 ? null : Math.min(times * 500, 3000)),
 };
+
+/** Producer (Queue) connection — can use maxRetriesPerRequest */
+const redisConnection = { ...redisBase, maxRetriesPerRequest: 1 };
+
+/** Worker/QueueEvents connection — BullMQ requires maxRetriesPerRequest: null */
+const redisWorkerConnection = { ...redisBase, maxRetriesPerRequest: null };
 
 // ── Queue Instances (singleton per queue name) ───────────────────────────────
 
@@ -49,7 +54,7 @@ function getQueue(name: QueueName): Queue {
 function getQueueEvents(name: QueueName): QueueEvents {
   let events = queueEvents.get(name);
   if (!events) {
-    events = new QueueEvents(name, { connection: redisConnection });
+    events = new QueueEvents(name, { connection: redisWorkerConnection });
     events.on("error", () => { /* suppress Redis connection errors */ });
     queueEvents.set(name, events);
   }
@@ -160,7 +165,7 @@ export function createWorker(
       return processor(job);
     },
     {
-      connection: redisConnection,
+      connection: redisWorkerConnection,
       concurrency,
     },
   );
