@@ -374,9 +374,12 @@ export function AgentChatPanel({
               if (parsed.error) {
                 setAgentPhase(null);
                 const errorMsgId = (Date.now() + Math.random()).toString();
+                // Show user-friendly error with technical detail in collapsible block
+                const friendlyError = "處理過程中遇到了問題，請稍後再試。";
+                const errorDetail = `\n\n\`\`\`json\n${JSON.stringify({ error: parsed.error }, null, 2)}\n\`\`\``;
                 setMessages((prev) => [
                   ...prev,
-                  { id: errorMsgId, role: "assistant", content: `Error: ${parsed.error}`, agentRole: "pm" },
+                  { id: errorMsgId, role: "assistant", content: `${friendlyError}${errorDetail}`, agentRole: "pm" },
                 ]);
               }
 
