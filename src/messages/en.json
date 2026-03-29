@@ -25,7 +25,7 @@
     "createApp": "Create App",
     "services": "Service List",
     "users": "User Management",
-    "organization": "Organization",
+    "organization": "Organization Settings",
     "agents": "Agent Monitor",
     "settings": "Settings",
     "logout": "Logout"
@@ -633,7 +633,11 @@
     "productionEnv": "Production",
     "developmentEnv": "Development",
     "appAccessPattern": "Apps accessible at: {url}/{appSlug}",
-    "slugUpdateFailed": "Failed to update slug"
+    "slugUpdateFailed": "Failed to update slug",
+    "agentModels": "Agent Model Settings",
+    "agentModelsDescription": "Configure the AI model used by each agent",
+    "agentModelsSaved": "Agent model settings saved",
+    "agentModelsSaveFailed": "Failed to save agent model settings"
   },
   "users": {
     "title": "User Management",

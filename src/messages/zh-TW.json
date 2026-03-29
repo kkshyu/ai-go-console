@@ -25,7 +25,7 @@
     "createApp": "建立應用",
     "services": "服務列表",
     "users": "使用者管理",
-    "organization": "組織",
+    "organization": "組織設定",
     "agents": "Agent 監控",
     "settings": "設定",
     "logout": "登出"
@@ -633,7 +633,11 @@
     "productionEnv": "生產環境",
     "developmentEnv": "開發環境",
     "appAccessPattern": "應用程式存取路徑：{url}/{appSlug}",
-    "slugUpdateFailed": "更新網址代碼失敗"
+    "slugUpdateFailed": "更新網址代碼失敗",
+    "agentModels": "Agent 模型設定",
+    "agentModelsDescription": "設定每個 Agent 使用的 AI 模型",
+    "agentModelsSaved": "Agent 模型設定已儲存",
+    "agentModelsSaveFailed": "儲存 Agent 模型設定失敗"
   },
   "users": {
     "title": "使用者管理",

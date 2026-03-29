@@ -123,6 +123,12 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Helper: resolve model for a given agent role from org config, fallback to default
+      const resolveModelForRole = (role: string): string => {
+        const override = ctx.agentModelConfigs.find((c) => c.agentRole === role);
+        return override?.modelId || ctx.model || DEFAULT_MODEL;
+      };
+
       // 1. Create actor system with supervisor strategy and trace ID
       const system = new ActorSystem(sendEvent, undefined, traceId);
 
@@ -134,13 +140,13 @@ export async function POST(request: NextRequest) {
         appId: ctx.appId,
         conversationId: ctx.conversationId,
         startedAt: Date.now(),
-        model: ctx.model || DEFAULT_MODEL,
+        model: resolveModelForRole("pm"),
       });
 
       // 2. Set actor factory for restarts
       system.setActorFactory((role, index) =>
         createSpecialistActor(role, index, {
-          model: ctx.model || DEFAULT_MODEL,
+          model: resolveModelForRole(role),
           serviceInstances: ctx.serviceInstances,
           appContext: ctx.appContext,
           sendEvent,
@@ -152,7 +158,7 @@ export async function POST(request: NextRequest) {
 
       // 3. Create and spawn PM actor
       const pmConfig: PMActorConfig = {
-        model: ctx.model || DEFAULT_MODEL,
+        model: resolveModelForRole("pm"),
         serviceInstances: ctx.serviceInstances,
         appContext: ctx.appContext,
         artifactContext: ctx.artifactContext,

@@ -93,10 +93,11 @@ model Organization {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  users           User[]
-  services        Service[]
-  domains         OrgDomain[]
-  chatFiles       ChatFile[]
+  users             User[]
+  services          Service[]
+  domains           OrgDomain[]
+  chatFiles         ChatFile[]
+  agentModelConfigs AgentModelConfig[]
 
   @@map("organizations")
 }
@@ -267,6 +268,20 @@ model ChatFile {
   @@index([organizationId])
   @@index([importSessionId])
   @@map("chat_files")
+}
+
+model AgentModelConfig {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  agentRole      String   @map("agent_role")
+  modelId        String   @map("model_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, agentRole])
+  @@map("agent_model_configs")
 }
 
 model Deployment {
