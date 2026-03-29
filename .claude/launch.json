@@ -5,7 +5,7 @@
       "name": "ai-go-console",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["next", "dev", "--turbopack"],
-      "port": 3000,
+      "port": 3333,
       "autoPort": true
     },
     {
