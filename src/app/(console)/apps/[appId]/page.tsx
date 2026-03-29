@@ -74,11 +74,43 @@ const statusVariant: Record<string, "default" | "success" | "warning" | "destruc
   importing: "warning",
 };
 
+interface ImportStepData {
+  id: string;
+  label: string;
+  status: "pending" | "running" | "completed" | "failed";
+  detail?: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+interface ImportProgressDetail {
+  steps: ImportStepData[];
+  currentFile?: string;
+  filesProcessed?: number;
+  filesTotal?: number;
+  autostartAttempt?: number;
+  autostartMaxAttempts?: number;
+  autostartErrors?: string[];
+  filesFixed?: string[];
+  fixExplanation?: string;
+}
+
 interface ImportSessionData {
   status: string;
   fileCount: number;
   errorMessage: string | null;
   progressMessage: string | null;
+  progressDetail: ImportProgressDetail | null;
+}
+
+function formatDuration(startedAt: string, completedAt: string): string {
+  const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+  if (ms < 1000) return `${ms}ms`;
+  const secs = Math.round(ms / 1000);
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  const remainSecs = secs % 60;
+  return remainSecs > 0 ? `${mins}m ${remainSecs}s` : `${mins}m`;
 }
 
 export default function AppDetailPage() {
@@ -815,24 +847,137 @@ export default function AppDetailPage() {
 
       {/* Importing Progress Panel */}
       {app.status === "importing" && (
-        <div className="flex flex-1 items-center justify-center min-h-0">
-          <div className="flex flex-col items-center gap-4 p-8 max-w-md text-center">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <h2 className="text-lg font-semibold">{t("importingTitle")}</h2>
-            <p className="text-sm text-muted-foreground">
-              {importSession?.progressMessage || t("importingWait")}
-            </p>
-            {importSession && (
-              <div className="w-full space-y-2">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{t("importingStatus")}</span>
-                  <Badge variant="outline">{importSession.status}</Badge>
+        <div className="flex flex-1 items-center justify-center min-h-0 overflow-auto">
+          <div className="flex flex-col gap-5 p-8 w-full max-w-lg">
+            {/* Header */}
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-6 w-6 animate-spin text-primary shrink-0" />
+              <div>
+                <h2 className="text-lg font-semibold">{t("importingTitle")}</h2>
+                <p className="text-sm text-muted-foreground">
+                  {importSession?.progressMessage || t("importingWait")}
+                </p>
+              </div>
+            </div>
+
+            {/* Steps Timeline */}
+            {importSession?.progressDetail?.steps && importSession.progressDetail.steps.length > 0 && (
+              <div className="space-y-1">
+                {importSession.progressDetail.steps.map((step) => (
+                  <div key={step.id} className="flex items-start gap-3 py-2">
+                    {/* Step icon */}
+                    <div className="mt-0.5 shrink-0">
+                      {step.status === "completed" ? (
+                        <div className="h-5 w-5 rounded-full bg-green-500/15 flex items-center justify-center">
+                          <Check className="h-3 w-3 text-green-600" />
+                        </div>
+                      ) : step.status === "running" ? (
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      ) : step.status === "failed" ? (
+                        <div className="h-5 w-5 rounded-full bg-destructive/15 flex items-center justify-center">
+                          <X className="h-3 w-3 text-destructive" />
+                        </div>
+                      ) : (
+                        <div className="h-5 w-5 rounded-full border border-muted-foreground/30" />
+                      )}
+                    </div>
+
+                    {/* Step content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "text-sm font-medium",
+                          step.status === "pending" && "text-muted-foreground",
+                          step.status === "completed" && "text-green-600",
+                          step.status === "failed" && "text-destructive",
+                        )}>
+                          {step.label}
+                        </span>
+                        {step.status === "completed" && step.startedAt && step.completedAt && (
+                          <span className="text-xs text-muted-foreground">
+                            {formatDuration(step.startedAt, step.completedAt)}
+                          </span>
+                        )}
+                      </div>
+                      {step.detail && step.status !== "pending" && (
+                        <p className="text-xs text-muted-foreground mt-0.5 break-words">
+                          {step.detail}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* File Progress */}
+            {importSession?.progressDetail?.filesTotal != null && importSession.progressDetail.filesTotal > 0 && (
+              <div className="space-y-2 rounded-lg border p-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">檔案處理進度</span>
+                  <span className="font-mono font-medium">
+                    {importSession.progressDetail.filesProcessed ?? 0} / {importSession.progressDetail.filesTotal}
+                  </span>
                 </div>
-                {importSession.fileCount > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {t("importFileCount", { count: importSession.fileCount })}
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-300"
+                    style={{
+                      width: `${Math.round(((importSession.progressDetail.filesProcessed ?? 0) / importSession.progressDetail.filesTotal) * 100)}%`,
+                    }}
+                  />
+                </div>
+                {importSession.progressDetail.currentFile && (
+                  <p className="text-xs text-muted-foreground font-mono truncate">
+                    {importSession.progressDetail.currentFile}
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Autostart Attempts */}
+            {importSession?.progressDetail?.autostartAttempt != null && importSession.progressDetail.autostartAttempt > 0 && (
+              <div className="space-y-2 rounded-lg border p-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <Wrench className="h-3.5 w-3.5" />
+                    自動修復嘗試
+                  </span>
+                  <span className="font-mono font-medium">
+                    第 {importSession.progressDetail.autostartAttempt} / {importSession.progressDetail.autostartMaxAttempts ?? 5} 次
+                  </span>
+                </div>
+                {importSession.progressDetail.fixExplanation && (
+                  <p className="text-xs text-muted-foreground">
+                    {importSession.progressDetail.fixExplanation}
+                  </p>
+                )}
+                {importSession.progressDetail.filesFixed && importSession.progressDetail.filesFixed.length > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    <span className="font-medium">修復的檔案：</span>
+                    <ul className="mt-1 space-y-0.5">
+                      {importSession.progressDetail.filesFixed.map((f) => (
+                        <li key={f} className="font-mono truncate">{f}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {importSession.progressDetail.autostartErrors && importSession.progressDetail.autostartErrors.length > 0 && (
+                  <div className="text-xs">
+                    <span className="font-medium text-destructive">偵測到的錯誤：</span>
+                    <pre className="mt-1 p-2 rounded bg-muted text-[11px] leading-relaxed overflow-auto max-h-32 whitespace-pre-wrap break-all">
+                      {importSession.progressDetail.autostartErrors.join("\n")}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Footer status */}
+            {importSession && (
+              <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t">
+                <span>{t("importingStatus")}</span>
+                <Badge variant="outline">{importSession.status}</Badge>
               </div>
             )}
           </div>
