@@ -98,9 +98,9 @@ export function generateDevPodSpec(opts: DevPodOptions): k8s.V1Pod {
   const devCmd = opts.devCommand || ["npx", "next", "dev"];
   const execCmd = devCmd.map((c) => `"${c}"`).join(" ");
   const startupScript = [
-    // Wait for package.json to appear (written by writeFiles after pod creation)
+    // Wait for .ready sentinel (written by writeFiles after all files are copied)
     `echo "Waiting for app files..."`,
-    `while [ ! -f /app/package.json ]; do sleep 0.5; done`,
+    `while [ ! -f /app/.ready ]; do sleep 0.5; done`,
     `echo "App files detected."`,
     // Restore cached node_modules and lockfile if not present
     `if [ ! -d /app/node_modules ] && [ -d /opt/node_modules_cache ]; then`,
@@ -108,9 +108,17 @@ export function generateDevPodSpec(opts: DevPodOptions): k8s.V1Pod {
     `  cp -a /opt/node_modules_cache /app/node_modules`,
     `  [ -f /opt/package-lock.json.cache ] && cp -a /opt/package-lock.json.cache /app/package-lock.json`,
     `fi`,
-    // Install/reconcile dependencies
+    // Install/reconcile dependencies; retry with clean node_modules on failure
     `echo "Installing dependencies..."`,
-    `npm install 2>&1`,
+    `if ! npm install 2>&1; then`,
+    `  echo "npm install failed, retrying with clean node_modules..."`,
+    `  rm -rf /app/node_modules`,
+    `  if [ -d /opt/node_modules_cache ]; then`,
+    `    cp -a /opt/node_modules_cache /app/node_modules`,
+    `    [ -f /opt/package-lock.json.cache ] && cp -a /opt/package-lock.json.cache /app/package-lock.json`,
+    `  fi`,
+    `  npm install 2>&1`,
+    `fi`,
     // Disable Next.js telemetry
     `export NEXT_TELEMETRY_DISABLED=1`,
     // Start dev server
@@ -360,7 +368,7 @@ export function generateDevIngressRouteSpec(
 ): IngressRouteSpec {
   const svcName = devServiceName(orgSlug, slug);
   const mwName = stripMiddlewareName(orgSlug, slug);
-  const host = `dev-${orgSlug}.localhost`;
+  const host = `${orgSlug}.dev.localhost`;
 
   return {
     entryPoints: ["web", "websecure"],
@@ -390,7 +398,7 @@ export function generateProdIngressRouteSpec(
 ): IngressRouteSpec {
   const svcName = prodServiceName(orgSlug, slug);
   const mwName = stripMiddlewareName(orgSlug, slug);
-  const hosts = [`prod-${orgSlug}.localhost`, ...customDomains];
+  const hosts = [`${orgSlug}.localhost`, ...customDomains];
 
   // Build match expression: Host(`a`) || Host(`b`) && PathPrefix(`/slug`)
   const hostMatch = hosts.map((h) => `Host(\`${h}\`)`).join(" || ");

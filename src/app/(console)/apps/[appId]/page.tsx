@@ -218,12 +218,12 @@ export default function AppDetailPage() {
   const [devRunning, setDevRunning] = useState(false);
   const hasPreview = app?.port && devRunning;
 
-  // URL mode: "local" = localhost:port, "proxy" = dev/prod-{org}.localhost/{slug}
+  // URL mode: "local" = localhost:port, "proxy" = {org}.dev.localhost/{slug} or {org}.localhost/{slug}
   const [previewUrlMode, setPreviewUrlMode] = useState<"local" | "proxy">("local");
   const [deployUrlMode, setDeployUrlMode] = useState<"local" | "proxy">("local");
 
-  const devProxyUrl = app?.orgSlug ? `https://dev-${app.orgSlug}.localhost/${app.slug}` : null;
-  const prodProxyUrl = app?.orgSlug ? `https://prod-${app.orgSlug}.localhost/${app.slug}` : null;
+  const devProxyUrl = app?.orgSlug ? `http://${app.orgSlug}.dev.localhost/${app.slug}` : null;
+  const prodProxyUrl = app?.orgSlug ? `http://${app.orgSlug}.localhost/${app.slug}` : null;
 
   const previewUrl = hasPreview
     ? previewUrlMode === "proxy" && devProxyUrl

@@ -48,8 +48,8 @@ pnpm dev
 
 | Email | Password | Role | Organization |
 |---|---|---|---|
-| admin@example.com | password123 | admin | Acme Corp |
-| alice@example.com | password123 | user | Acme Corp |
+| admin@example.com | password123 | admin | AI Go |
+| alice@example.com | password123 | user | AI Go |
 | bob@example.com | password123 | admin | Cool Startup |
 
 ## 主要功能

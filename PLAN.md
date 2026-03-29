@@ -119,7 +119,7 @@ Models in `prisma/schema.prisma`:
 - Traefik Ingress Controller deployed via k3d/k8s
 - Custom domains stored in PostgreSQL (`app_domains` table) as the single source of truth
 - On app start/publish/domain change: `k8s/ingress.ts` syncs IngressRoute CRDs from DB state
-- Default routing: `dev-{org}.localhost/{slug}` (dev) / `prod-{org}.localhost/{slug}` (prod)
+- Default routing: `{org}.dev.localhost/{slug}` (dev) / `{org}.localhost/{slug}` (prod)
 - Custom domain binding: user adds domain in app settings → saved to DB → IngressRoute reconciled
 - `src/lib/k8s/ingress.ts` — manages Traefik IngressRoute + Middleware CRDs
 - On console startup: sync all active domains from DB → ensure IngressRoute resources are current

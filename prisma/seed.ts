@@ -70,11 +70,11 @@ async function main() {
   // ── 1. Organizations ────────────────────────────────────────────────────
 
   const acme = await prisma.organization.upsert({
-    where: { slug: "acme-corp" },
+    where: { slug: "ai-go" },
     update: {},
     create: {
-      name: "Acme Corp",
-      slug: "acme-corp",
+      name: "AI Go",
+      slug: "ai-go",
     },
   });
 
@@ -451,21 +451,10 @@ async function main() {
   // ── 7. Domains ──────────────────────────────────────────────────────────
 
   await prisma.orgDomain.upsert({
-    where: { domain: "shop.acme-corp.dev" },
+    where: { domain: "console.ai-go.app" },
     update: {},
     create: {
-      domain: "shop.acme-corp.dev",
-      isActive: true,
-      sslStatus: "active",
-      organizationId: acme.id,
-    },
-  });
-
-  await prisma.orgDomain.upsert({
-    where: { domain: "blog.acme-corp.dev" },
-    update: {},
-    create: {
-      domain: "blog.acme-corp.dev",
+      domain: "console.ai-go.app",
       isActive: true,
       sslStatus: "active",
       organizationId: acme.id,
@@ -544,8 +533,8 @@ async function main() {
 
   console.log("\n🎉 Seed completed successfully!");
   console.log("\n📋 Quick reference:");
-  console.log("   admin@example.com  / password123  (admin, Acme Corp)");
-  console.log("   alice@example.com  / password123  (user,  Acme Corp)");
+  console.log("   admin@example.com  / password123  (admin, AI Go)");
+  console.log("   alice@example.com  / password123  (user,  AI Go)");
   console.log("   bob@example.com    / password123  (admin, Cool Startup)");
 }
 

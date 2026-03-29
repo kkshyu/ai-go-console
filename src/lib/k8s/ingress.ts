@@ -124,8 +124,8 @@ export function getLocalDomain(
   env: "production" | "development" = "production",
 ): string {
   return env === "development"
-    ? `dev-${orgSlug}.localhost`
-    : `prod-${orgSlug}.localhost`;
+    ? `${orgSlug}.dev.localhost`
+    : `${orgSlug}.localhost`;
 }
 
 /**

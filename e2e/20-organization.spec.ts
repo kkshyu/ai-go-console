@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Organization API", () => {
   let orgId: string;
-  const originalName = "Acme Corp";
+  const originalName = "AI Go";
 
   test("setup: get orgId from session", async ({ request }) => {
     const res = await request.get("/api/auth/session");
