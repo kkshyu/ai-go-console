@@ -150,7 +150,7 @@ export const templates: Record<string, TemplateDefinition> = {
     directory: path.join(TEMPLATES_ROOT, "blank"),
     defaultPort: 3000,
     devCommand: "sh",
-    devArgs: ["-c", "if [ -f package.json ]; then npm install && npm run dev; else echo 'No package.json found' && sleep infinity; fi"],
+    devArgs: ["-c", "if [ -f package.json ]; then npm install && npm run dev; else npx -y serve -s -l 3000 .; fi"],
     installCommand: "npm",
     installArgs: ["install"],
     internalDevPort: 3000,

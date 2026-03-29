@@ -11,6 +11,9 @@ TEMPLATES=("react-spa" "nextjs-fullstack" "node-api" "line-bot")
 # New system-type templates
 TEMPLATES+=("crm" "erp" "linebot" "website" "ecommerce" "booking" "internal" "dashboard")
 
+# Blank template (user-uploaded projects)
+TEMPLATES+=("blank")
+
 for tmpl in "${TEMPLATES[@]}"; do
   echo "=== Building dev base image: aigo-dev-base-${tmpl} ==="
   docker build \

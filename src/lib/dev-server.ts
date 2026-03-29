@@ -71,6 +71,10 @@ const FILTERED_LOG_PATTERNS = [
   /run `npm fund` for details/,
   /found 0 vulnerabilities/,
   /up to date, audited \d+ packages/,
+  /npm error/,
+  /npm install failed, retrying/,
+  /A complete log of this run can be found in/,
+  /Starting dev server\.\.\./,
 ];
 
 /**

@@ -216,11 +216,11 @@ export default function AppDetailPage() {
 
   // Dev server is running if we have a port and it's in developing state
   const [devRunning, setDevRunning] = useState(false);
-  const hasPreview = app?.port && devRunning;
+  const hasPreview = devRunning && (app?.port || app?.orgSlug);
 
-  // URL mode: "local" = localhost:port, "proxy" = {org}.dev.localhost/{slug} or {org}.localhost/{slug}
-  const [previewUrlMode, setPreviewUrlMode] = useState<"local" | "proxy">("local");
-  const [deployUrlMode, setDeployUrlMode] = useState<"local" | "proxy">("local");
+  // URL mode: "local" = localhost:port, "proxy" = {org-slug}.dev.localhost/{slug}
+  const [previewUrlMode, setPreviewUrlMode] = useState<"local" | "proxy">("proxy");
+  const [deployUrlMode, setDeployUrlMode] = useState<"local" | "proxy">("proxy");
 
   const devProxyUrl = app?.orgSlug ? `http://${app.orgSlug}.dev.localhost/${app.slug}` : null;
   const prodProxyUrl = app?.orgSlug ? `http://${app.orgSlug}.localhost/${app.slug}` : null;
@@ -228,15 +228,19 @@ export default function AppDetailPage() {
   const previewUrl = hasPreview
     ? previewUrlMode === "proxy" && devProxyUrl
       ? devProxyUrl
-      : `http://localhost:${app.port}`
+      : app?.port
+        ? `http://localhost:${app.port}`
+        : devProxyUrl
     : null;
 
   // Production is running if app status is "running"
   const isProdRunning = app?.status === "running";
-  const prodUrl = isProdRunning && app?.prodPort
+  const prodUrl = isProdRunning
     ? deployUrlMode === "proxy" && prodProxyUrl
       ? prodProxyUrl
-      : `http://localhost:${app.prodPort}`
+      : app?.prodPort
+        ? `http://localhost:${app.prodPort}`
+        : prodProxyUrl
     : null;
 
   useEffect(() => {

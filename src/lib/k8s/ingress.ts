@@ -27,7 +27,7 @@ import {
 
 interface AppWithStatus {
   slug: string;
-  port: number;
+  port: number | null;
   status: string;
 }
 
@@ -48,7 +48,6 @@ export async function syncRoutes(): Promise<void> {
           apps: {
             where: {
               status: { in: ["running", "developing"] },
-              port: { not: null },
             },
             select: { slug: true, port: true, status: true },
           },
@@ -62,13 +61,13 @@ export async function syncRoutes(): Promise<void> {
   const desiredProd = new Map<string, { orgSlug: string; slug: string; customDomains: string[] }>();
 
   for (const org of orgs) {
-    const allApps = org.users.flatMap((u) =>
-      u.apps.filter((a): a is typeof a & { port: number } => a.port !== null),
-    ) as AppWithStatus[];
+    const allApps = org.users.flatMap((u) => u.apps) as AppWithStatus[];
 
     if (allApps.length === 0) continue;
 
+    // Dev apps: route via k8s service (port not required)
     const devApps = allApps.filter((a) => a.status === "developing");
+    // Prod apps: route via k8s deployment (port not required)
     const prodApps = allApps.filter((a) => a.status === "running");
     const customDomains = org.domains.map((d) => d.domain);
 

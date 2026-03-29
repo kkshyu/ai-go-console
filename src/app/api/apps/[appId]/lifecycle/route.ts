@@ -10,6 +10,8 @@ import { syncRoutes } from "@/lib/k8s/ingress";
 import * as sandbox from "@/lib/k8s/sandbox";
 import { getTemplate } from "@/lib/templates";
 import { authorizeAppAccess } from "@/lib/api-auth";
+import { generateApp } from "@/lib/generator";
+import { readFileFromMinIO } from "@/lib/minio-storage";
 
 
 export async function POST(
@@ -30,7 +32,53 @@ export async function POST(
     switch (action) {
       case "dev-start": {
         // Start dev server inside Docker container
+        // If the pod doesn't exist (e.g. after import or pod eviction), recreate it
+        const devStatus = await sandbox.getDevContainerStatus(orgSlug, app.slug);
+        if (devStatus === "not_found") {
+          // Restore from import session files if available
+          const importSession = await prisma.importSession.findFirst({
+            where: { appId },
+            orderBy: { createdAt: "desc" },
+          });
+
+          const files: Array<{ path: string; content: string }> = [];
+          if (importSession) {
+            const chatFiles = await prisma.chatFile.findMany({
+              where: {
+                importSessionId: importSession.importSessionId,
+                status: { in: ["ready", "uploaded"] },
+              },
+              select: { storagePath: true, relativePath: true, fileType: true },
+            });
+            for (const cf of chatFiles) {
+              if (!cf.storagePath || !cf.relativePath) continue;
+              try {
+                const buffer = await readFileFromMinIO(cf.storagePath);
+                if (cf.fileType === "image" || cf.fileType === "pdf") continue;
+                const text = buffer.toString("utf-8");
+                if (!/[\x00-\x08\x0E-\x1F]/.test(text.slice(0, 1000))) {
+                  files.push({ path: cf.relativePath, content: text });
+                }
+              } catch { /* skip unreadable */ }
+            }
+          }
+
+          await generateApp({
+            appId,
+            slug: app.slug,
+            orgSlug,
+            name: app.name,
+            description: app.description || undefined,
+            template: app.template,
+            files,
+          });
+        }
         const result = await startDevServer(orgSlug, app.slug, app.template);
+        // Update app status to developing
+        await prisma.app.update({
+          where: { id: appId },
+          data: { status: "developing" },
+        });
         // Ensure Traefik IngressRoute exists for the dev container
         syncRoutes().catch(() => {});
         return NextResponse.json({ success: true, ...result });
