@@ -2,9 +2,9 @@
 
 import { useState, useRef, useCallback, useEffect, type DragEvent } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Sheet,
   SheetContent,
@@ -16,8 +16,7 @@ import {
   Loader2,
   CheckCircle2,
   AlertTriangle,
-  Wrench,
-  Play,
+  ExternalLink,
 } from "lucide-react";
 import {
   readEntryFiles,
@@ -31,16 +30,13 @@ type ImportStep =
   | "processing"
   | "analyzing"
   | "review"
-  | "creating"
-  | "starting"
+  | "done"
   | "error";
 
 interface AnalysisResult {
   name: string;
   slug: string;
   description: string;
-  template: string;
-  requiredServices: string[];
 }
 
 interface ImportProgress {
@@ -49,14 +45,6 @@ interface ImportProgress {
   error: number;
   processing: number;
   uploaded: number;
-}
-
-interface AutostartEvent {
-  step: string;
-  attempt?: number;
-  message: string;
-  errors?: string[];
-  filesFixed?: string[];
 }
 
 interface ImportAppDialogProps {
@@ -72,15 +60,15 @@ export function ImportAppDialog({
 }: ImportAppDialogProps) {
   const t = useTranslations("apps");
   const tc = useTranslations("common");
+  const router = useRouter();
   const [step, setStep] = useState<ImportStep>("upload");
   const [isDragging, setIsDragging] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [_importSessionId, setImportSessionId] = useState<string | null>(null);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
-  const [autostartEvents, setAutostartEvents] = useState<AutostartEvent[]>([]);
   const [fileCount, setFileCount] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
-  const [_createdAppId, setCreatedAppId] = useState<string | null>(null);
+  const [createdAppId, setCreatedAppId] = useState<string | null>(null);
   const folderInputRef = useCallback((node: HTMLInputElement | null) => {
     if (node) {
       node.setAttribute("webkitdirectory", "");
@@ -99,7 +87,6 @@ export function ImportAppDialog({
         setAnalysis(null);
         setImportSessionId(null);
         setProgress(null);
-        setAutostartEvents([]);
         setFileCount(0);
         setErrorMsg("");
         setCreatedAppId(null);
@@ -289,21 +276,19 @@ export function ImportAppDialog({
     [uploadFiles]
   );
 
-  // Confirm and create app, then auto-start
+  // Confirm and create app in background
   const handleConfirm = useCallback(async () => {
-    if (!analysis) return;
-    setStep("creating");
+    if (!analysis || !_importSessionId) return;
 
     try {
-      const res = await fetch("/api/apps", {
+      const res = await fetch("/api/apps/import/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          importSessionId: _importSessionId,
           name: analysis.name,
           slug: analysis.slug,
           description: analysis.description,
-          template: analysis.template,
-          serviceIds: [],
         }),
       });
 
@@ -314,75 +299,21 @@ export function ImportAppDialog({
 
       const app = await res.json();
       setCreatedAppId(app.id);
-
-      // Auto-start the app
-      setStep("starting");
-      setAutostartEvents([]);
-      startAutostart(app.id);
+      setStep("done");
+      onAppCreated();
     } catch (err) {
       setErrorMsg(
         err instanceof Error ? err.message : "Failed to create app"
       );
       setStep("error");
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- startAutostart is stable ref-based
-  }, [analysis]);
-
-  // Connect to autostart SSE
-  const startAutostart = useCallback(async (appId: string) => {
-    try {
-      const res = await fetch("/api/apps/import/autostart", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appId }),
-      });
-
-      if (!res.ok || !res.body) {
-        setErrorMsg("Failed to start autostart");
-        setStep("error");
-        return;
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const text = decoder.decode(value, { stream: true });
-        const lines = text.split("\n").filter((l) => l.startsWith("data: "));
-
-        for (const line of lines) {
-          try {
-            const event = JSON.parse(line.slice(6)) as AutostartEvent;
-            setAutostartEvents((prev) => [...prev, event]);
-
-            if (event.step === "success") {
-              // Wait a moment then notify parent
-              setTimeout(() => onAppCreated(), 1500);
-            } else if (event.step === "failed") {
-              // Keep showing the starting UI with error state
-            }
-          } catch {
-            // Skip malformed events
-          }
-        }
-      }
-    } catch (err) {
-      setErrorMsg(
-        err instanceof Error ? err.message : "Autostart connection failed"
-      );
-      setStep("error");
-    }
-  }, [onAppCreated]);
+  }, [analysis, _importSessionId, onAppCreated]);
 
   const handleRetry = useCallback(() => {
     setStep("upload");
     setAnalysis(null);
     setImportSessionId(null);
     setProgress(null);
-    setAutostartEvents([]);
     setFileCount(0);
     setErrorMsg("");
     setCreatedAppId(null);
@@ -392,14 +323,6 @@ export function ImportAppDialog({
     progress && progress.total > 0
       ? Math.round(((progress.ready + progress.error) / progress.total) * 100)
       : 0;
-
-  const lastAutostartEvent =
-    autostartEvents.length > 0
-      ? autostartEvents[autostartEvents.length - 1]
-      : null;
-
-  const autostartSuccess = lastAutostartEvent?.step === "success";
-  const autostartFailed = lastAutostartEvent?.step === "failed";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -537,30 +460,6 @@ export function ImportAppDialog({
                   />
                 </div>
 
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">
-                    {t("importTemplate")}
-                  </label>
-                  <div className="mt-1">
-                    <Badge variant="outline">{analysis.template}</Badge>
-                  </div>
-                </div>
-
-                {analysis.requiredServices.length > 0 && (
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">
-                      {t("importServices")}
-                    </label>
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      {analysis.requiredServices.map((svc) => (
-                        <Badge key={svc} variant="secondary">
-                          {svc}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 <p className="text-xs text-muted-foreground">
                   {t("importFileCount", { count: fileCount })}
                 </p>
@@ -582,84 +481,37 @@ export function ImportAppDialog({
             </div>
           )}
 
-          {/* Creating step */}
-          {step === "creating" && (
-            <div className="mt-8 flex flex-col items-center gap-3">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="text-sm text-muted-foreground">
-                {t("importCreating")}
+          {/* Done step — background processing started */}
+          {step === "done" && (
+            <div className="mt-8 flex flex-col items-center gap-4">
+              <CheckCircle2 className="h-10 w-10 text-green-500" />
+              <p className="text-sm text-center font-medium">
+                {t("importBackgroundStarted")}
               </p>
-            </div>
-          )}
-
-          {/* Starting / Auto-fix step */}
-          {step === "starting" && (
-            <div className="mt-4 space-y-4">
-              <div className="flex items-center gap-2">
-                {autostartSuccess ? (
-                  <CheckCircle2 className="h-6 w-6 text-green-500" />
-                ) : autostartFailed ? (
-                  <AlertTriangle className="h-6 w-6 text-destructive" />
-                ) : (
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                )}
-                <h3 className="font-medium">
-                  {autostartSuccess
-                    ? t("importStartSuccess")
-                    : autostartFailed
-                      ? t("importStartFailed")
-                      : t("importStarting")}
-                </h3>
-              </div>
-
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {autostartEvents.map((event, i) => (
-                  <div
-                    key={i}
-                    className={`flex items-start gap-2 text-xs ${
-                      event.step === "success"
-                        ? "text-green-600"
-                        : event.step === "failed" || event.step === "error"
-                          ? "text-destructive"
-                          : event.step === "fixing"
-                            ? "text-amber-600"
-                            : "text-muted-foreground"
-                    }`}
-                  >
-                    {event.step === "fixing" && (
-                      <Wrench className="h-3 w-3 mt-0.5 shrink-0" />
-                    )}
-                    {event.step === "success" && (
-                      <CheckCircle2 className="h-3 w-3 mt-0.5 shrink-0" />
-                    )}
-                    {(event.step === "starting" ||
-                      event.step === "restarting") && (
-                      <Play className="h-3 w-3 mt-0.5 shrink-0" />
-                    )}
-                    <span>{event.message}</span>
-                  </div>
-                ))}
-              </div>
-
-              {(autostartSuccess || autostartFailed) && (
-                <div className="flex gap-2 pt-2">
-                  {autostartFailed && (
-                    <Button
-                      variant="outline"
-                      className="flex-1"
-                      onClick={handleRetry}
-                    >
-                      {t("importRetry")}
-                    </Button>
-                  )}
+              <p className="text-xs text-center text-muted-foreground">
+                {t("importBackgroundHint")}
+              </p>
+              <div className="flex gap-2 pt-2 w-full">
+                {createdAppId && (
                   <Button
                     className="flex-1"
-                    onClick={() => onOpenChange(false)}
+                    onClick={() => {
+                      onOpenChange(false);
+                      router.push(`/apps/${createdAppId}`);
+                    }}
                   >
-                    {tc("close")}
+                    <ExternalLink className="h-4 w-4" />
+                    {t("importViewApp")}
                   </Button>
-                </div>
-              )}
+                )}
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => onOpenChange(false)}
+                >
+                  {tc("close")}
+                </Button>
+              </div>
             </div>
           )}
 

@@ -138,7 +138,17 @@
     "importError": "操作失敗，請重試",
     "importRetry": "重試",
     "importNoFiles": "未偵測到有效的檔案",
-    "importSuccess": "應用建立成功"
+    "importSuccess": "應用建立成功",
+    "importBackgroundStarted": "應用程式正在背景建立中",
+    "importBackgroundHint": "您可以關閉此頁面，處理完成後可在應用列表中查看",
+    "importViewApp": "查看應用",
+    "importing": "匯入中",
+    "importingTitle": "應用程式正在建立中...",
+    "importingWait": "正在準備您的應用程式，請稍候...",
+    "importingStatus": "目前狀態",
+    "importFailedTitle": "自動啟動失敗",
+    "importFailedHint": "您可以使用 AI 手動修復啟動問題",
+    "importManualFix": "AI 手動修復"
   },
   "create": {
     "title": "建立應用",

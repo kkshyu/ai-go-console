@@ -2,14 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma, getOrgSlug } from "@/lib/db";
-import { writeFileToStorage, buildChatFileStoragePath } from "@/lib/file-storage";
+import { writeFileToMinIO, buildImportFileKey } from "@/lib/minio-storage";
 import { randomUUID } from "node:crypto";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import ignore from "ignore";
 
 /** Max size for a single file (10MB) */
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 /** Max total files per import session */
 const MAX_FILES = 500;
+
+/** Hardcoded baseline directories to always skip */
+const SKIP_DIRS = [
+  "node_modules",
+  ".git",
+  ".next",
+  "dist",
+  "build",
+  ".cache",
+  "__pycache__",
+  ".svn",
+  "vendor",
+  ".DS_Store",
+];
 
 function detectFileType(mimeType: string, fileName: string): string {
   if (mimeType.startsWith("image/")) return "image";
@@ -30,44 +45,51 @@ function detectFileType(mimeType: string, fileName: string): string {
 }
 
 /**
- * Ensure file processing background agents are registered.
+ * Build an ignore filter from .gitignore and .dockerignore contents found
+ * in the uploaded files, combined with the hardcoded SKIP_DIRS baseline.
  */
-async function ensureFileAgents() {
-  const { ensureBackgroundSystem, backgroundSystem } = await import(
-    "@/lib/actors/background-system"
-  );
-  await ensureBackgroundSystem();
+function buildIgnoreFilter(
+  files: File[],
+  paths: string[],
+  ignoreContents: Map<string, string>,
+): (relativePath: string) => boolean {
+  const ig = ignore();
 
-  if (!backgroundSystem.hasActor("file_processor")) {
-    const { FileProcessorActor } = await import(
-      "@/lib/actors/file-processor-actor"
-    );
-    await backgroundSystem.registerActor(
-      new FileProcessorActor(`file-processor-${Date.now()}`)
-    );
+  // Always skip baseline dirs
+  for (const dir of SKIP_DIRS) {
+    ig.add(dir);
+    ig.add(`${dir}/`);
   }
 
-  if (!backgroundSystem.hasActor("file_analyzer")) {
-    const { FileAnalyzerActor } = await import(
-      "@/lib/actors/file-analyzer-actor"
-    );
-    await backgroundSystem.registerActor(
-      new FileAnalyzerActor(`file-analyzer-${Date.now()}`)
-    );
+  // Add patterns from .gitignore
+  const gitignore = ignoreContents.get(".gitignore");
+  if (gitignore) {
+    ig.add(gitignore);
   }
 
-  return backgroundSystem;
+  // Add patterns from .dockerignore
+  const dockerignore = ignoreContents.get(".dockerignore");
+  if (dockerignore) {
+    ig.add(dockerignore);
+  }
+
+  return (relativePath: string) => {
+    // Remove leading folder name (e.g., "my-project/src/app.ts" → "src/app.ts")
+    // But only if not already a bare path
+    try {
+      return !ig.ignores(relativePath);
+    } catch {
+      return true; // If filter errors, include the file
+    }
+  };
 }
 
 /**
  * POST /api/apps/import/upload
  *
  * Upload project folder files for import.
- * Files are stored and processed via background pipeline (FileProcessor -> FileAnalyzer -> Embedding).
- *
- * FormData fields:
- * - files: File[] — the files to upload
- * - paths: string[] — corresponding relative paths (e.g., "src/app/page.tsx")
+ * Files are filtered using .gitignore/.dockerignore patterns,
+ * stored in MinIO, and processed via background pipeline.
  */
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -105,8 +127,37 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Step 1: Extract ignore file contents for filtering
+  const ignoreContents = new Map<string, string>();
+  for (let i = 0; i < files.length; i++) {
+    const relativePath = paths[i] || files[i].name;
+    const baseName = relativePath.split("/").pop() || "";
+    if (baseName === ".gitignore" || baseName === ".dockerignore") {
+      try {
+        const text = await files[i].text();
+        ignoreContents.set(baseName, text);
+      } catch {
+        // Skip unreadable ignore files
+      }
+    }
+  }
+
+  // Step 2: Build filter and apply
+  const shouldInclude = buildIgnoreFilter(files, paths, ignoreContents);
+
   const orgSlug = await getOrgSlug(session.user.id);
   const importSessionId = randomUUID();
+
+  // Step 3: Create ImportSession record
+  await prisma.importSession.create({
+    data: {
+      userId: session.user.id,
+      organizationId: session.user.organizationId,
+      importSessionId,
+      status: "uploading",
+      fileCount: 0,
+    },
+  });
 
   let storedCount = 0;
   let skippedCount = 0;
@@ -121,6 +172,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (file.size === 0) {
+      skippedCount++;
+      continue;
+    }
+
+    // Apply ignore filter
+    if (!shouldInclude(relativePath)) {
       skippedCount++;
       continue;
     }
@@ -142,26 +199,26 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const storagePath = buildChatFileStoragePath(
-      orgSlug,
-      chatFile.id,
-      file.name
-    );
+    // Store in MinIO
+    const minioKey = buildImportFileKey(orgSlug, importSessionId, chatFile.id, file.name);
     const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFileToStorage(storagePath, buffer);
+    await writeFileToMinIO(minioKey, buffer);
 
     await prisma.chatFile.update({
       where: { id: chatFile.id },
-      data: { storagePath },
+      data: { storagePath: minioKey },
     });
 
     // Trigger background processing pipeline
     try {
-      const backgroundSystem = await ensureFileAgents();
+      const { ensureBackgroundSystem } = await import(
+        "@/lib/actors/background-system"
+      );
+      const backgroundSystem = await ensureBackgroundSystem();
 
       backgroundSystem.fireAndForget("file_processor", "process_file", {
         fileId: chatFile.id,
-        storagePath,
+        storagePath: minioKey,
         mimeType: file.type || "application/octet-stream",
         fileName: file.name,
         conversationId: importSessionId,
@@ -169,7 +226,7 @@ export async function POST(request: NextRequest) {
 
       backgroundSystem.fireAndForget("file_analyzer", "analyze_file", {
         fileId: chatFile.id,
-        storagePath,
+        storagePath: minioKey,
         mimeType: file.type || "application/octet-stream",
         fileName: file.name,
       });
@@ -179,6 +236,15 @@ export async function POST(request: NextRequest) {
 
     storedCount++;
   }
+
+  // Update session with file count and advance status
+  await prisma.importSession.update({
+    where: { importSessionId },
+    data: {
+      fileCount: storedCount,
+      status: "processing",
+    },
+  });
 
   return NextResponse.json({
     importSessionId,

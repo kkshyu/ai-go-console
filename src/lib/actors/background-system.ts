@@ -31,6 +31,7 @@ function roleToQueue(role: BackgroundAgentRole): QueueName {
     case "summarizer": return "summarizer";
     case "file_processor": return "file-processing";
     case "file_analyzer": return "file-analysis";
+    case "import_orchestrator": return "import-orchestrator";
     default: return role as QueueName;
   }
 }

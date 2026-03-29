@@ -32,25 +32,6 @@ const ANALYSIS_SYSTEM_PROMPT = `你是一個程式碼分析助手。根據使用
 1. 適當的應用名稱（使用使用者程式碼中的語言，或英文）
 2. slug（英文小寫，用 - 連接，語意化描述應用）
 3. 簡短描述（一句話說明應用用途）
-4. 最適合的範本類型
-5. 需要的外部服務
-
-## 範本選擇邏輯
-- package.json 有 next 依賴 → "nextjs-fullstack"
-- package.json 有 react 但沒有 next → "react-spa"
-- package.json 有 express / fastify / koa → "node-api"
-- 有 @line/bot-sdk 或 LINE 相關設定 → "line-bot"
-- 其他情況 → "nextjs-fullstack"
-
-## 服務偵測邏輯
-- 有 prisma/schema.prisma 或 pg/mysql/mongodb 依賴 → 對應的資料庫服務
-- 有 stripe/paypal 依賴 → 對應的金流服務
-- 有 auth0/firebase-auth 依賴 → 對應的認證服務
-- 有 aws-sdk/s3 依賴 → "s3"
-- 有 .env 中的 LINE_CHANNEL → "line_bot"
-- 有 sendgrid/ses/mailgun 依賴 → 對應的郵件服務
-
-可用的服務代碼：postgresql, mysql, mongodb, s3, gcs, azure_blob, stripe, paypal, ecpay, sendgrid, ses, mailgun, twilio, vonage, aws_sns, auth0, firebase_auth, line_login, supabase, hasura, line_bot, whatsapp, discord, telegram, openai, gemini, claude, openrouter
 
 ## 輸出格式
 只輸出以下 JSON，不要有其他文字：
@@ -58,9 +39,7 @@ const ANALYSIS_SYSTEM_PROMPT = `你是一個程式碼分析助手。根據使用
 {
   "name": "應用名稱",
   "slug": "english-kebab-case-slug",
-  "description": "簡短描述",
-  "template": "nextjs-fullstack",
-  "requiredServices": ["postgresql"]
+  "description": "簡短描述"
 }
 \`\`\``;
 
@@ -76,15 +55,13 @@ function parseAnalysisResponse(content: string): {
 
   try {
     const parsed = JSON.parse(jsonStr.trim());
-    if (!parsed.name || !parsed.template) return null;
+    if (!parsed.name) return null;
     return {
       name: parsed.name || "",
       slug: parsed.slug || "",
       description: parsed.description || "",
-      template: parsed.template || "nextjs-fullstack",
-      requiredServices: Array.isArray(parsed.requiredServices)
-        ? parsed.requiredServices
-        : [],
+      template: "blank",
+      requiredServices: [],
     };
   } catch {
     return null;
@@ -94,11 +71,8 @@ function parseAnalysisResponse(content: string): {
 /**
  * POST /api/apps/import/analyze
  *
- * RAG-based project analysis. Instead of stuffing all file contents into one prompt,
- * this endpoint:
- * 1. Fetches priority files (package.json, etc.) directly from ChatFile.extractedText
- * 2. Uses vector search to find relevant chunks across all uploaded files
- * 3. Assembles a focused context and calls the LLM
+ * RAG-based project analysis. Detects name, slug, and description only.
+ * Always uses blank template with no service bindings.
  */
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -183,7 +157,7 @@ export async function POST(request: NextRequest) {
   let ragContext = "";
   try {
     const queryEmbedding = await generateEmbedding(
-      "What is this project? What framework, dependencies, template, and services does it use? Detect package.json, configuration files, database schemas, API integrations."
+      "What is this project? What is its name, purpose, and main functionality?"
     );
 
     if (queryEmbedding.length > 0) {
@@ -222,13 +196,23 @@ export async function POST(request: NextRequest) {
 
   const filePrompt = parts.join("\n");
 
+  // Update ImportSession status
+  try {
+    await prisma.importSession.update({
+      where: { importSessionId },
+      data: { status: "analyzing" },
+    });
+  } catch {
+    // ImportSession might not exist in some edge cases
+  }
+
   try {
     const model = getModelForAgent("architect");
     const result = await chat(
       [
         {
           role: "user",
-          content: `分析以下專案資料夾，判斷應用類型和需要的服務：\n\n${filePrompt}`,
+          content: `分析以下專案資料夾，判斷應用名稱、slug 和描述：\n\n${filePrompt}`,
         },
       ],
       model,

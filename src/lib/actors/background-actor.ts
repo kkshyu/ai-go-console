@@ -149,11 +149,12 @@ export abstract class BackgroundActor {
         }
       } catch (err) {
         this._totalFailed++;
-        this._consecutiveFailures++;
+        // Do NOT increment consecutiveFailures — individual task failures
+        // should not affect actor health. The actor always continues processing.
         const error = err instanceof Error ? err : new Error(String(err));
 
         console.warn(
-          `[BackgroundActor:${this.role}] Process failed (${this._consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}): ${error.message}`,
+          `[BackgroundActor:${this.role}] Task failed (total failures: ${this._totalFailed}): ${error.message}`,
         );
 
         // Reject pending request if exists
@@ -161,13 +162,6 @@ export abstract class BackgroundActor {
         if (resolver) {
           resolver.reject(error);
           this.pendingRequests.delete(message.requestId);
-        }
-
-        // Mark as unhealthy if too many consecutive failures
-        if (this._consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-          console.error(
-            `[BackgroundActor:${this.role}] Max consecutive failures reached, marking unhealthy`,
-          );
         }
       }
     }

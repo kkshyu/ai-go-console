@@ -82,8 +82,8 @@ export class FileAnalyzerActor extends BackgroundActor {
   }
 
   private async analyzeImage(storagePath: string, mimeType: string, fileName: string): Promise<string> {
-    const { readFileFromStorage } = await import("../file-storage");
-    const buffer = await readFileFromStorage(storagePath);
+    const { readFileFromMinIO } = await import("../minio-storage");
+    const buffer = await readFileFromMinIO(storagePath);
     const base64 = buffer.toString("base64");
     const dataUrl = `data:${mimeType};base64,${base64}`;
 

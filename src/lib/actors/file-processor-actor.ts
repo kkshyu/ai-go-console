@@ -62,7 +62,7 @@ export class FileProcessorActor extends BackgroundActor {
 
       if (isTextFile(mimeType, fileName)) {
         // Direct text read
-        const buffer = await (await import("../file-storage")).readFileFromStorage(storagePath);
+        const buffer = await (await import("../minio-storage")).readFileFromMinIO(storagePath);
         extractedText = buffer.toString("utf-8").slice(0, MAX_TEXT_LENGTH);
       } else if (isImageFile(mimeType)) {
         // Use LLM vision to describe image
@@ -70,7 +70,7 @@ export class FileProcessorActor extends BackgroundActor {
       } else if (isPdfFile(mimeType, fileName)) {
         // Extract text from PDF
         try {
-          const buffer = await (await import("../file-storage")).readFileFromStorage(storagePath);
+          const buffer = await (await import("../minio-storage")).readFileFromMinIO(storagePath);
           const pdfModule = await import("pdf-parse");
           const pdfParse = (pdfModule as unknown as { default: (buffer: Buffer) => Promise<{ text: string }> }).default;
           const pdf = await pdfParse(buffer);
@@ -84,7 +84,7 @@ export class FileProcessorActor extends BackgroundActor {
       } else {
         // Unknown type — try reading as text
         try {
-          const buffer = await (await import("../file-storage")).readFileFromStorage(storagePath);
+          const buffer = await (await import("../minio-storage")).readFileFromMinIO(storagePath);
           const text = buffer.toString("utf-8").slice(0, MAX_TEXT_LENGTH);
           // Check if it's valid text (not binary garbage)
           if (/[\x00-\x08\x0E-\x1F]/.test(text.slice(0, 1000))) {
@@ -139,7 +139,7 @@ export class FileProcessorActor extends BackgroundActor {
   }
 
   private async describeImage(storagePath: string, mimeType: string): Promise<string> {
-    const buffer = await (await import("../file-storage")).readFileFromStorage(storagePath);
+    const buffer = await (await import("../minio-storage")).readFileFromMinIO(storagePath);
     const base64 = buffer.toString("base64");
     const dataUrl = `data:${mimeType};base64,${base64}`;
 

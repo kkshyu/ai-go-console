@@ -8,7 +8,7 @@
 export type AgentRole = "pm" | "architect" | "developer" | "reviewer" | "devops" | "ux_designer" | "tester" | "db_migrator" | "doc_writer";
 
 /** Background agent roles — persist across requests, managed by BackgroundActorSystem */
-export type BackgroundAgentRole = "embedding" | "retrieval" | "summarizer" | "file_processor" | "file_analyzer" | "code_validator" | "dependency_resolver" | "template_cache" | "progress_tracker";
+export type BackgroundAgentRole = "embedding" | "retrieval" | "summarizer" | "file_processor" | "file_analyzer" | "code_validator" | "dependency_resolver" | "template_cache" | "progress_tracker" | "import_orchestrator";
 
 export type TaskStatus = "idle" | "running" | "completed" | "error";
 
@@ -183,6 +183,13 @@ export const BACKGROUND_AGENT_DEFINITIONS: Record<BackgroundAgentRole, Backgroun
     icon: "BarChart3",
     color: "text-yellow-500",
     description: "Progress Tracker — aggregates pipeline progress across all agents",
+  },
+  import_orchestrator: {
+    role: "import_orchestrator",
+    label: "Import Orchestrator",
+    icon: "FolderUp",
+    color: "text-emerald-500",
+    description: "Import Orchestrator — generates and starts imported app in background",
   },
 };
 

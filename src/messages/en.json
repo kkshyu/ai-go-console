@@ -138,7 +138,17 @@
     "importError": "Operation failed, please try again",
     "importRetry": "Retry",
     "importNoFiles": "No valid files detected",
-    "importSuccess": "Application created successfully"
+    "importSuccess": "Application created successfully",
+    "importBackgroundStarted": "Your app is being created in the background",
+    "importBackgroundHint": "You can close this page. Check the app list when it's ready.",
+    "importViewApp": "View App",
+    "importing": "Importing",
+    "importingTitle": "Setting up your application...",
+    "importingWait": "Preparing your application, please wait...",
+    "importingStatus": "Current status",
+    "importFailedTitle": "Auto-start failed",
+    "importFailedHint": "You can use AI to manually fix startup issues",
+    "importManualFix": "AI Manual Fix"
   },
   "create": {
     "title": "Create App",

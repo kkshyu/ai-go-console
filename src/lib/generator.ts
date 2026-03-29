@@ -45,6 +45,16 @@ export async function generateApp(options: GenerateAppOptions): Promise<string> 
   // Resolve environment variables from linked services
   const envVars = await resolveServiceEnvVars(appId);
 
+  // Blank template: user files go directly into the container, no template rendering
+  if (template === "blank") {
+    await sandbox.tagBaseImage(orgSlug, slug, template);
+    await sandbox.createDevContainer(orgSlug, slug, template, port, envVars);
+    if (options.files && options.files.length > 0) {
+      await sandbox.writeFiles(orgSlug, slug, options.files);
+    }
+    return sandbox.devContainerName(orgSlug, slug);
+  }
+
   // Template context for Handlebars
   const context = {
     name,
