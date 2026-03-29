@@ -18,10 +18,16 @@ import type {
   DiscussPayload,
   DiscussReplyPayload,
   ReportPayload,
+  SubTaskPayload,
+  SubTaskResultPayload,
+  SeniorPlanPayload,
 } from "./types";
 import { createMessage } from "./types";
+import type { ActorSystem } from "./actor-system";
 import { streamChat, translateForUser, stripJsonBlocks, getModelForAgent, getOutputModel, type ChatMessage, type TokenUsage } from "../ai";
-import type { AgentRole } from "../agents/types";
+import { getModelForTier } from "../model-tiers";
+import type { ModelTier } from "../model-tiers";
+import type { AgentRole, SeniorPlan, SubTask } from "../agents/types";
 import { parseAgentResult } from "../agents/orchestrator";
 import {
   buildArchitectPrompt,
@@ -33,6 +39,9 @@ import {
   buildTesterPrompt,
   buildDBMigratorPrompt,
   buildDocWriterPrompt,
+  buildSeniorPlanningPrompt,
+  buildSeniorSynthesisPrompt,
+  buildJuniorExecutionPreamble,
 } from "../agents/prompts";
 import { actorLog } from "./logger";
 import type { BackgroundActorSystem } from "./background-system";
@@ -46,6 +55,8 @@ export interface SpecialistConfig {
   peerRegistry?: Map<AgentRole, string>;
   conversationId?: string;
   backgroundSystem?: BackgroundActorSystem;
+  /** ActorSystem reference — required for senior agents to spawn juniors */
+  system?: ActorSystem;
 }
 
 /** Progress messages shown while an agent is generating. */
@@ -783,9 +794,626 @@ export class DocWriterActor extends BaseSpecialistActor {
   }
 }
 
+// ---- Senior Specialist Actor (Plan → Delegate → Synthesize) ----
+
+/** Max sub-tasks a senior can create */
+const MAX_SUB_TASKS = 6;
+/** Timeout waiting for all juniors to complete */
+const JUNIOR_COLLECTION_TIMEOUT_MS = 120_000;
+
+/**
+ * Abstract senior specialist actor.
+ *
+ * When a senior receives a `task` from PM, it:
+ * 1. Plans: Calls LLM to decompose the task into sub-tasks (SeniorPlan JSON)
+ * 2. Simple-task bypass: If only 1 sub-task with low complexity, executes directly
+ * 3. Dispatches juniors: Spawns JuniorSpecialistActors for each sub-task
+ * 4. Collects results: Accumulates sub_task_result messages from juniors
+ * 5. Synthesizes: Calls LLM to merge all junior outputs into final result
+ *
+ * Returns standard task_result to PM — PM is unaware of the internal hierarchy.
+ */
+abstract class SeniorSpecialistActor extends BaseSpecialistActor {
+  private currentPlan: SeniorPlan | null = null;
+  private pendingSubTaskResults: Map<string, SubTaskResultPayload> = new Map();
+  private expectedSubTaskCount = 0;
+  private originalMessage: ActorMessage | null = null;
+  private juniorCounter = 0;
+  private collectionTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  /** Subclasses must provide the standard role prompt builder */
+  protected abstract buildPrompt(task: string): string;
+
+  async onReceive(message: ActorMessage): Promise<ActorMessage | null> {
+    // Handle discussion messages normally
+    if (message.type === "discuss" || message.type === "discuss_reply") {
+      return super.onReceive(message);
+    }
+
+    // Handle sub_task_result from juniors
+    if (message.type === "sub_task_result") {
+      return this.handleSubTaskResult(message);
+    }
+
+    // Only handle task messages for the planning flow
+    if (message.type !== "task") return null;
+
+    const { system } = this.config;
+
+    // If no ActorSystem available, fall back to direct execution (backward compat)
+    if (!system) {
+      actorLog("warn", this.id, "No ActorSystem reference — executing directly as legacy specialist", this.traceId);
+      return super.onReceive(message);
+    }
+
+    this.originalMessage = message;
+    const payload = message.payload;
+
+    // Phase 1: Planning — ask senior LLM to decompose the task
+    const plan = await this.planTask(payload.task, payload.context || "");
+
+    if (!plan) {
+      // Planning failed — fall back to direct execution
+      actorLog("warn", this.id, "Planning failed — executing directly", this.traceId);
+      return super.onReceive(message);
+    }
+
+    this.currentPlan = plan;
+
+    // Phase 2: Simple-task bypass
+    if (plan.subTasks.length <= 1 && plan.estimatedComplexity === "low") {
+      actorLog("info", this.id, "Simple task — bypassing junior delegation", this.traceId);
+      return super.onReceive(message);
+    }
+
+    // Send senior_plan event for UI observability
+    const juniorCount = plan.subTasks.filter(t => t.tier === "junior").length;
+    const midCount = plan.subTasks.filter(t => t.tier === "intermediate").length;
+    const planMsg = createMessage("senior_plan", this.id, message.from, {
+      agentRole: this.role,
+      strategy: plan.strategy,
+      subTaskCount: plan.subTasks.length,
+      tiers: { junior: juniorCount, intermediate: midCount },
+    } satisfies SeniorPlanPayload);
+    // Route plan event through system to PM
+    if (this._getSystemSendFn()) {
+      this._getSystemSendFn()!(planMsg);
+    }
+
+    // Phase 3: Dispatch juniors
+    this.expectedSubTaskCount = plan.subTasks.length;
+    this.pendingSubTaskResults.clear();
+
+    // Set collection timeout
+    this.collectionTimeout = setTimeout(async () => {
+      if (this.pendingSubTaskResults.size < this.expectedSubTaskCount) {
+        actorLog("warn", this.id, `Junior collection timeout: ${this.pendingSubTaskResults.size}/${this.expectedSubTaskCount} — synthesizing partial results`, this.traceId);
+        await this.synthesizeAndRespond();
+      }
+    }, JUNIOR_COLLECTION_TIMEOUT_MS);
+
+    // Group sub-tasks by dependency layers for parallel execution
+    await this.dispatchSubTasks(plan.subTasks, message);
+
+    // Return null — we'll respond asynchronously after all juniors complete
+    return null;
+  }
+
+  private async planTask(task: string, context: string): Promise<SeniorPlan | null> {
+    const planningPrompt = buildSeniorPlanningPrompt(this.role, task, context);
+    const effectiveModel = getModelForTier(this.role, "senior", this.config.model);
+
+    this.updateHeartbeat();
+    await this.config.sendEvent({ statusUpdate: "正在規劃任務分解...", agentRole: this.role });
+
+    try {
+      const result = await streamChat(
+        [{ role: "user", content: task }],
+        () => { this.updateHeartbeat(); },
+        effectiveModel,
+        planningPrompt,
+      );
+
+      if (result.usage) {
+        await this.config.sendEvent({ usage: result.usage, model: effectiveModel });
+      }
+
+      // Parse the plan JSON from the LLM output
+      const jsonMatch = result.content.match(/```json\s*\n([\s\S]*?)\n```/);
+      if (!jsonMatch) {
+        actorLog("warn", this.id, "No JSON plan found in LLM output", this.traceId);
+        return null;
+      }
+
+      const parsed = JSON.parse(jsonMatch[1]) as SeniorPlan;
+
+      // Validate and cap sub-tasks
+      if (!parsed.subTasks || parsed.subTasks.length === 0) return null;
+      if (parsed.subTasks.length > MAX_SUB_TASKS) {
+        parsed.subTasks = parsed.subTasks.slice(0, MAX_SUB_TASKS);
+      }
+
+      return parsed;
+    } catch (err) {
+      actorLog("error", this.id, `Planning LLM call failed: ${err}`, this.traceId);
+      return null;
+    }
+  }
+
+  private async dispatchSubTasks(subTasks: SubTask[], originalMessage: ActorMessage): Promise<void> {
+    const { system } = this.config;
+    if (!system) return;
+
+    // Simple approach: dispatch all sub-tasks without dependencies first,
+    // then dispatch dependent ones as their dependencies complete
+    const noDeps = subTasks.filter(t => !t.dependsOn || t.dependsOn.length === 0);
+    const withDeps = subTasks.filter(t => t.dependsOn && t.dependsOn.length > 0);
+
+    // Dispatch independent sub-tasks in parallel
+    for (const subTask of noDeps) {
+      await this.spawnAndDispatchJunior(subTask, originalMessage);
+    }
+
+    // Store dependent tasks — they'll be dispatched when their dependencies complete
+    // For simplicity, dispatch them immediately too (they'll have context from the strategy)
+    for (const subTask of withDeps) {
+      await this.spawnAndDispatchJunior(subTask, originalMessage);
+    }
+  }
+
+  private async spawnAndDispatchJunior(subTask: SubTask, originalMessage: ActorMessage): Promise<void> {
+    const { system, sendEvent } = this.config;
+    if (!system) return;
+
+    const tier = subTask.tier as ModelTier;
+    const tierLabel = tier === "intermediate" ? "mid" : "junior";
+    const juniorId = `${this.role}-${tierLabel}-${this.juniorCounter++}`;
+
+    // Create junior config (no system needed — juniors don't spawn their own children)
+    const juniorConfig: SpecialistConfig = {
+      model: this.config.model,
+      serviceInstances: this.config.serviceInstances,
+      appContext: this.config.appContext,
+      sendEvent: this.config.sendEvent,
+      locale: this.config.locale,
+      conversationId: this.config.conversationId,
+      backgroundSystem: this.config.backgroundSystem,
+      // No system, no peerRegistry for juniors
+    };
+
+    const junior = new JuniorSpecialistActor(
+      juniorId,
+      this.role,
+      tier,
+      this.buildPrompt, // pass the role-specific prompt builder
+      juniorConfig,
+    );
+
+    await system.spawnChild(this.id, junior);
+
+    // Send sub-task dispatched event for UI
+    await sendEvent({
+      subTaskDispatched: {
+        parentActorId: this.id,
+        actorId: juniorId,
+        subTaskId: subTask.subTaskId,
+        agentRole: this.role,
+        tier,
+        description: subTask.description.slice(0, 100),
+      },
+    });
+
+    // Dispatch the sub_task message
+    const taskMsg = createMessage("sub_task", this.id, juniorId, {
+      subTaskId: subTask.subTaskId,
+      task: subTask.description,
+      tier,
+      context: (originalMessage as { payload: { context?: string } }).payload.context,
+      seniorStrategy: this.currentPlan?.strategy,
+      files: subTask.files,
+      messages: (originalMessage as { payload: { messages?: Array<{ role: string; content: string }> } }).payload.messages,
+    } satisfies SubTaskPayload);
+
+    system.send(taskMsg);
+  }
+
+  private async handleSubTaskResult(message: ActorMessage & { type: "sub_task_result" }): Promise<ActorMessage | null> {
+    const payload = message.payload;
+
+    this.pendingSubTaskResults.set(payload.subTaskId, payload);
+    actorLog("info", this.id, `Received sub_task_result ${payload.subTaskId} (${this.pendingSubTaskResults.size}/${this.expectedSubTaskCount})`, this.traceId);
+
+    // Send sub-task complete event for UI
+    await this.config.sendEvent({
+      subTaskComplete: {
+        parentActorId: this.id,
+        actorId: payload.actorId,
+        subTaskId: payload.subTaskId,
+        tier: payload.tier,
+        summary: payload.summary?.slice(0, 100) || "Completed",
+      },
+    });
+
+    // Check if all sub-tasks are done
+    if (this.pendingSubTaskResults.size >= this.expectedSubTaskCount) {
+      if (this.collectionTimeout) {
+        clearTimeout(this.collectionTimeout);
+        this.collectionTimeout = null;
+      }
+      await this.synthesizeAndRespond();
+    }
+
+    return null;
+  }
+
+  private async synthesizeAndRespond(): Promise<void> {
+    if (!this.originalMessage || !this.currentPlan) return;
+
+    const subTaskResults = Array.from(this.pendingSubTaskResults.values()).map(r => ({
+      subTaskId: r.subTaskId,
+      content: r.content,
+      tier: r.tier,
+    }));
+
+    // Phase 5: Synthesis
+    await this.config.sendEvent({ statusUpdate: "正在整合所有結果...", agentRole: this.role });
+
+    const synthesisPrompt = buildSeniorSynthesisPrompt(
+      this.role,
+      this.currentPlan.strategy,
+      subTaskResults,
+    );
+
+    const effectiveModel = getModelForTier(this.role, "senior", this.config.model);
+    this.updateHeartbeat();
+
+    try {
+      const result = await streamChat(
+        [{ role: "user", content: "Synthesize the sub-task results into a final output." }],
+        () => { this.updateHeartbeat(); },
+        effectiveModel,
+        synthesisPrompt,
+      );
+
+      if (result.usage) {
+        await this.config.sendEvent({ usage: result.usage, model: effectiveModel });
+      }
+
+      // Translate final output for user display
+      await this.translateAndSend(result.content, this.role);
+
+      const parsed = parseAgentResult(result.content);
+
+      // Return task_result to PM — PM doesn't know about the internal hierarchy
+      const responseMsg = createMessage("task_result", this.id, this.originalMessage.from, {
+        agentRole: this.role,
+        content: result.content,
+        summary: parsed.summary,
+        blocked: parsed.blocked,
+        blockedReason: parsed.blockedReason,
+      } satisfies TaskResultPayload);
+
+      // Route through system
+      if (this._getSystemSendFn()) {
+        this._getSystemSendFn()!(responseMsg);
+      }
+    } catch (err) {
+      actorLog("error", this.id, `Synthesis failed: ${err}`, this.traceId);
+      // Fall back: concatenate all junior results
+      const fallbackContent = subTaskResults.map(r => r.content).join("\n\n---\n\n");
+      const parsed = parseAgentResult(fallbackContent);
+
+      const responseMsg = createMessage("task_result", this.id, this.originalMessage.from, {
+        agentRole: this.role,
+        content: fallbackContent,
+        summary: parsed.summary,
+        blocked: false,
+      } satisfies TaskResultPayload);
+
+      if (this._getSystemSendFn()) {
+        this._getSystemSendFn()!(responseMsg);
+      }
+    }
+  }
+
+  onStop(): void {
+    super.onStop();
+    if (this.collectionTimeout) {
+      clearTimeout(this.collectionTimeout);
+      this.collectionTimeout = null;
+    }
+  }
+
+  /** Access the system send function */
+  private _getSystemSendFn(): ((msg: ActorMessage) => void) | null {
+    return (this as unknown as { _systemSend: ((msg: ActorMessage) => void) | null })._systemSend;
+  }
+}
+
+// ---- Junior Specialist Actor ----
+
+/** Progress messages for junior/intermediate agents */
+const JUNIOR_PROGRESS_MESSAGES = [
+  "正在執行子任務...",
+  "正在產生內容...",
+  "子任務即將完成...",
+];
+
+/**
+ * Junior/Intermediate specialist actor — executes a single sub-task.
+ * Uses the same role-specific prompt as the senior but with a junior execution preamble.
+ * Does NOT translate output (senior handles that after synthesis).
+ * Does NOT conduct peer discussions.
+ */
+class JuniorSpecialistActor extends BaseSpecialistActor {
+  private tier: ModelTier;
+  private rolePromptBuilder: (task: string) => string;
+
+  constructor(
+    id: string,
+    role: AgentRole,
+    tier: ModelTier,
+    rolePromptBuilder: (task: string) => string,
+    config: SpecialistConfig,
+  ) {
+    super(id, role, config);
+    this.tier = tier;
+    this.rolePromptBuilder = rolePromptBuilder;
+  }
+
+  protected buildPrompt(task: string): string {
+    const preamble = buildJuniorExecutionPreamble(this.role, this.tier);
+    const rolePrompt = this.rolePromptBuilder(task);
+    return `${preamble}${rolePrompt}`;
+  }
+
+  async onReceive(message: ActorMessage): Promise<ActorMessage | null> {
+    if (message.type !== "sub_task") return null;
+
+    const payload = message.payload as SubTaskPayload;
+    const effectiveModel = getModelForTier(this.role, this.tier);
+
+    this.updateHeartbeat();
+
+    // Progress updates
+    let progressIdx = 0;
+    const progressTimer = setInterval(async () => {
+      const msg = JUNIOR_PROGRESS_MESSAGES[Math.min(progressIdx, JUNIOR_PROGRESS_MESSAGES.length - 1)];
+      progressIdx++;
+      try {
+        await this.config.sendEvent({ statusUpdate: msg, agentRole: this.role, actorId: this.id });
+      } catch { /* stream may have closed */ }
+    }, 3000);
+    this.trackTimer(progressTimer);
+
+    try {
+      // Build the task description with senior strategy context
+      let fullTask = payload.task;
+      if (payload.seniorStrategy) {
+        fullTask = `OVERALL STRATEGY: ${payload.seniorStrategy}\n\nYOUR SUB-TASK:\n${payload.task}`;
+      }
+
+      const systemPrompt = this.buildPrompt(fullTask) + (payload.context || "");
+      const chatMessages: ChatMessage[] = (payload.messages || []).map(m => ({
+        role: m.role as ChatMessage["role"],
+        content: m.content,
+      }));
+
+      const result = await streamChat(
+        chatMessages,
+        () => { this.updateHeartbeat(); },
+        effectiveModel,
+        systemPrompt,
+      );
+
+      if (result.usage) {
+        await this.config.sendEvent({ usage: result.usage, model: effectiveModel });
+      }
+
+      const parsed = parseAgentResult(result.content);
+
+      // Return sub_task_result to senior (NOT task_result to PM)
+      return createMessage("sub_task_result", this.id, message.from, {
+        subTaskId: payload.subTaskId,
+        agentRole: this.role,
+        tier: this.tier,
+        actorId: this.id,
+        content: result.content,
+        summary: parsed.summary,
+        blocked: parsed.blocked,
+        blockedReason: parsed.blockedReason,
+      } satisfies SubTaskResultPayload);
+    } finally {
+      this.clearTrackedTimer(progressTimer);
+    }
+  }
+}
+
+// ---- Senior Specialist Implementations ----
+
+class SeniorArchitectActor extends SeniorSpecialistActor {
+  constructor(id: string, config: SpecialistConfig) {
+    super(id, "architect", config);
+  }
+
+  protected buildPrompt(task: string): string {
+    const base = buildArchitectPrompt(this.config.serviceInstances);
+    return `${base}${this.buildPeerDiscussionSection()}\n\n--- TASK FROM PM ---\n${task}`;
+  }
+}
+
+class SeniorDeveloperActor extends SeniorSpecialistActor {
+  readonly instanceIndex: number;
+
+  constructor(id: string, instanceIndex: number, config: SpecialistConfig) {
+    super(id, "developer", config);
+    this.instanceIndex = instanceIndex;
+  }
+
+  protected buildPrompt(task: string): string {
+    const base = this.config.appContext
+      ? buildAppDevDeveloperPrompt(this.config.appContext)
+      : buildDeveloperPrompt();
+    return `${base}${this.buildPeerDiscussionSection()}\n\n--- TASK FROM PM ---\n${task}`;
+  }
+
+  async onReceive(message: ActorMessage): Promise<ActorMessage | null> {
+    // Handle parallel_task from PM (existing parallel dev coordination)
+    if (message.type === "parallel_task") {
+      return this.handleParallelTask(message);
+    }
+    // Everything else (task, sub_task_result, discuss, etc.) handled by SeniorSpecialistActor
+    return super.onReceive(message);
+  }
+
+  private async handleParallelTask(message: ActorMessage & { type: "parallel_task" }): Promise<ActorMessage> {
+    const payload = message.payload as ParallelTaskPayload;
+
+    const scopedTask = `${payload.task}\n\nYou are Developer #${this.instanceIndex}. You are ONLY responsible for these files:\n${payload.files.join("\n")}\n\nDo NOT create files outside your assigned scope.`;
+
+    const result = await this.executeLLM(
+      scopedTask,
+      payload.messages || [],
+      payload.context || ""
+    );
+
+    if (result.usage) {
+      await this.config.sendEvent({
+        usage: result.usage,
+        model: getModelForAgent(this.role, this.config.model),
+      });
+    }
+
+    await this.config.sendEvent({
+      parallelActorStatus: {
+        actorId: this.id,
+        taskId: payload.taskId,
+        groupId: payload.groupId,
+        status: "completed",
+        agentRole: "developer",
+      },
+    });
+
+    const parsed = parseAgentResult(result.content);
+    return createMessage("parallel_result", this.id, message.from, {
+      groupId: payload.groupId,
+      taskId: payload.taskId,
+      agentRole: "developer",
+      actorId: this.id,
+      content: result.content,
+      summary: parsed.summary,
+      blocked: parsed.blocked,
+      blockedReason: parsed.blockedReason,
+    } satisfies ParallelResultPayload);
+  }
+}
+
+class SeniorReviewerActor extends SeniorSpecialistActor {
+  constructor(id: string, config: SpecialistConfig) {
+    super(id, "reviewer", config);
+  }
+
+  protected buildPrompt(task: string): string {
+    const base = buildReviewerPrompt();
+    return `${base}${this.buildPeerDiscussionSection()}\n\n--- TASK FROM PM ---\n${task}`;
+  }
+}
+
+class SeniorDevOpsActor extends SeniorSpecialistActor {
+  constructor(id: string, config: SpecialistConfig) {
+    super(id, "devops", config);
+  }
+
+  protected buildPrompt(task: string): string {
+    const base = buildDevOpsPrompt();
+    return `${base}${this.buildPeerDiscussionSection()}\n\n--- TASK FROM PM ---\n${task}`;
+  }
+}
+
+class SeniorUXDesignerActor extends SeniorSpecialistActor {
+  constructor(id: string, config: SpecialistConfig) {
+    super(id, "ux_designer", config);
+  }
+
+  protected buildPrompt(task: string): string {
+    const base = buildUXDesignerPrompt();
+    return `${base}${this.buildPeerDiscussionSection()}\n\n--- TASK FROM PM ---\n${task}`;
+  }
+}
+
+class SeniorTesterActor extends SeniorSpecialistActor {
+  constructor(id: string, config: SpecialistConfig) {
+    super(id, "tester", config);
+  }
+
+  protected buildPrompt(task: string): string {
+    const base = buildTesterPrompt();
+    return `${base}${this.buildPeerDiscussionSection()}\n\n--- TASK FROM PM ---\n${task}`;
+  }
+}
+
+class SeniorDBMigratorActor extends SeniorSpecialistActor {
+  constructor(id: string, config: SpecialistConfig) {
+    super(id, "db_migrator", config);
+  }
+
+  protected buildPrompt(task: string): string {
+    const base = buildDBMigratorPrompt();
+    return `${base}${this.buildPeerDiscussionSection()}\n\n--- TASK FROM PM ---\n${task}`;
+  }
+}
+
+class SeniorDocWriterActor extends SeniorSpecialistActor {
+  constructor(id: string, config: SpecialistConfig) {
+    super(id, "doc_writer", config);
+  }
+
+  protected buildPrompt(task: string): string {
+    const base = buildDocWriterPrompt();
+    return `${base}${this.buildPeerDiscussionSection()}\n\n--- TASK FROM PM ---\n${task}`;
+  }
+}
+
 // ---- Factory ----
 
+/**
+ * Create a senior specialist actor.
+ * Senior actors plan, delegate to juniors, and synthesize results.
+ * They accept standard `task` messages and return `task_result` — backward compatible with PM.
+ */
 export function createSpecialistActor(
+  role: AgentRole,
+  index: number,
+  config: SpecialistConfig
+): Actor {
+  const id = `${role}-senior-${index}`;
+  switch (role) {
+    case "architect":
+      return new SeniorArchitectActor(id, config);
+    case "developer":
+      return new SeniorDeveloperActor(id, index, config);
+    case "reviewer":
+      return new SeniorReviewerActor(id, config);
+    case "devops":
+      return new SeniorDevOpsActor(id, config);
+    case "ux_designer":
+      return new SeniorUXDesignerActor(id, config);
+    case "tester":
+      return new SeniorTesterActor(id, config);
+    case "db_migrator":
+      return new SeniorDBMigratorActor(id, config);
+    case "doc_writer":
+      return new SeniorDocWriterActor(id, config);
+    default:
+      throw new Error(`Cannot create specialist actor for role: ${role}`);
+  }
+}
+
+/**
+ * Create a legacy (non-senior) specialist actor.
+ * Used for backward compatibility or testing without the senior/junior hierarchy.
+ */
+export function createLegacySpecialistActor(
   role: AgentRole,
   index: number,
   config: SpecialistConfig

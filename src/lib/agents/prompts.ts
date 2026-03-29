@@ -909,3 +909,107 @@ Guidelines:
 - Respond in the same language as the user`;
 }
 
+// ---- Senior/Junior Hierarchy Prompts ----
+
+/**
+ * Build the planning prompt for a senior agent.
+ * Instructs the senior to decompose the task into sub-tasks with tier assignments.
+ */
+export function buildSeniorPlanningPrompt(
+  role: string,
+  task: string,
+  context?: string,
+): string {
+  return `You are a SENIOR ${role.toUpperCase()} in a multi-agent system. Your job is to PLAN how to decompose this task into sub-tasks.
+
+TASK:
+${task}
+
+${context ? `CONTEXT:\n${context}\n` : ""}
+
+TIER ASSIGNMENT GUIDELINES:
+- "junior" tier: Template code, boilerplate, documentation sections, config files, straightforward CRUD operations, simple tests, repetitive patterns
+- "intermediate" tier: Complex business logic, security-sensitive code, database schema design, API design, integration code, architectural sub-decisions
+- Never assign "senior" tier to sub-tasks — senior is only for planning and synthesis
+
+INSTRUCTIONS:
+1. Analyze the task and break it into concrete, independently executable sub-tasks
+2. Assign each sub-task to "junior" or "intermediate" tier based on complexity
+3. Specify dependencies between sub-tasks if any (sub-tasks without dependencies run in parallel)
+4. Estimate overall complexity
+
+OUTPUT FORMAT — respond with ONLY this JSON (no other text):
+\`\`\`json
+{
+  "strategy": "Brief description of your decomposition strategy",
+  "estimatedComplexity": "low" | "medium" | "high",
+  "subTasks": [
+    {
+      "subTaskId": "unique-id",
+      "description": "What this sub-task should accomplish",
+      "tier": "junior" | "intermediate",
+      "files": ["optional", "list", "of", "files"],
+      "dependsOn": ["optional-sub-task-ids"]
+    }
+  ]
+}
+\`\`\`
+
+RULES:
+- If the task is simple enough to do in one step, output a single sub-task with "low" complexity
+- Maximum 6 sub-tasks per plan
+- Each sub-task must be self-contained with clear deliverables
+- Use "intermediate" tier sparingly — only for genuinely complex sub-tasks
+${FAILURE_CLAUSE}`;
+}
+
+/**
+ * Build the synthesis prompt for a senior agent.
+ * Instructs the senior to review all junior outputs and produce a final consolidated result.
+ */
+export function buildSeniorSynthesisPrompt(
+  role: string,
+  strategy: string,
+  subTaskResults: Array<{ subTaskId: string; content: string; tier: string }>,
+): string {
+  const resultsSection = subTaskResults
+    .map((r, i) => `--- SUB-TASK ${i + 1} (${r.subTaskId}, tier: ${r.tier}) ---\n${r.content}`)
+    .join("\n\n");
+
+  return `You are a SENIOR ${role.toUpperCase()} reviewing and synthesizing sub-task results.
+
+ORIGINAL STRATEGY:
+${strategy}
+
+SUB-TASK RESULTS:
+${resultsSection}
+
+INSTRUCTIONS:
+1. Review all sub-task outputs for consistency and completeness
+2. Merge them into a single, coherent output in the standard ${role} output format
+3. Fix any conflicts or inconsistencies between sub-task outputs
+4. Ensure the final output is complete and production-ready
+5. Add any missing pieces that individual sub-tasks may have overlooked
+
+Produce the final consolidated output as if you had done all the work yourself.
+Do NOT mention sub-tasks, juniors, or the decomposition process in your output.
+${FAILURE_CLAUSE}`;
+}
+
+/**
+ * Build the preamble prepended to junior/intermediate agent prompts.
+ */
+export function buildJuniorExecutionPreamble(role: string, tier: string): string {
+  const tierLabel = tier === "intermediate" ? "INTERMEDIATE" : "JUNIOR";
+  return `You are a ${tierLabel} ${role.toUpperCase()} executing a specific sub-task.
+
+RULES:
+- Execute ONLY the sub-task described below — do not expand scope
+- Follow the senior's strategy and specifications precisely
+- Produce complete, production-ready output for your assigned scope
+- Do NOT skip any details — your output will be merged with other sub-tasks
+- If you cannot complete the sub-task, report status "blocked" with a clear reason
+
+`;
+}
+

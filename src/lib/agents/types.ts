@@ -7,6 +7,27 @@
 
 export type AgentRole = "pm" | "architect" | "developer" | "reviewer" | "devops" | "ux_designer" | "tester" | "db_migrator" | "doc_writer";
 
+// Re-export ModelTier from model-tiers for convenience
+export type { ModelTier } from "../model-tiers";
+
+// ---- Senior/Junior Hierarchy Types ----
+
+/** A sub-task decomposed by a senior agent for delegation to juniors/intermediates */
+export interface SubTask {
+  subTaskId: string;
+  description: string;
+  tier: import("../model-tiers").ModelTier;
+  files?: string[];
+  dependsOn?: string[];  // sub-task IDs that must complete first
+}
+
+/** Plan produced by a senior agent to decompose work */
+export interface SeniorPlan {
+  strategy: string;
+  subTasks: SubTask[];
+  estimatedComplexity: "low" | "medium" | "high";
+}
+
 /** Background agent roles — persist across requests, managed by BackgroundActorSystem */
 export type BackgroundAgentRole = "embedding" | "retrieval" | "summarizer" | "file_processor" | "file_analyzer" | "code_validator" | "dependency_resolver" | "template_cache" | "progress_tracker" | "import_orchestrator";
 
@@ -19,6 +40,9 @@ export interface AgentTask {
   status: TaskStatus;
   description?: string; // what PM asked this agent to do
   summary?: string; // result summary after completion
+  tier?: import("../model-tiers").ModelTier; // model tier used
+  parentActorId?: string; // senior actor that spawned this (for juniors)
+  subTasks?: AgentTask[]; // child tasks for UI tree rendering
 }
 
 /** A group of parallel developer tasks running simultaneously */

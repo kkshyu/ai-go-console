@@ -265,6 +265,13 @@ export class PMActor extends Actor {
         return this.handleParallelResult(message);
       case "error":
         return this.handleAgentError(message);
+      case "senior_plan":
+        // Senior plan event — forward to UI for observability
+        await this.config.sendEvent({
+          seniorPlan: message.payload,
+          agentRole: (message.payload as { agentRole: string }).agentRole,
+        });
+        return null;
       default:
         return null;
     }
@@ -847,6 +854,7 @@ export class PMActor extends Actor {
       peerRegistry,
       conversationId: this.config.conversationId,
       backgroundSystem: this.config.backgroundSystem,
+      system: this.config.system,
     };
 
     // Create and spawn specialist actor
@@ -930,6 +938,7 @@ export class PMActor extends Actor {
       locale: this.config.locale,
       conversationId: this.config.conversationId,
       backgroundSystem: this.config.backgroundSystem,
+      system: this.config.system,
     };
 
     // Spawn all developers and dispatch tasks concurrently
