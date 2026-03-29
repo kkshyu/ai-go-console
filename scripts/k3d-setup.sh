@@ -203,6 +203,11 @@ info "  等待 PostHog..."
 kubectl wait --for=condition=available deployment/builtin-posthog \
   -n aigo-system --timeout=180s 2>/dev/null || warn "  PostHog 尚未就緒，請稍後檢查"
 
+# 等待 Metabase PostgreSQL
+info "  等待 Metabase PostgreSQL..."
+kubectl wait --for=condition=ready pod -l app=builtin-metabase-pg \
+  -n aigo-system --timeout=120s 2>/dev/null || warn "  Metabase PostgreSQL 尚未就緒，請稍後檢查"
+
 # 等待 Metabase
 info "  等待 Metabase..."
 kubectl wait --for=condition=available deployment/builtin-metabase \

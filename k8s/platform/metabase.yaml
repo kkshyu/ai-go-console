@@ -1,6 +1,99 @@
 ---
 # Built-in Metabase — Business Intelligence & Analytics Dashboard
 # Multi-tenant: each org gets its own group/collection (org-<slug>)
+# 自帶獨立 PostgreSQL，不依賴其他 builtin service
+---
+# Metabase PostgreSQL credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: builtin-metabase-pg-credentials
+  namespace: aigo-system
+type: Opaque
+stringData:
+  POSTGRES_USER: metabase
+  POSTGRES_PASSWORD: metabase_dev_password
+  POSTGRES_DB: metabase
+---
+# Metabase dedicated PostgreSQL
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: builtin-metabase-pg
+  namespace: aigo-system
+  labels:
+    app: builtin-metabase-pg
+    aigo.dev/component: metabase-db
+spec:
+  serviceName: builtin-metabase-pg
+  replicas: 1
+  selector:
+    matchLabels:
+      app: builtin-metabase-pg
+  template:
+    metadata:
+      labels:
+        app: builtin-metabase-pg
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: builtin-metabase-pg-credentials
+          volumeMounts:
+            - name: metabase-pg-data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - metabase
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - metabase
+            initialDelaySeconds: 30
+            periodSeconds: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: metabase-pg-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: builtin-metabase-pg
+  namespace: aigo-system
+  labels:
+    app: builtin-metabase-pg
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: builtin-metabase-pg
+---
+# Metabase application
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -32,11 +125,17 @@ spec:
             - name: MB_DB_PORT
               value: "5432"
             - name: MB_DB_USER
-              value: "supabase_admin"
+              valueFrom:
+                secretKeyRef:
+                  name: builtin-metabase-pg-credentials
+                  key: POSTGRES_USER
             - name: MB_DB_PASS
-              value: "supabase_dev_password"
+              valueFrom:
+                secretKeyRef:
+                  name: builtin-metabase-pg-credentials
+                  key: POSTGRES_PASSWORD
             - name: MB_DB_HOST
-              value: "builtin-supabase-db.aigo-system.svc.cluster.local"
+              value: "builtin-metabase-pg.aigo-system.svc.cluster.local"
             - name: JAVA_TOOL_OPTIONS
               value: "-Xmx1g"
           resources:

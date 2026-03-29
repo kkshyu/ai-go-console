@@ -3,6 +3,32 @@
 # Self-hosted Supabase: PostgreSQL + PostgREST + GoTrue + Kong
 # 每個 org 共用此 Supabase instance，透過 RLS 隔離
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: supabase-db-init
+  namespace: aigo-system
+data:
+  00-roles.sql: |
+    -- Supabase required roles for PostgREST
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'anon') THEN
+        CREATE ROLE anon NOLOGIN NOINHERIT;
+      END IF;
+    END $$;
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'authenticated') THEN
+        CREATE ROLE authenticated NOLOGIN NOINHERIT;
+      END IF;
+    END $$;
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'service_role') THEN
+        CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS;
+      END IF;
+    END $$;
+    GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+    GRANT anon, authenticated, service_role TO supabase_admin;
+---
+apiVersion: v1
 kind: Secret
 metadata:
   name: builtin-supabase-credentials
@@ -65,6 +91,8 @@ spec:
           volumeMounts:
             - name: supabase-db-data
               mountPath: /var/lib/postgresql/data
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
           resources:
             requests:
               memory: "256Mi"
@@ -80,6 +108,10 @@ spec:
                 - supabase_admin
             initialDelaySeconds: 5
             periodSeconds: 5
+      volumes:
+        - name: init-scripts
+          configMap:
+            name: supabase-db-init
   volumeClaimTemplates:
     - metadata:
         name: supabase-db-data
@@ -150,8 +182,7 @@ spec:
               memory: "512Mi"
               cpu: "500m"
           readinessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: 3000
             initialDelaySeconds: 5
             periodSeconds: 5
