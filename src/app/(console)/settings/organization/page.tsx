@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Building2, Globe, Plus, Trash2, Check, Link, Copy, Wifi, WifiOff, Bot } from "lucide-react";
-import { AVAILABLE_MODELS, DEFAULT_MODEL } from "@/lib/models";
+import { AVAILABLE_MODELS } from "@/lib/models";
 
 const AGENT_ROLES = [
   { role: "pm", label: "PM" },
@@ -24,6 +24,12 @@ const AGENT_ROLES = [
   { role: "tester", label: "Tester" },
   { role: "db_migrator", label: "DB Migrator" },
   { role: "doc_writer", label: "Doc Writer" },
+] as const;
+
+const TIERS = [
+  { tier: "senior", label: "Senior" },
+  { tier: "intermediate", label: "Intermediate" },
+  { tier: "junior", label: "Junior" },
 ] as const;
 
 interface OrgDomain {
@@ -62,6 +68,7 @@ export default function OrganizationSettingsPage() {
   const [proxyStatus, setProxyStatus] = useState<ProxyStatus | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [agentModels, setAgentModels] = useState<Record<string, string>>({});
+  const [defaultModels, setDefaultModels] = useState<Record<string, string>>({});
   const [savingModels, setSavingModels] = useState(false);
 
   useEffect(() => {
@@ -81,10 +88,11 @@ export default function OrganizationSettingsPage() {
           .catch(() => {});
         fetch(`/api/organizations/${data.id}/agent-models`)
           .then((r) => r.json())
-          .then((configs: { agentRole: string; modelId: string }[]) => {
+          .then((result: { configs: { agentRole: string; modelId: string }[]; defaults: Record<string, string> }) => {
             const map: Record<string, string> = {};
-            configs.forEach((c) => { map[c.agentRole] = c.modelId; });
+            result.configs.forEach((c) => { map[c.agentRole] = c.modelId; });
             setAgentModels(map);
+            setDefaultModels(result.defaults || {});
           })
           .catch(() => {});
       })
@@ -170,9 +178,18 @@ export default function OrganizationSettingsPage() {
   async function handleSaveAgentModels() {
     if (!org) return;
     setSavingModels(true);
-    const configs = Object.entries(agentModels)
-      .filter(([, modelId]) => modelId && modelId !== DEFAULT_MODEL)
-      .map(([agentRole, modelId]) => ({ agentRole, modelId }));
+
+    // Build configs for all role:tier combinations
+    const configs: { agentRole: string; modelId: string }[] = [];
+    for (const { role } of AGENT_ROLES) {
+      for (const { tier } of TIERS) {
+        const key = `${role}:${tier}`;
+        const value = agentModels[key];
+        if (value) {
+          configs.push({ agentRole: key, modelId: value });
+        }
+      }
+    }
 
     const res = await fetch(`/api/organizations/${org.id}/agent-models`, {
       method: "PUT",
@@ -407,23 +424,38 @@ export default function OrganizationSettingsPage() {
           <CardDescription>{t("agentModelsDescription")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3">
+          {/* Header row */}
+          <div className="grid grid-cols-[120px_1fr_1fr_1fr] gap-2 text-xs font-medium text-muted-foreground">
+            <div />
+            {TIERS.map(({ tier, label }) => (
+              <div key={tier} className="text-center">{label}</div>
+            ))}
+          </div>
+          {/* Agent rows */}
+          <div className="grid gap-2">
             {AGENT_ROLES.map(({ role, label }) => (
-              <div key={role} className="flex items-center gap-3">
-                <label className="w-32 text-sm font-medium shrink-0">{label}</label>
-                <select
-                  value={agentModels[role] || DEFAULT_MODEL}
-                  onChange={(e) =>
-                    setAgentModels((prev) => ({ ...prev, [role]: e.target.value }))
-                  }
-                  className="flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-                >
-                  {AVAILABLE_MODELS.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.label}
-                    </option>
-                  ))}
-                </select>
+              <div key={role} className="grid grid-cols-[120px_1fr_1fr_1fr] gap-2 items-center">
+                <label className="text-sm font-medium truncate">{label}</label>
+                {TIERS.map(({ tier }) => {
+                  const key = `${role}:${tier}`;
+                  const defaultModel = defaultModels[key] || "";
+                  return (
+                    <select
+                      key={tier}
+                      value={agentModels[key] || defaultModel}
+                      onChange={(e) =>
+                        setAgentModels((prev) => ({ ...prev, [key]: e.target.value }))
+                      }
+                      className="w-full rounded-md border bg-background px-2 py-1.5 text-xs outline-none focus:ring-1 focus:ring-ring"
+                    >
+                      {AVAILABLE_MODELS.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.label}
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })}
               </div>
             ))}
           </div>

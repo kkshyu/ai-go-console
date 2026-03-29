@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { chat, getModelForAgent } from "@/lib/ai";
+import { chat } from "@/lib/ai";
+import { getModelForTier } from "@/lib/model-tiers";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 
 /** Max content size for priority files in the prompt (3KB each) */
@@ -183,7 +184,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const model = getModelForAgent("architect");
+    const model = getModelForTier("architect", "senior");
     const result = await chat(
       [
         {

@@ -24,7 +24,7 @@ import type {
 } from "./types";
 import { createMessage } from "./types";
 import type { ActorSystem } from "./actor-system";
-import { streamChat, translateForUser, stripJsonBlocks, getModelForAgent, getOutputModel, type ChatMessage, type TokenUsage } from "../ai";
+import { streamChat, translateForUser, stripJsonBlocks, getOutputModel, type ChatMessage, type TokenUsage } from "../ai";
 import { getModelForTier } from "../model-tiers";
 import type { ModelTier } from "../model-tiers";
 import type { AgentRole, SeniorPlan, SubTask } from "../agents/types";
@@ -57,6 +57,8 @@ export interface SpecialistConfig {
   backgroundSystem?: BackgroundActorSystem;
   /** ActorSystem reference — required for senior agents to spawn juniors */
   system?: ActorSystem;
+  /** Org-level model overrides from DB */
+  orgModelConfigs?: Array<{ agentRole: string; modelId: string }>;
 }
 
 /** Progress messages shown while an agent is generating. */
@@ -200,7 +202,7 @@ abstract class BaseSpecialistActor extends Actor {
       payload.context || ""
     );
 
-    const effectiveModel = getModelForAgent(this.role, this.config.model);
+    const effectiveModel = getModelForTier(this.role, "senior", this.config.model, this.config.orgModelConfigs);
 
     if (result.usage) {
       await this.config.sendEvent({
@@ -295,7 +297,7 @@ Respond with your perspective on this topic. Be concise and technical.`;
     const result = await streamChat(
       [{ role: "user", content: discussPrompt }],
       () => { this.updateHeartbeat(); },
-      getModelForAgent(this.role, this.config.model),
+      getModelForTier(this.role, "senior", this.config.model, this.config.orgModelConfigs),
       this.buildPrompt("")
     );
 
@@ -498,7 +500,7 @@ Respond with your perspective on this topic. Be concise and technical.`;
   ): Promise<{ content: string; usage: TokenUsage | null }> {
     const systemPrompt = this.buildPrompt(task) + artifactContext;
     const { sendEvent } = this.config;
-    const effectiveModel = getModelForAgent(this.role, this.config.model);
+    const effectiveModel = getModelForTier(this.role, "senior", this.config.model, this.config.orgModelConfigs);
 
     // Reset heartbeat before LLM call (may take long before first token)
     this.updateHeartbeat();
@@ -687,7 +689,7 @@ export class DeveloperActor extends BaseSpecialistActor {
     if (result.usage) {
       await this.config.sendEvent({
         usage: result.usage,
-        model: getModelForAgent(this.role, this.config.model),
+        model: getModelForTier(this.role, "senior", this.config.model, this.config.orgModelConfigs),
       });
     }
 
@@ -901,7 +903,7 @@ abstract class SeniorSpecialistActor extends BaseSpecialistActor {
 
   private async planTask(task: string, context: string): Promise<SeniorPlan | null> {
     const planningPrompt = buildSeniorPlanningPrompt(this.role, task, context);
-    const effectiveModel = getModelForTier(this.role, "senior", this.config.model);
+    const effectiveModel = getModelForTier(this.role, "senior", this.config.model, this.config.orgModelConfigs);
 
     this.updateHeartbeat();
     await this.config.sendEvent({ statusUpdate: "正在規劃任務分解...", agentRole: this.role });
@@ -1064,7 +1066,7 @@ abstract class SeniorSpecialistActor extends BaseSpecialistActor {
       subTaskResults,
     );
 
-    const effectiveModel = getModelForTier(this.role, "senior", this.config.model);
+    const effectiveModel = getModelForTier(this.role, "senior", this.config.model, this.config.orgModelConfigs);
     this.updateHeartbeat();
 
     try {
@@ -1171,7 +1173,7 @@ class JuniorSpecialistActor extends BaseSpecialistActor {
     if (message.type !== "sub_task") return null;
 
     const payload = message.payload as SubTaskPayload;
-    const effectiveModel = getModelForTier(this.role, this.tier);
+    const effectiveModel = getModelForTier(this.role, this.tier, undefined, this.config.orgModelConfigs);
 
     this.updateHeartbeat();
 
@@ -1280,7 +1282,7 @@ class SeniorDeveloperActor extends SeniorSpecialistActor {
     if (result.usage) {
       await this.config.sendEvent({
         usage: result.usage,
-        model: getModelForAgent(this.role, this.config.model),
+        model: getModelForTier(this.role, "senior", this.config.model, this.config.orgModelConfigs),
       });
     }
 

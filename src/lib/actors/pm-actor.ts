@@ -25,10 +25,10 @@ import {
   streamChat,
   translateForUser,
   stripJsonBlocks,
-  getModelForAgent,
   getOutputModel,
   type ChatMessage,
 } from "../ai";
+import { getModelForTier } from "../model-tiers";
 import type { AgentRole, OrchestrationState, AgentMessage as AgentMsg } from "../agents/types";
 import { createInitialOrchestrationState } from "../agents/types";
 import {
@@ -147,6 +147,7 @@ export interface PMActorConfig {
   orgSlug?: string;
   conversationId?: string;
   backgroundSystem?: BackgroundActorSystem;
+  orgModelConfigs?: Array<{ agentRole: string; modelId: string }>;
 }
 
 export class PMActor extends Actor {
@@ -647,7 +648,7 @@ export class PMActor extends Actor {
       }, PROGRESS_INTERVAL_MS);
       this.activeTimers.add(progressTimer);
 
-      const pmModel = getModelForAgent("pm", this.config.model);
+      const pmModel = getModelForTier("pm", "senior", this.config.model, this.config.orgModelConfigs);
       let result;
       try {
         const systemPrompt = this.config.pmPrompt + this.config.artifactContext + (this.config.fileContext || "");
