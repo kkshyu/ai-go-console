@@ -75,10 +75,6 @@ const FILTERED_LOG_PATTERNS = [
   /npm install failed, retrying/,
   /A complete log of this run can be found in/,
   /Starting dev server\.\.\./,
-  // serve (static file server) noise
-  /Checking for updates failed/,
-  /npm warn/,
-  /added \d+ packages? in/,
 ];
 
 /**

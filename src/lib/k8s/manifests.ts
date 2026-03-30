@@ -121,9 +121,8 @@ export function generateDevPodSpec(opts: DevPodOptions): k8s.V1Pod {
     `    npm install 2>&1`,
     `  fi`,
     `fi`,
-    // Disable Next.js telemetry and serve update notifier
+    // Disable Next.js telemetry
     `export NEXT_TELEMETRY_DISABLED=1`,
-    `export NO_UPDATE_NOTIFIER=1`,
     // Start dev server
     `echo "Starting dev server..."`,
     `exec ${execCmd}`,
