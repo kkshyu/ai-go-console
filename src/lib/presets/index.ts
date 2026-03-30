@@ -110,16 +110,9 @@ const PRESET_LOADERS: Record<string, () => Promise<PresetOverlay>> = {
   "realestate-owner-negotiation": () => import("./crm/realestate").then((m) => m.CRM_REALESTATE),
 
   // LINE Bot aliases
-  "linebot-payment-notify": () => import("./linebot/order-notify").then((m) => m.LINEBOT_ORDER_NOTIFY),
-  "linebot-contract-alert": () => import("./linebot/customer-service").then((m) => m.LINEBOT_CUSTOMER_SERVICE),
-  "linebot-ecommerce": () => import("./linebot/customer-service").then((m) => m.LINEBOT_CUSTOMER_SERVICE),
   "linebot-order-tracking": () => import("./linebot/order-notify").then((m) => m.LINEBOT_ORDER_NOTIFY),
-  "linebot-leave": () => import("./linebot/customer-service").then((m) => m.LINEBOT_CUSTOMER_SERVICE),
   "linebot-member-card": () => import("./linebot/membership").then((m) => m.LINEBOT_MEMBERSHIP),
-  "linebot-survey": () => import("./linebot/customer-service").then((m) => m.LINEBOT_CUSTOMER_SERVICE),
-  "linebot-notification": () => import("./linebot/order-notify").then((m) => m.LINEBOT_ORDER_NOTIFY),
   "linebot-faq": () => import("./linebot/customer-service").then((m) => m.LINEBOT_CUSTOMER_SERVICE),
-  "linebot-property-inquiry": () => import("./linebot/customer-service").then((m) => m.LINEBOT_CUSTOMER_SERVICE),
 };
 
 /* ---------- Public API ---------- */
