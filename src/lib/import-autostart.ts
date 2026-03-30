@@ -57,6 +57,8 @@ const SUCCESS_PATTERNS = [
   /Listening on.+:\d+/,
   /Local:\s+http/,
   /compiled.*successfully/i,
+  /Accepting connections/i,
+  /Serving!/,
 ];
 
 /** Known noise patterns — always ignored */
@@ -73,6 +75,10 @@ const STARTUP_NOISE_PATTERNS = [
   "FetchError",
   "fetch failed",
   "NEXT_REDIRECT",
+  "npm warn",
+  "Checking for updates failed",
+  "added ",
+  " packages in ",
 ];
 
 /** Error patterns that indicate a real build/runtime error */
